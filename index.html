@@ -147,6 +147,7 @@
     async function defaultSpeech(text) {
       const key=JSON.stringify([ttsSettings.endpoint||'',text]);
       const cached=await ttsCache('readonly',key);if(cached instanceof Blob)return cached;
+      if(!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;}
       if(!ttsSettings.endpoint||!ttsSettings.token)throw new Error('请先展开“在线发音设置”，配置服务地址和访问口令。');
       if(ttsPending.has(key))return ttsPending.get(key);
       const job=(async()=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA'}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}throw new Error(message);}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}return blob;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
@@ -245,9 +246,60 @@
     function escapeHtml(value='') { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
     function blobToDataURL(blob) { return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(reader.error); reader.readAsDataURL(blob); }); }
     function dataURLToBlob(dataURL) { const [header,base64] = dataURL.split(','); if (!header?.startsWith('data:') || !base64) throw new Error('录音数据格式不正确'); const mime=(header.match(/^data:([^;]+)/)||[])[1]||'audio/webm'; const binary=atob(base64), bytes=new Uint8Array(binary.length); for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i); return new Blob([bytes],{type:mime}); }
-    async function exportBackup() { const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const backup={format:backupFormat,version:1,exportedAt:new Date().toISOString(),entries}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条（录音与同步标识已一并写入备份）。请在下载或共享面板中保存到 iCloud Drive。`; }
-    function isValidBackup(value) { return value && value.format===backupFormat && value.version===1 && Array.isArray(value.entries) && value.entries.every(item=>typeof item.word==='string' && typeof item.meaning==='string' && (item.audio===null || typeof item.audio==='string')); }
-    async function importBackup(file) { if (!file) return; $('#backupStatus').textContent='正在读取备份…'; try { const backup=JSON.parse(await file.text()); if(!isValidBackup(backup)) throw new Error('这不是本词典的有效备份文件'); if(!backup.entries.length){$('#backupStatus').textContent='备份文件中没有词条。';return;} if(!confirm(`将同步备份中的 ${backup.entries.length} 个词条：新词条会新增，已有词条会按最后保存时间更新，当前词典不会被删除。是否继续？`)){ $('#backupStatus').textContent='已取消导入。'; return; } const current=await allEntries(), bySyncId=new Map(), byLegacyKey=new Map(); for(const entry of current){if(entry.syncId)bySyncId.set(entry.syncId,entry);const key=legacyEntryKey(entry),found=byLegacyKey.get(key);if(!found||Number(entry.updatedAt)>Number(found.updatedAt))byLegacyKey.set(key,entry);} let added=0,updated=0,unchanged=0; for (const raw of backup.entries) { const audio=raw.audio?await audioPayload(dataURLToBlob(raw.audio)):await audioPayload(null),hasIncomingSyncId=typeof raw.syncId==='string'&&raw.syncId.trim(),item={word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:hasIncomingSyncId?raw.syncId.trim():newSyncId(),...audio,updatedAt:Number(raw.updatedAt)||Date.now(),mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}}; const legacyKey=legacyEntryKey(item),existing=(hasIncomingSyncId&&bySyncId.get(item.syncId))||byLegacyKey.get(legacyKey); if(!existing){const id=await addEntry(item),stored={...item,id};bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyKey,stored);added++;continue;} if(Number(item.updatedAt)>Number(existing.updatedAt)){const stored={...item,id:existing.id};await putEntry(stored);if(existing.syncId)bySyncId.delete(existing.syncId);bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyEntryKey(stored),stored);updated++;continue;} if(hasIncomingSyncId&&existing.syncId!==item.syncId){const stored={...existing,syncId:item.syncId};await putEntry(stored);if(existing.syncId)bySyncId.delete(existing.syncId);bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyEntryKey(stored),stored);} unchanged++; } await requestPersistentStorage(); $('#backupStatus').textContent=`同步完成：新增 ${added} 个，更新 ${updated} 个，已是最新版 ${unchanged} 个；录音已一并恢复。`; await render(); choosePractice(); } catch(error) { $('#backupStatus').textContent=`导入失败：${error.message||'无法读取此文件'}`; } finally { $('#importFile').value=''; } }
+
+    function withDefaultAudioStore(mode, work) {
+      return new Promise((resolve,reject)=>{
+        const open=indexedDB.open('lao-default-speech-cache',1);
+        open.onupgradeneeded=()=>open.result.createObjectStore('audio');
+        open.onerror=()=>reject(open.error);
+        open.onsuccess=()=>{
+          const db=open.result;let result,tx;
+          try{tx=db.transaction('audio',mode);result=work(tx.objectStore('audio'));}
+          catch(error){if(tx)tx.abort();db.close();reject(error);return;}
+          tx.oncomplete=()=>{db.close();resolve(result);};
+          tx.onabort=()=>{db.close();reject(tx.error||new Error('默认音频保存失败，请重试导入。'));};
+          tx.onerror=()=>{};
+        };
+      });
+    }
+    async function exportDefaultAudio() {
+      const rows=await withDefaultAudioStore('readonly',store=>{
+        const rows=[],cursor=store.openCursor();
+        cursor.onsuccess=()=>{const item=cursor.result;if(item){rows.push({key:item.key,blob:item.value});item.continue();}};
+        return rows;
+      });
+      const result=[];
+      for(const row of rows){
+        if(!(row.blob instanceof Blob)||!row.blob.size)throw new Error('默认发音缓存包含无效音频，未生成备份。');
+        result.push({key:row.key,audio:await blobToDataURL(row.blob)});
+      }
+      return result;
+    }
+    function prepareDefaultAudio(backup) {
+      if(backup.version===1)return [];
+      if(!Array.isArray(backup.defaultAudio))throw new Error('备份缺少默认发音数据。');
+      const rows=backup.defaultAudio.map(row=>{
+        if(!row||typeof row.key!=='string'||typeof row.audio!=='string'||!/^data:audio\/[^;,]+;base64,/.test(row.audio))throw new Error('默认发音备份格式无效。');
+        let parts;try{parts=JSON.parse(row.key);}catch(_){throw new Error('默认发音索引无效。');}
+        if(!Array.isArray(parts)||parts.length!==2||parts.some(x=>typeof x!=='string'))throw new Error('默认发音索引无效。');
+        const blob=dataURLToBlob(row.audio);if(!blob.size)throw new Error('默认发音为空。');
+        return {key:row.key,blob,source:parts[0],text:parts[1]};
+      });
+      // Keep original source keys. A separate fallback allows offline playback on
+      // a new phone without importing credentials or selecting a service.
+      for(const row of [...rows]){
+        if(row.source&&row.source===backup.defaultAudioSource)
+          rows.push({key:JSON.stringify(['imported-default',row.text]),blob:row.blob});
+      }
+      return rows;
+    }
+    async function restoreDefaultAudio(rows) {
+      if(!rows.length)return;
+      await withDefaultAudioStore('readwrite',store=>{for(const row of rows)store.put(row.blob,row.key);});
+    }
+    async function exportBackup() { const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:2,exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||''}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音（及自己的录音与同步标识）。请在下载或共享面板中保存到 iCloud Drive。`; }
+    function isValidBackup(value) { return value && value.format===backupFormat && [1,2].includes(value.version) && Array.isArray(value.entries) && value.entries.every(item=>item&&typeof item.word==='string' && typeof item.meaning==='string' && (item.audio===null || typeof item.audio==='string')); }
+    async function importBackup(file) { if (!file) return; $('#backupStatus').textContent='正在读取备份…'; try { const backup=JSON.parse(await file.text()); if(!isValidBackup(backup)) throw new Error('这不是本词典的有效备份文件'); if(!backup.entries.length){$('#backupStatus').textContent='备份文件中没有词条。';return;} if(!confirm(`将同步备份中的 ${backup.entries.length} 个词条：新词条会新增，已有词条会按最后保存时间更新，当前词典不会被删除。是否继续？`)){ $('#backupStatus').textContent='已取消导入。'; return; } const preparedAudio=prepareDefaultAudio(backup); const current=await allEntries(), bySyncId=new Map(), byLegacyKey=new Map(); for(const entry of current){if(entry.syncId)bySyncId.set(entry.syncId,entry);const key=legacyEntryKey(entry),found=byLegacyKey.get(key);if(!found||Number(entry.updatedAt)>Number(found.updatedAt))byLegacyKey.set(key,entry);} let added=0,updated=0,unchanged=0; for (const raw of backup.entries) { const audio=raw.audio?await audioPayload(dataURLToBlob(raw.audio)):await audioPayload(null),hasIncomingSyncId=typeof raw.syncId==='string'&&raw.syncId.trim(),item={word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:hasIncomingSyncId?raw.syncId.trim():newSyncId(),...audio,updatedAt:Number(raw.updatedAt)||Date.now(),mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}}; const legacyKey=legacyEntryKey(item),existing=(hasIncomingSyncId&&bySyncId.get(item.syncId))||byLegacyKey.get(legacyKey); if(!existing){const id=await addEntry(item),stored={...item,id};bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyKey,stored);added++;continue;} if(Number(item.updatedAt)>Number(existing.updatedAt)){const stored={...item,id:existing.id};await putEntry(stored);if(existing.syncId)bySyncId.delete(existing.syncId);bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyEntryKey(stored),stored);updated++;continue;} if(hasIncomingSyncId&&existing.syncId!==item.syncId){const stored={...existing,syncId:item.syncId};await putEntry(stored);if(existing.syncId)bySyncId.delete(existing.syncId);bySyncId.set(stored.syncId,stored);byLegacyKey.set(legacyEntryKey(stored),stored);} unchanged++; } await restoreDefaultAudio(preparedAudio); await requestPersistentStorage(); $('#backupStatus').textContent=`同步完成：新增 ${added} 个，更新 ${updated} 个，已是最新版 ${unchanged} 个；自己的录音已恢复，另恢复 ${preparedAudio.length} 段默认发音缓存。`; await render(); choosePractice(); } catch(error) { $('#backupStatus').textContent=`导入失败：${error.message||'无法读取此文件'}`; } finally { $('#importFile').value=''; } }
     function normalizeAnswer(value) { return (value||'').normalize('NFC').replace(/\s+/g,'').trim(); }
     function normalizeIPA(value) { return normalizeAnswer(value).replace(/[\/\[\]]/g,''); }
     const reviewModes={ipaToWord:{prompt:'看 IPA 音标，默写对应的老挝语字母或词条。',placeholder:'输入对应的老挝语字母或词条',question:item=>`/${item.ipa}/`,answer:item=>item.word,normalize:normalizeAnswer},wordToIpa:{prompt:'看老挝语字母或词条，默写 IPA 音标。',placeholder:'输入 IPA 音标，例如 k 或 kʰ',question:item=>item.word,answer:item=>item.ipa,normalize:normalizeIPA},wordToMeaning:{prompt:'看老挝语字母或词条，写出中文意思。',placeholder:'输入中文意思',question:item=>item.word,answer:item=>item.meaning,normalize:normalizeAnswer},meaningToWord:{prompt:'看中文意思，默写老挝语字母或词条。',placeholder:'输入对应的老挝语字母或词条',question:item=>item.meaning,answer:item=>item.word,normalize:normalizeAnswer}};

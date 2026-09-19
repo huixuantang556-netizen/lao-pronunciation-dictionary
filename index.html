@@ -16,6 +16,7 @@
     button { appearance:none; padding:9px 13px; border:1px solid #bcd0c8; border-radius:9px; background:white; color:var(--ink); cursor:pointer; font:inherit; } button:hover { border-color:var(--brand); } button:disabled { opacity:.5; cursor:not-allowed; }.primary { border-color:var(--brand); background:var(--brand); color:#fff; }.danger { color:#ae3434; }.record { color:#b42318; }.record.active { background:#b42318; color:#fff; border-color:#b42318; }
     .filters { display:flex; flex-wrap:wrap; gap:9px; margin-bottom:11px; }.filters input { flex:1 1 220px; margin:0; }.page-size { display:flex; align-items:center; gap:6px; margin:0; white-space:nowrap; }.page-size select { width:auto; margin:0; }.dictionary-tag-filter { padding:10px 11px; margin:0 0 13px; border-radius:10px; background:#f5f9f7; }.dictionary-tag-filter p { margin:0 0 5px; color:var(--muted); font-size:13px; }.dictionary-display-filter { margin-top:11px; padding-top:10px; border-top:1px solid #dce9e4; }.count { color:var(--muted); font-size:13px; margin:0 0 11px; }.entries { display:grid; gap:10px; }.entry { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:15px; border:1px solid var(--line); border-radius:12px; background:#fff; }.word { font-family:"Noto Sans Lao",sans-serif; font-size:25px; line-height:1.2; }.ipa { color:var(--brand); margin-left:7px; }.meaning { margin-top:3px; color:var(--muted); }.entry-note { margin-top:9px; padding:8px 10px; border-left:3px solid #9ed8c6; background:#f6fbf8; border-radius:0 7px 7px 0; color:#39574f; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }.entry-note strong { color:#176554; }.tag { display:inline-block; padding:2px 7px; margin-top:7px; background:var(--soft); color:#176554; border-radius:99px; font-size:12px; }.tag.hard { background:#fff0dc; color:#9a5411; }.tag.focus { background:#ffe5e5; color:#a53131; }.actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }.pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:7px; margin-top:15px; }.pagination p { margin:0 4px; color:var(--muted); font-size:13px; }.empty { padding:35px 12px; text-align:center; color:var(--muted); }.hidden { display:none!important; }.edit-note { color:var(--brand); font-size:13px; margin:-8px 0 12px; }.backup { margin:20px 0 0; }.backup p { margin:0 0 8px; }.backup .backup-status { min-height:0; margin:9px 0 0; color:var(--brand); }.practice { grid-column:1 / -1; }.practice-layout { display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:18px; align-items:start; }.practice-card { padding:22px; border:1px solid var(--line); border-radius:13px; background:#fff; }.practice-card p { margin:0 0 6px; color:var(--muted); }.question-ipa { margin:8px 0 17px; color:var(--brand); font-size:30px; font-weight:700; word-break:break-word; }.practice-answer { font-family:"Noto Sans Lao",sans-serif; font-size:24px; }.practice-result { min-height:24px; margin:13px 0 0; }.practice-result.ok { color:#087e6b; }.practice-result.wrong { color:#ad3f2e; }.practice-side { padding:15px; background:var(--soft); border-radius:12px; }.practice-side p { margin:0 0 12px; color:var(--muted); font-size:14px; }.practice-side select { margin:5px 0 12px; }.tag-picker { display:flex; flex-wrap:wrap; gap:6px; margin:5px 0 7px; }.tag-choice { padding:5px 9px; border-radius:99px; font-size:13px; }.tag-choice[aria-pressed="true"] { color:#fff; border-color:var(--brand); background:var(--brand); }.tag-hint { color:var(--muted); font-size:12px; }.secondary { margin-left:5px; } @media (min-width:761px) { .entry .actions button { padding:5px 8px; border-radius:7px; font-size:12px; } }
     @media (max-width:760px) { main{padding:20px 13px;} .grid{grid-template-columns:1fr;}.panel{padding:17px;}.entry{grid-template-columns:1fr;}.actions{justify-content:flex-start;}.filters{flex-direction:column;}.filters select{width:100%;}.two,.practice-layout{grid-template-columns:1fr;}.practice{grid-column:auto;} }
+    .bulk { margin-top:18px; border-top:1px solid var(--line); padding-top:14px; } .bulk summary { cursor:pointer; color:var(--brand); font-weight:600; } .bulk p { font-size:13px; color:var(--muted); } .bulk textarea { min-height:150px; } .bulk-preview { overflow:auto; max-height:320px; margin-top:12px; } .bulk-preview table { border-collapse:collapse; width:100%; font-size:13px; } .bulk-preview th,.bulk-preview td { text-align:left; padding:8px; border:1px solid var(--line); white-space:pre-wrap; min-width:70px; } .bulk-status { white-space:pre-wrap; } .bulk pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
   </style>
 </head>
 <body>
@@ -35,6 +36,15 @@
           <button class="primary" id="saveButton">保存词条</button> <button type="button" id="cancelButton" class="hidden">取消修改</button>
           <div class="recording backup"><p><strong>词典备份与同步</strong><br>导出的备份文件含有词条与录音，可存到 iCloud Drive。再次导入同一份词典时，会新增新词条、更新改过的词条，不再重复创建。</p><button type="button" id="exportButton">⇩ 导出备份</button> <button type="button" id="importButton">⇧ 同步导入</button><input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p></div>
         </form>
+        <details class="bulk" id="bulkPanel">
+          <summary>批量添加词条 / 字母</summary>
+          <p>每行一个词条，用半角竖线 | 分成五列。第一行固定为：老挝语 | IPA | 中文 | 标签 | 备注。只有老挝语必填，其余可留空；多个标签用逗号分隔，备注换行写成 &lt;br&gt;。正文需要竖线时写成全角 ｜。</p>
+          <details><summary>给 AI 的整理提示词（展开后可复制）</summary><textarea id="bulkPrompt" readonly aria-label="给 AI 的整理提示词"></textarea></details>
+          <label>粘贴整理后的词本<textarea id="bulkText" spellcheck="false" placeholder="老挝语 | IPA | 中文 | 标签 | 备注&#10;ກ |  |  | 辅音,基本辅音 | 待补音标&#10;ນ້ຳ |  | 水 | 生活 | "></textarea></label>
+          <button type="button" id="bulkPreviewButton">检查并预览</button> <button type="button" class="primary" id="bulkSaveButton" disabled>确认批量添加</button>
+          <p>完全相同的词条（五列内容相同）会跳过；不同词义或备注会保留为独立词条。录音可在添加后逐条补录。批量添加不用于更新已有词条。</p>
+          <p id="bulkStatus" class="bulk-status" aria-live="polite"></p><div id="bulkPreview" class="bulk-preview"></div>
+        </details>
       </section>
       <section class="panel" aria-labelledby="list-title">
         <h2 id="list-title">我的词典</h2>
@@ -64,6 +74,64 @@
     const selectedDictionaryFields = loadDictionaryFields();
     const storeName = 'entries';
     const backupFormat = 'LaoPronunciationDictionaryBackup';
+    const bulkPrompt = '请把我接下来提供的杂乱老挝语词本整理成可直接粘贴导入的表格文本。第一行必须是：老挝语 | IPA | 中文 | 标签 | 备注。每行一个词条或字母，严格五列，用半角竖线 | 分隔。只有老挝语必填；原文缺失或不能确定的 IPA、中文等请留空，不要猜测补写，字母没有中文意思可以留空。多个标签用中文或英文逗号分隔。备注可保留发音要点、例句和记忆方法；单元格内换行写成 <br>，正文中的竖线改成全角 ｜。忠实保留老挝语拼写、IPA 声调与附加符号，同形词的不同词义分别成行。不输出解释、编号或额外表格。下面是我的原始词本：';
+    let bulkReadyText = null;
+    function parseBulkText(text) {
+      const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/), entries=[], errors=[];
+      let header=false;
+      lines.forEach((raw,index)=>{
+        let line=raw.trim();
+        if(!line||/^```(?:[\w-]+)?$/.test(line))return;
+        if(line.startsWith('|'))line=line.slice(1);
+        // A trailing pipe is a table border only when it would create a sixth column.
+        let cells=line.split('|');
+        if(cells.length===6&&!cells[5].trim())cells.pop();
+        cells=cells.map(value=>value.trim());
+        if(!header){if(cells.join('|')!=='老挝语|IPA|中文|标签|备注')errors.push(`第 ${index+1} 行：请使用规定的五列表头。`);else header=true;return;}
+        if(cells.length===5&&cells.every(value=>/^:?-{3,}:?$/.test(value)))return;
+        if(cells.length!==5){errors.push(`第 ${index+1} 行：需要五列，当前为 ${cells.length} 列；空列也要保留竖线。`);return;}
+        if(!cells[0]){errors.push(`第 ${index+1} 行：老挝语不能为空。`);return;}
+        entries.push({word:cells[0],ipa:cells[1],meaning:cells[2],category:cells[3],note:cells[4].replace(/<br\s*\/?\s*>/gi,'\n')});
+      });
+      if(!header&&!errors.length)errors.push('请先粘贴含表头的词本。');
+      if(header&&!entries.length&&!errors.length)errors.push('表头下方还没有词条。');
+      return {entries,errors};
+    }
+    function planBulk(entries,existing) {
+      const known=new Set(existing.map(legacyEntryKey)), additions=[];let skipped=0;
+      for(const entry of entries){const key=legacyEntryKey(entry);if(known.has(key)){skipped++;continue;}known.add(key);additions.push(entry);}
+      return {additions,skipped};
+    }
+    async function previewBulk() {
+      const text=$('#bulkText').value;bulkReadyText=null;$('#bulkSaveButton').disabled=true;$('#bulkPreview').innerHTML='';
+      const parsed=parseBulkText(text);
+      if(parsed.errors.length){$('#bulkStatus').textContent=parsed.errors.join('\n');return;}
+      try {
+        const plan=planBulk(parsed.entries,await allEntries());if(text!==$('#bulkText').value)return;
+        $('#bulkStatus').textContent=`共 ${parsed.entries.length} 行，可新增 ${plan.additions.length} 条，跳过完全重复 ${plan.skipped} 条。预览最多显示前 50 条待添加内容。`;
+        $('#bulkPreview').innerHTML='<table><thead><tr>'+['老挝语','IPA','中文','标签','备注'].map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>'+plan.additions.slice(0,50).map(item=>'<tr>'+['word','ipa','meaning','category','note'].map(key=>`<td>${escapeHtml(item[key])}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+        bulkReadyText=text;$('#bulkSaveButton').disabled=!plan.additions.length;
+      }catch(error){$('#bulkStatus').textContent=`预览失败：${error.message}`;}
+    }
+    async function saveBulk() {
+      if(bulkReadyText===null||bulkReadyText!==$('#bulkText').value)return;
+      const parsed=parseBulkText(bulkReadyText);if(parsed.errors.length)return;
+      $('#bulkSaveButton').disabled=true;$('#bulkPreviewButton').disabled=true;$('#bulkText').disabled=true;
+      let committed=false;
+      try {
+        const database=await openDB();
+        // Read, deduplicate and add in one transaction: either the whole batch commits or none does.
+        const result=await new Promise((resolve,reject)=>{
+          const tx=database.transaction(storeName,'readwrite'),store=tx.objectStore(storeName);let plan,failure;
+          tx.oncomplete=()=>resolve(plan);tx.onabort=()=>reject(failure||tx.error||new Error('批量保存被中断'));tx.onerror=()=>{};
+          const read=store.getAll();read.onsuccess=()=>{try{plan=planBulk(parsed.entries,read.result);for(const entry of plan.additions)store.add({...entry,syncId:newSyncId(),audio:null,audioData:null,audioDataUrl:null,audioBytes:0,updatedAt:Date.now(),reviews:0,correct:0,mistakes:0,needsExtraPractice:false,reviewStats:{}});}catch(error){failure=error;tx.abort();}};
+        });
+        committed=true;bulkReadyText=null;$('#bulkPreview').innerHTML='';
+        $('#bulkStatus').textContent=`已保存 ${result.additions.length} 个词条，跳过完全重复 ${result.skipped} 条。可以在词典中修改或补录声音。`;
+        dictionaryPage=1;await requestPersistentStorage();await render();
+      }catch(error){$('#bulkStatus').textContent=committed?`词条已保存，但列表刷新失败，请刷新网页：${error.message}`:`未保存本批词条：${error.message}。请重新检查并预览后重试。`;bulkReadyText=null;}
+      finally{$('#bulkPreviewButton').disabled=false;$('#bulkText').disabled=false;}
+    }
     async function openDB(force=false) { if(force) resetDBConnection(); if(db)return db; if(dbOpening)return dbOpening; dbOpening=new Promise((resolve,reject)=>{const req=indexedDB.open('lao-private-pronunciation-dictionary',1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(storeName))req.result.createObjectStore(storeName,{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{db=req.result;db.onversionchange=()=>resetDBConnection();resolve(db);};req.onerror=()=>reject(req.error||new Error('无法打开本地数据库'));req.onblocked=()=>reject(new Error('本地数据库正被另一个页面占用，请关闭其他词典页面后重试。'));}); try{return await dbOpening;}finally{dbOpening=null;} }
     function resetDBConnection() { try{db?.close();}catch(_){} db=null; dbOpening=null; }
     function request(req) { return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('数据库操作失败'));}); }
@@ -117,6 +185,10 @@
     function setBlob(blob,text='已录好新的示范发音。保存词条后会永久保留。') { clearCurrentAudio(); currentBlob=blob; currentPreviewUrl=URL.createObjectURL(blob); $('#previewButton').disabled=false; $('#recordStatus').textContent=text; }
     function playStoredAudio(item) { const blob=audioBlobFor(item); if(!blob){alert('此词条没有可播放的录音。');return;} const url=URL.createObjectURL(blob), audio=new Audio(url), release=()=>URL.revokeObjectURL(url); audio.onended=release; audio.onerror=release; audio.play().catch(()=>{release();alert('无法播放这段录音。');}); }
     async function startRecording() { if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { alert('当前浏览器不支持录音。请使用最新版 Chrome、Edge 或 Safari。'); return; } try { const stream=await navigator.mediaDevices.getUserMedia({audio:true}); chunks=[]; recorder=new MediaRecorder(stream); recorder.ondataavailable=e=>{if(e.data.size) chunks.push(e.data)}; recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop()); setBlob(new Blob(chunks,{type:recorder.mimeType||'audio/webm'})); recorder=null; $('#recordButton').textContent='● 开始录音'; $('#recordButton').classList.remove('active');}; recorder.start(); $('#recordStatus').textContent='正在录音… 请清晰读出这个词。'; $('#recordButton').textContent='■ 停止录音'; $('#recordButton').classList.add('active'); } catch(e) { alert('无法使用麦克风。请在浏览器中允许麦克风权限，然后重试。'); } }
+    $('#bulkPrompt').value=bulkPrompt;
+    $('#bulkPreviewButton').onclick=previewBulk;
+    $('#bulkSaveButton').onclick=saveBulk;
+    $('#bulkText').oninput=()=>{bulkReadyText=null;$('#bulkSaveButton').disabled=true;$('#bulkPreview').innerHTML='';$('#bulkStatus').textContent='文本已修改，请重新检查并预览。';};
     $('#recordButton').onclick=()=>recorder?.state==='recording'?recorder.stop():startRecording();
     $('#previewButton').onclick=()=>{if(currentPreviewUrl) new Audio(currentPreviewUrl).play();};
     $('#exportButton').onclick=async()=>{ try { await exportBackup(); } catch(error) { $('#backupStatus').textContent=`导出失败：${error.message||'请重试'}`; } };

@@ -18,6 +18,7 @@
     @media (max-width:760px) { main{padding:20px 13px;} .grid{grid-template-columns:1fr;}.panel{padding:17px;}.entry{grid-template-columns:1fr;}.actions{justify-content:flex-start;}.filters{flex-direction:column;}.filters select{width:100%;}.two,.practice-layout{grid-template-columns:1fr;}.practice{grid-column:auto;} }
     .bulk { margin-top:18px; border-top:1px solid var(--line); padding-top:14px; } .bulk summary { cursor:pointer; color:var(--brand); font-weight:600; } .bulk p { font-size:13px; color:var(--muted); } .bulk textarea { min-height:150px; } .bulk-preview { overflow:auto; max-height:320px; margin-top:12px; } .bulk-preview table { border-collapse:collapse; width:100%; font-size:13px; } .bulk-preview th,.bulk-preview td { text-align:left; padding:8px; border:1px solid var(--line); white-space:pre-wrap; min-width:70px; } .bulk-status { white-space:pre-wrap; } .bulk pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
     .selection-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; } .entry-select { display:flex; align-items:center; gap:7px; margin:0 0 9px; font-size:13px; cursor:pointer; } .entry-select input { width:18px; height:18px; margin:0; accent-color:var(--brand); } .entry:has(input[data-select]:checked) { border-color:var(--brand); background:#f5fbf8; }
+    .dictionary-settings { margin-bottom:12px; } .dictionary-settings > summary { cursor:pointer; color:var(--brand); font-size:14px; padding:8px 0; } .dictionary-settings[open] > summary { margin-bottom:8px; } .dictionary-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; } .dictionary-header h2 { margin:0; } #dictionaryPanel:not(.delete-mode) .entry-select { display:none; }
   </style>
 </head>
 <body>
@@ -47,11 +48,13 @@
           <p id="bulkStatus" class="bulk-status" aria-live="polite"></p><div id="bulkPreview" class="bulk-preview"></div>
         </details>
       </section>
-      <section class="panel" aria-labelledby="list-title">
-        <h2 id="list-title">我的词典</h2>
+      <section class="panel" id="dictionaryPanel" aria-labelledby="list-title">
+        <div class="dictionary-header"><h2 id="list-title">我的词典</h2><button type="button" id="toggleDeleteMode" aria-pressed="false" aria-controls="selectionTools">批量删除</button></div>
+        <details class="dictionary-settings" id="dictionarySettings"><summary>搜索、筛选与显示设置</summary>
         <div class="filters"><input id="search" placeholder="搜索老挝语、IPA、中文、标签或备注" aria-label="搜索" /><label class="page-size">每页 <select id="pageSize" aria-label="每页显示数量"><option value="5">5 条</option><option value="10" selected>10 条</option><option value="15">15 条</option></select></label></div>
         <div class="dictionary-tag-filter"><p><strong>标签筛选（可多选）</strong></p><div id="dictionaryTags" class="tag-picker"></div><button type="button" id="clearDictionaryTags" class="tag-choice">清空标签</button><p class="tag-hint">多选后，只展示同时具有全部已选标签的词条。</p><div class="dictionary-display-filter"><p><strong>卡片显示内容（可多选）</strong></p><div id="dictionaryFields" class="tag-picker"></div><p class="tag-hint">可只保留老挝语、音标、中文或备注中的任意一项；至少保留一项。</p></div></div>
-        <p class="count" id="count"></p><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
+        <button type="button" id="closeDictionarySettings">完成设置 · 收起</button></details>
+        <p class="count" id="count"></p><div id="selectionTools" class="hidden"><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p></div><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
       </section>
       <section class="panel practice" aria-labelledby="practice-title">
         <h2 id="practice-title">多方向默写练习</h2>
@@ -74,7 +77,17 @@
     const selectedPracticeTags = new Set(), selectedDictionaryTags = new Set(), dictionaryFieldLabels={word:'老挝语',ipa:'音标',meaning:'中文',note:'备注'};
     const selectedDictionaryFields = loadDictionaryFields();
     const selectedEntryIds = new Set();
-    let visibleEntryIds = [], selectionFilter = '', deletingSelection = false;
+    let visibleEntryIds = [], selectionFilter = '', deletingSelection = false, deleteMode = false;
+    function setDeleteMode(enabled) {
+      if(deletingSelection)return;
+      deleteMode=enabled;
+      if(!enabled)selectedEntryIds.clear();
+      $('#dictionaryPanel').classList.toggle('delete-mode',enabled);
+      $('#selectionTools').classList.toggle('hidden',!enabled);
+      $('#toggleDeleteMode').textContent=enabled?'退出删除模式':'批量删除';
+      $('#toggleDeleteMode').setAttribute('aria-pressed',String(enabled));
+      updateSelectionControls();
+    }
     function updateSelectionControls() {
       $('#deleteSelected').disabled=deletingSelection||!selectedEntryIds.size;
       $('#deleteSelected').textContent=`删除已选（${selectedEntryIds.size}）`;
@@ -84,7 +97,7 @@
       document.querySelectorAll('[data-select]').forEach(box=>{box.checked=selectedEntryIds.has(Number(box.dataset.select));box.disabled=deletingSelection;});
     }
     async function deleteSelectedEntries() {
-      if(deletingSelection||!selectedEntryIds.size)return;
+      if(!deleteMode||deletingSelection||!selectedEntryIds.size)return;
       const ids=[...selectedEntryIds];
       if(!confirm(`确定删除已选的 ${ids.length} 个词条吗？包括其他页面勾选的词条；对应录音、备注和复习记录也会删除。此操作无法撤销。`))return;
       deletingSelection=true;updateSelectionControls();let committed=false;
@@ -220,6 +233,8 @@
     $('#selectPage').onclick=()=>{visibleEntryIds.forEach(id=>selectedEntryIds.add(id));updateSelectionControls();};
     $('#clearSelection').onclick=()=>{selectedEntryIds.clear();updateSelectionControls();};
     $('#deleteSelected').onclick=deleteSelectedEntries;
+    $('#toggleDeleteMode').onclick=()=>setDeleteMode(!deleteMode);
+    $('#closeDictionarySettings').onclick=()=>{$('#dictionarySettings').open=false;$('#dictionarySettings > summary').focus();};
     $('#bulkPrompt').value=bulkPrompt;
     $('#bulkPreviewButton').onclick=previewBulk;
     $('#bulkSaveButton').onclick=saveBulk;

@@ -35,6 +35,17 @@
     <nav class="view-nav" id="viewNav" aria-label="词典页面"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
     <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令（不是 Azure 密钥）<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
+    <details class="dictionary-settings" id="cloudAccountPanel">
+      <summary>云端账号 · 手动同步</summary>
+      <p class="tag-hint">登录后先进入该账号的独立词典空间，再点“云端同步”。首次迁移请先导出原本机备份，在账号空间同步导入。离线可用，修改不会自动上传；刷新后需重新登录。共享设备请退出并返回原本机空间，离线数据未加密。</p>
+      <p id="cloudWorkspaceLabel" class="tag-hint"></p><button type="button" id="cloudGuestButton">返回原本机词典</button>
+      <form id="cloudLoginForm">
+        <div class="two"><label>词典登录邮箱<input id="cloudEmail" type="email" autocomplete="username" required /></label><label>词典登录密码<input id="cloudPassword" type="password" autocomplete="current-password" required /></label></div>
+        <button class="primary" id="cloudLoginButton" type="submit">登录并检查连接</button>
+      </form>
+      <div id="cloudLoggedIn" class="hidden"><p id="cloudUserLabel" class="tag-hint"></p><button type="button" id="cloudEnterButton">进入此账号词典</button> <button type="button" id="cloudSyncButton" class="primary">云端同步</button> <button type="button" id="cloudCheckButton">重新检查连接</button> <button type="button" id="cloudLogoutButton">退出登录</button></div>
+      <p id="cloudStatus" class="tag-hint" role="status" aria-live="polite">尚未登录。现有本地词典可照常使用。</p>
+    </details>
     <div class="grid">
       <section class="panel hidden" id="addPanel" aria-labelledby="form-title">
         <h2 id="form-title">添加词条</h2><p id="editNote" class="edit-note hidden">正在修改词条。保存后会替换原内容；不重新录音会保留旧录音。删除自己的录音需保存修改后生效，不影响默认发音缓存。</p>
@@ -83,6 +94,13 @@
   </main>
   <script>
     const $ = s => document.querySelector(s);
+    const cloudWorkspace=(()=>{try{const id=localStorage.getItem('lao-cloud-workspace');return /^[0-9a-f-]{36}$/i.test(id||'')?id:null;}catch(_){return null;}})();
+    const workspaceName=name=>name+(cloudWorkspace?'-account-'+cloudWorkspace:'');
+    function switchCloudWorkspace(owner) {
+      if(recorder||editingId!==null||ttsPending.size||backupBusy){alert('请先完成录音、修改、音频生成或备份操作。');return;}
+      if(!confirm('将切换本机词典空间并刷新页面，未保存的输入会丢失。原词典不会删除。首次迁移：先在原本机词典导出备份，进入账号词典后用“同步导入”导入。继续吗？'))return;
+      try{if(owner)localStorage.setItem('lao-cloud-workspace',owner);else localStorage.removeItem('lao-cloud-workspace');location.reload();}catch(_){alert('无法保存账号空间选择，请允许浏览器本地存储。');}
+    }
     let db, dbOpening = null, recorder, chunks = [], currentBlob = null, removePersonalAudio = false, editingId = null, currentPreviewUrl = null, practiceId = null, practiceDirection = null, practiceEvaluated = false, dictionaryPage = 1;
     const selectedPracticeTags = new Set(), selectedDictionaryTags = new Set(), dictionaryFieldLabels={word:'老挝语',ipa:'音标',meaning:'中文',note:'备注'};
     const selectedDictionaryFields = loadDictionaryFields();
@@ -144,18 +162,18 @@
     }
     const storeName = 'entries';
     const backupFormat = 'LaoPronunciationDictionaryBackup';
-    let ttsSettings={};try{ttsSettings=JSON.parse(localStorage.getItem('lao-tts-settings'))||{};}catch(_){}
+    let ttsSettings={};try{ttsSettings=JSON.parse(localStorage.getItem(workspaceName('lao-tts-settings')))||{};}catch(_){}
     const ttsPending=new Map();let playbackGeneration=0;
     function ttsCache(mode,key,value) {
-      return new Promise((resolve,reject)=>{const open=indexedDB.open('lao-default-speech-cache',1);open.onupgradeneeded=()=>open.result.createObjectStore('audio');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const cache=open.result,tx=cache.transaction('audio',mode),store=tx.objectStore('audio');let result;const req=value?store.put(value,key):store.get(key);req.onsuccess=()=>{result=req.result;};tx.oncomplete=()=>{cache.close();resolve(result);};tx.onabort=()=>{cache.close();reject(tx.error);};tx.onerror=()=>{};};});
+      return new Promise((resolve,reject)=>{const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);open.onupgradeneeded=()=>open.result.createObjectStore('audio');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const cache=open.result,tx=cache.transaction('audio',mode),store=tx.objectStore('audio');let result;const req=value?store.put(value,key):store.get(key);req.onsuccess=()=>{result=req.result;};tx.oncomplete=()=>{cache.close();resolve(result);};tx.onabort=()=>{cache.close();reject(tx.error);};tx.onerror=()=>{};};});
     }
     async function defaultSpeech(text) {
       const key=JSON.stringify([ttsSettings.endpoint||'',text]);
       const cached=await ttsCache('readonly',key);if(cached instanceof Blob)return cached;
-      if(!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;}
+      if(!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;const rows=await cloudCacheRows();const saved=rows.find(row=>{try{return JSON.parse(row.key)[1]===text;}catch(_){return false;}});if(saved?.blob instanceof Blob)return saved.blob;}
       if(!ttsSettings.endpoint||!ttsSettings.token)throw new Error('请先展开“在线发音设置”，配置服务地址和访问口令。');
       if(ttsPending.has(key))return ttsPending.get(key);
-      const job=(async()=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA'}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}throw new Error(message);}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}return blob;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
+      const job=(async()=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA'}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}const error=new Error(message);error.status=response.status;throw error;}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}return blob;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
     }
     async function playEntrySpeech(item, source = 'auto') {
       stopPracticeAudio();const generation=playbackGeneration;
@@ -219,7 +237,7 @@
       }catch(error){$('#bulkStatus').textContent=committed?`词条已保存，但列表刷新失败，请刷新网页：${error.message}`:`未保存本批词条：${error.message}。请重新检查并预览后重试。`;bulkReadyText=null;}
       finally{$('#bulkPreviewButton').disabled=false;$('#bulkText').disabled=false;}
     }
-    async function openDB(force=false) { if(force) resetDBConnection(); if(db)return db; if(dbOpening)return dbOpening; dbOpening=new Promise((resolve,reject)=>{const req=indexedDB.open('lao-private-pronunciation-dictionary',1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(storeName))req.result.createObjectStore(storeName,{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{db=req.result;db.onversionchange=()=>resetDBConnection();resolve(db);};req.onerror=()=>reject(req.error||new Error('无法打开本地数据库'));req.onblocked=()=>reject(new Error('本地数据库正被另一个页面占用，请关闭其他词典页面后重试。'));}); try{return await dbOpening;}finally{dbOpening=null;} }
+    async function openDB(force=false) { if(force) resetDBConnection(); if(db)return db; if(dbOpening)return dbOpening; dbOpening=new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-private-pronunciation-dictionary'),2);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('cloud_meta'))req.result.createObjectStore('cloud_meta');if(!req.result.objectStoreNames.contains(storeName))req.result.createObjectStore(storeName,{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{db=req.result;db.onversionchange=()=>resetDBConnection();resolve(db);};req.onerror=()=>reject(req.error||new Error('无法打开本地数据库'));req.onblocked=()=>reject(new Error('本地数据库正被另一个页面占用，请关闭其他词典页面后重试。'));}); try{return await dbOpening;}finally{dbOpening=null;} }
     function resetDBConnection() { try{db?.close();}catch(_){} db=null; dbOpening=null; }
     function request(req) { return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('数据库操作失败'));}); }
     function transactionDone(transaction) { return new Promise((resolve,reject)=>{transaction.oncomplete=()=>resolve();transaction.onerror=()=>reject(transaction.error||new Error('数据库事务失败'));transaction.onabort=()=>reject(transaction.error||new Error('数据库事务被中断'));}); }
@@ -238,7 +256,7 @@
     async function migrateLegacyAudio() { const items=await allEntries(); for(const item of items){const blob=audioBlobFor(item);if(blob&&!item.audioDataUrl){const payload=await audioPayload(blob);await putEntry({...item,...payload});}} }
     function newSyncId() { return globalThis.crypto?.randomUUID?.()||`entry-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
     async function migrateSyncIds() { const items=await allEntries(); for(const item of items) if(!item.syncId) await putEntry({...item,syncId:newSyncId()}); }
-    async function seed() { if ((await allEntries()).length) return; for (const item of [{word:'ສະບາຍດີ',ipa:'sa.bāːj.diː',meaning:'你好',category:'问候'},{word:'ຂອບໃຈ',ipa:'kʰɔ̀ːp.caj',meaning:'谢谢',category:'日常用语'},{word:'ນ້ຳ',ipa:'nâm',meaning:'水',category:'生活'}]) await addEntry({...item,syncId:newSyncId(),audio:null,audioData:null,audioDataUrl:null,updatedAt:Date.now()}); }
+    async function seed() { if (cloudWorkspace||(await allEntries()).length) return; for (const item of [{word:'ສະບາຍດີ',ipa:'sa.bāːj.diː',meaning:'你好',category:'问候'},{word:'ຂອບໃຈ',ipa:'kʰɔ̀ːp.caj',meaning:'谢谢',category:'日常用语'},{word:'ນ້ຳ',ipa:'nâm',meaning:'水',category:'生活'}]) await addEntry({...item,syncId:newSyncId(),audio:null,audioData:null,audioDataUrl:null,updatedAt:Date.now()}); }
     function tagsFor(item) { return [...new Set((item.category||'').split(/[,，]/).map(tag=>tag.trim()).filter(Boolean))]; }
     function legacyEntryKey(item) { return JSON.stringify([(item.word||'').normalize('NFC').trim(),(item.ipa||'').normalize('NFC').trim(),(item.meaning||'').normalize('NFC').trim(),tagsFor(item).map(tag=>tag.normalize('NFC')).sort(),(item.note||'').normalize('NFC').trim()]); }
     function matchesSelectedTags(item,selectedTags,mode) { if(!selectedTags.length)return true; const tags=tagsFor(item); return mode==='all'?selectedTags.every(tag=>tags.includes(tag)):selectedTags.some(tag=>tags.includes(tag)); }
@@ -273,7 +291,7 @@
 
     function withDefaultAudioStore(mode, work) {
       return new Promise((resolve,reject)=>{
-        const open=indexedDB.open('lao-default-speech-cache',1);
+        const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);
         open.onupgradeneeded=()=>open.result.createObjectStore('audio');
         open.onerror=()=>reject(open.error);
         open.onsuccess=()=>{
@@ -429,7 +447,7 @@
     $('#ttsEndpoint').value=ttsSettings.endpoint||'';
     $('#ttsToken').value=ttsSettings.token||'';
     if(ttsSettings.endpoint)$('#ttsStatus').textContent='已配置服务地址；点击词条的“默认发音”即可生成并播放。';
-    $('#saveTtsSettings').onclick=()=>{try{const endpoint=$('#ttsEndpoint').value.trim(),token=$('#ttsToken').value.trim();if(endpoint&&new URL(endpoint).protocol!=='https:')throw new Error('服务地址必须以 https:// 开头。');ttsSettings={endpoint,token};localStorage.setItem('lao-tts-settings',JSON.stringify(ttsSettings));stopPracticeAudio();$('#ttsStatus').textContent=endpoint&&token?'设置已保存。请点击一个词条的默认发音进行测试。':'在线发音未启用：请填写服务地址和个人访问口令。';}catch(error){alert(error.message);}};
+    $('#saveTtsSettings').onclick=()=>{try{const endpoint=$('#ttsEndpoint').value.trim(),token=$('#ttsToken').value.trim();if(endpoint&&new URL(endpoint).protocol!=='https:')throw new Error('服务地址必须以 https:// 开头。');ttsSettings={endpoint,token};localStorage.setItem(workspaceName('lao-tts-settings'),JSON.stringify(ttsSettings));stopPracticeAudio();$('#ttsStatus').textContent=endpoint&&token?'设置已保存。请点击一个词条的默认发音进行测试。':'在线发音未启用：请填写服务地址和个人访问口令。';}catch(error){alert(error.message);}};
     $('#bulkPrompt').value=bulkPrompt;
     $('#bulkPreviewButton').onclick=previewBulk;
     $('#bulkSaveButton').onclick=saveBulk;
@@ -459,6 +477,243 @@
     $('#pagination').onclick=e=>{const button=e.target.closest('[data-page]');if(!button||button.disabled)return;const action=button.dataset.page;if(action==='first')dictionaryPage=1;if(action==='previous')dictionaryPage--;if(action==='next')dictionaryPage++;if(action==='last')dictionaryPage=Number.MAX_SAFE_INTEGER;render();};
     $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
     (async()=>{try{await openDB();await migrateLegacyAudio();await seed();await migrateSyncIds();await render();await choosePractice();}catch(e){alert('无法打开本地词典数据库：'+e.message)}})();
+    // Cloud sync core: three-way merge, immutable audio and conditional writes.
+    function cloudStable(value) { if(Array.isArray(value))return '['+value.map(cloudStable).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+cloudStable(value[k])).join(',')+'}';return JSON.stringify(value); }
+    function cloudSame(a,b) { return cloudStable(a)===cloudStable(b); }
+    function cloudValue(row) { return row?{deleted:row.deleted,payload:row.deleted?{}:row.payload}:null; }
+    function cloudDecision(local,remote,base) {
+      if(cloudSame(local,remote))return 'same';
+      if(!base){if(!local)return 'remote';if(!remote)return 'local';return 'conflict';}
+      if(!remote)throw new Error('云端缺少以前同步过的记录，已停止，避免误删。');
+      if(cloudSame(local,base))return 'remote';
+      if(cloudSame(remote,base))return 'local';
+      return 'conflict';
+    }
+    async function cloudHash(blob) { if(!crypto.subtle)throw new Error('当前页面不支持安全摘要，请在 HTTPS 词典页面使用云端同步。');return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+    function cloudEntryData(item) {
+      const value={};for(const key of ['word','ipa','meaning','category','note'])value[key]=typeof item[key]==='string'?item[key]:'';
+      value.syncId=item.syncId;value.syncAliases=syncKeys(item).filter(x=>x!==item.syncId);
+      for(const key of ['updatedAt','mistakes','reviews','correct','lastReviewed'])value[key]=Number(item[key])||0;
+      value.needsExtraPractice=Boolean(item.needsExtraPractice);value.reviewStats=item.reviewStats||{};return value;
+    }
+    async function cloudCacheRows() { return withDefaultAudioStore('readonly',store=>{const rows=[],r=store.openCursor();r.onsuccess=()=>{if(r.result){rows.push({key:r.result.key,blob:r.result.value});r.result.continue();}};return rows;}); }
+    async function cloudReadCheckpoint() { const database=await openDB();return new Promise((resolve,reject)=>{const tx=database.transaction('cloud_meta','readonly'),r=tx.objectStore('cloud_meta').get('checkpoint');tx.oncomplete=()=>resolve(r.result||{});tx.onabort=()=>reject(tx.error);}); }
+    async function runCloudSync(uid,api,status) {
+      if(uid!==cloudWorkspace)throw new Error('请先进入当前账号的独立词典空间。');
+      if(recorder||editingId!==null||ttsPending.size||backupBusy||deletingSelection)throw new Error('请先完成录音、修改、发音生成、备份或删除操作，再同步。');
+      stopPracticeAudio();
+      const panels=[...document.querySelectorAll('.grid, #viewNav, details.dictionary-settings:not(#cloudAccountPanel)')];
+      panels.forEach(x=>x.inert=true);
+      const beforeUnload=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',beforeUnload);
+      try {
+        await migrateSyncIds();
+        const entries=await allEntries(),cache=await cloudCacheRows(),base=await cloudReadCheckpoint();
+        const local=new Map(),blobs=new Map(),entryByKey=new Map(),cacheByKey=new Map();
+        const descriptor=async blob=>{
+          if(!blob)return null;if(!(blob instanceof Blob)||!blob.size||blob.size>20971520)throw new Error('音频为空或超过 20 MiB，请先处理后再同步。');
+          const mime=(blob.type||'audio/webm').split(';')[0].toLowerCase();
+          if(!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(mime))throw new Error('音频格式暂不支持：'+mime);
+          const sha=await cloudHash(blob),path=uid+'/'+sha+'-'+mime.replace(/[^a-z0-9]/g,'_');blobs.set(path,blob);return {path,sha,mime,size:blob.size};
+        };
+        for(const item of entries){
+          if(!item.syncId||item.syncId.length>512)throw new Error('词条同步编号无效，请先导出备份。');
+          const key='entry:'+item.syncId;if(local.has(key))throw new Error('发现重复同步编号，请先核对重复词条。');
+          local.set(key,{deleted:false,payload:{version:1,entry:cloudEntryData(item),audio:await descriptor(audioBlobFor(item))}});entryByKey.set(key,item);
+        }
+        for(const row of cache){
+          const parts=JSON.parse(row.key);if(!Array.isArray(parts)||parts.length!==2||parts.some(x=>typeof x!=='string'))throw new Error('默认音频索引无效。');
+          const key='default_audio:'+await cloudHash(new Blob([row.key]));
+          local.set(key,{deleted:false,payload:{version:1,cacheKey:row.key,audio:await descriptor(row.blob)}});cacheByKey.set(key,row);
+        }
+        status('正在读取云端词条和音频索引…');
+        const remote=new Map();
+        for(let offset=0;;){
+          const rows=await api('/rest/v1/lao_dictionary_records?select=*&owner_id=eq.'+uid+'&order=record_kind.asc,record_id.asc&limit=500&offset='+offset);
+          if(!Array.isArray(rows))throw new Error('云端返回格式异常。');if(!rows.length)break;
+          for(const row of rows){
+            if(row.owner_id!==uid||!['entry','default_audio'].includes(row.record_kind)||!Number.isSafeInteger(row.revision)||row.revision<1)throw new Error('云端记录身份或版本异常。');
+            const key=row.record_kind+':'+row.record_id;if(remote.has(key))throw new Error('云端分页发生变化，请重新同步。');remote.set(key,row);
+          }
+          offset+=rows.length;
+        }
+        // Reconcile legacy/cross-device IDs only with explicit user approval.
+        const linkedEntries=[];
+        for(const [key,value] of [...local]){
+          if(!key.startsWith('entry:')||remote.has(key)||base[key])continue;
+          const e=value.payload.entry;
+          const candidates=[...remote].filter(([rk,rr])=>rk.startsWith('entry:')&&!rr.deleted&&rr.payload?.entry&&
+            (syncKeys(e).some(id=>syncKeys(rr.payload.entry).includes(id))||sameWord(e,rr.payload.entry)));
+          if(!candidates.length)continue;
+          if(candidates.length>1)throw new Error('云端有多个“'+e.word+'”候选词条，请先通过备份导入核对关联，再同步。');
+          const [targetKey,targetRow]=candidates[0];
+          const answer=prompt('“'+e.word+'”在云端已有另一个编号。\n本机释义：'+e.meaning+'\n云端释义：'+targetRow.payload.entry.meaning+'\n输入 1 关联为同一词条，输入 2 保留为不同词条；取消停止。','1');
+          if(answer===null||!['1','2'].includes(answer.trim()))throw new Error('已停止同步，尚未上传。');
+          if(answer.trim()==='2')continue;
+          if(local.has(targetKey))throw new Error('本机已有对应词条，请先合并重复词条，再同步。');
+          const old=entryByKey.get(key),canonical=targetRow.record_id;
+          value.payload.entry={...e,syncId:canonical,syncAliases:[...new Set([...syncKeys(e),...syncKeys(targetRow.payload.entry)])].filter(id=>id!==canonical)};
+          linkedEntries.push({value:{...old,syncId:canonical,syncAliases:value.payload.entry.syncAliases}});
+          local.delete(key);entryByKey.delete(key);local.set(targetKey,value);entryByKey.set(targetKey,old);
+        }
+        const plan=[];
+        for(const key of new Set([...local.keys(),...remote.keys(),...Object.keys(base)])){
+          let l=local.get(key)||null;const row=remote.get(key),r=cloudValue(row),b=base[key]?.value||null;
+          if(!l&&b)l=key.startsWith('entry:')?{deleted:true,payload:{}}:b; // Cache eviction is not an intentional delete.
+          let action=cloudDecision(l,r,b);
+          if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
+          if(action==='conflict'){
+            const label=l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
+            const describe=v=>!v||v.deleted?'已删除':v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
+            const choice=prompt('两端都修改了“'+label+'”。\n本机：'+describe(l)+'\n云端：'+describe(r)+'\n输入 1 保留本机，输入 2 使用云端。取消则停止本次同步（此时尚未上传）。','2');
+            if(choice===null)throw new Error('已取消同步，尚未上传或修改词条。');
+            if(!['1','2'].includes(choice.trim()))throw new Error('未选择有效版本，已停止同步。');action=choice.trim()==='1'?'local':'remote';
+          }
+          const target=action==='local'?l:r;if(target)plan.push({key,action,target,row});
+        }
+        const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
+        if(!confirm('将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
+        function validateAudio(a){if(!a||!a.path?.startsWith(uid+'/')||!/^[0-9a-f]{64}$/.test(a.sha)||a.path!==uid+'/'+a.sha+'-'+a.mime?.replace(/[^a-z0-9]/g,'_')||!a.mime?.startsWith('audio/')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('云端音频索引无效，已停止。');}
+        async function loadAudio(a){
+          validateAudio(a);if(blobs.has(a.path))return blobs.get(a.path);
+          const blob=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});
+          if(blob.size!==a.size||await cloudHash(blob)!==a.sha)throw new Error('下载的音频校验失败，未覆盖本机数据。');
+          const typed=new Blob([blob],{type:a.mime});blobs.set(a.path,typed);return typed;
+        }
+        const changes=[...linkedEntries],audioChanges=[];
+        // Validate and stage downloads before any cloud record writes.
+        for(const p of plan){
+          if(!p.target.deleted){
+            const payload=p.target.payload;if(payload.version!==1)throw new Error('云端格式版本不支持，请更新程序。');
+            if(p.key.startsWith('entry:')){const e=payload.entry;if(!e||typeof e.word!=='string'||!e.word.trim()||e.syncId!==p.key.slice(6))throw new Error('云端词条格式无效。');}
+            else {const parts=JSON.parse(payload.cacheKey);if(!Array.isArray(parts)||parts.length!==2||parts.some(x=>typeof x!=='string')||await cloudHash(new Blob([payload.cacheKey]))!==p.key.slice(14))throw new Error('云端默认音频索引不匹配。');}
+          }
+          if(p.action!=='remote')continue;
+          if(p.key.startsWith('entry:')){
+            const old=entryByKey.get(p.key);
+            if(p.target.deleted){if(old)changes.push({deleteId:old.id});}
+            else {const payload=p.target.payload,audio=await audioPayload(payload.audio?await loadAudio(payload.audio):null);const value={...cloudEntryData(payload.entry),...audio};if(old)value.id=old.id;changes.push({value});}
+          }else if(!p.target.deleted)audioChanges.push({key:p.target.payload.cacheKey,blob:await loadAudio(p.target.payload.audio)});
+        }
+        for(const p of plan.filter(x=>x.action==='local')){
+          status('正在上传 '+(p.key.startsWith('entry:')?'词条':'默认音频')+'…');
+          const a=p.target.payload.audio;
+          if(!p.target.deleted&&a){
+            validateAudio(a);const blob=blobs.get(a.path);if(!blob)throw new Error('本机音频缺失。');
+            try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}
+            catch(error){if(![400,409].includes(error.status))throw error;const existing=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(existing.size!==a.size||await cloudHash(existing)!==a.sha)throw new Error('已有云端音频与本机不符，未覆盖。');}
+          }
+          const colon=p.key.indexOf(':'),kind=p.key.slice(0,colon),id=p.key.slice(colon+1);
+          const quotedId=encodeURIComponent('"'+id.replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"');
+          const body={payload:p.target.payload,deleted:p.target.deleted};
+          const result=p.row?await api('/rest/v1/lao_dictionary_records?owner_id=eq.'+uid+'&record_kind=eq.'+kind+'&record_id=eq.'+quotedId+'&revision=eq.'+p.row.revision,{method:'PATCH',body,extraHeaders:{Prefer:'return=representation'}}):await api('/rest/v1/lao_dictionary_records',{method:'POST',body:{owner_id:uid,record_kind:kind,record_id:id,...body},extraHeaders:{Prefer:'return=representation'}});
+          if(!Array.isArray(result)||result.length!==1||result[0].owner_id!==uid||result[0].record_id!==id||result[0].record_kind!==kind||!Number.isSafeInteger(result[0].revision))throw new Error('其他设备刚刚修改了数据，请重新同步并处理冲突。');
+          p.row=result[0];
+        }
+        // Downloads may complete after another local tab edits: refuse overwriting that tab's entries.
+        const cacheFingerprint=async rows=>cloudStable(await Promise.all(rows.map(async row=>[row.key,await cloudHash(row.blob)])));
+        if(await cacheFingerprint(await cloudCacheRows())!==await cacheFingerprint(cache))throw new Error('另一个页面更新了默认音频，请重新同步。');
+        await restoreDefaultAudio(audioChanges);
+        const checkpoint={};for(const p of plan)if(p.row)checkpoint[p.key]={revision:p.row.revision,value:p.target};
+        const database=await openDB();
+        await new Promise((resolve,reject)=>{
+          const tx=database.transaction([storeName,'cloud_meta'],'readwrite'),store=tx.objectStore(storeName);let changed=false;
+          tx.oncomplete=resolve;tx.onerror=()=>{};tx.onabort=()=>reject(new Error(changed?'另一个页面修改了本机词典，请重新同步。':'本机同步保存失败，请重试。'));
+          const r=store.getAll();r.onsuccess=()=>{
+            if(!cloudSame(r.result.slice().sort((a,b)=>a.id-b.id),entries.slice().sort((a,b)=>a.id-b.id))){changed=true;tx.abort();return;}
+            try{for(const change of changes){if(change.deleteId!==undefined)store.delete(change.deleteId);else store.put(change.value);}tx.objectStore('cloud_meta').put(checkpoint,'checkpoint');}catch(_){tx.abort();}
+          };
+        });
+        await render();await choosePractice();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。两类音频已保存在本机，可离线播放。');
+      }finally{panels.forEach(x=>x.inert=false);window.removeEventListener('beforeunload',beforeUnload);}
+    }
+
+    // Cloud account and manual sync controls.
+    (()=>{
+      const project='https://eqfxljkthrrjekquqnbr.supabase.co';
+      const publishableKey='sb_publishable_9rDDNlUlHTgUYeW0nl1m4A_oyetJzie';
+      let session=null,busy=false;
+      const status=message=>{$('#cloudStatus').textContent=message;};
+      function updateUI(){
+        $('#cloudLoginForm').classList.toggle('hidden',Boolean(session));
+        $('#cloudLoggedIn').classList.toggle('hidden',!session);
+        $('#cloudUserLabel').textContent=session?'已登录：'+session.user.email:'';
+        for(const id of ['cloudLoginButton','cloudCheckButton','cloudLogoutButton','cloudEmail','cloudPassword','cloudEnterButton','cloudSyncButton','cloudGuestButton'])$('#'+id).disabled=busy;
+      }
+      async function cloudRequest(path,{method='GET',body,token,rawBody,blobResponse=false,extraHeaders={}}={}){
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+        try{
+          const headers={apikey:publishableKey,...extraHeaders};
+          if(token)headers.Authorization='Bearer '+token;
+          if(body!==undefined)headers['Content-Type']='application/json';
+          const response=await fetch(project+path,{method,headers,body:rawBody!==undefined?rawBody:body===undefined?undefined:JSON.stringify(body),signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store'});
+          if(response.ok&&blobResponse)return response.blob();
+          const data=await response.json().catch(()=>null);
+          if(!response.ok){
+            const code=data?.error_code||data?.code;
+            const message=code==='invalid_credentials'?'邮箱或密码不正确。':code==='email_not_confirmed'?'这个账号的邮箱尚未确认，请在 Supabase 用户页面检查。':response.status===401?'登录凭证无效或已过期，请退出后重新登录。':response.status===403?'云端拒绝访问，请检查数据表与存储权限。':response.status===429?'请求过于频繁，请稍后重试。':'云端请求失败（'+response.status+'），请把此提示发给我排查。';
+            const error=new Error(message);error.status=response.status;throw error;
+          }
+          return data;
+        }catch(error){
+          if(error.name==='AbortError')throw new Error('连接超时，请检查网络后重试。');
+          if(error instanceof TypeError)throw new Error('无法连接云端，请检查网络；也可以在 GitHub 网页上重试。');
+          throw error;
+        }finally{clearTimeout(timer);}
+      }
+      async function checkConnection(){
+        if(!session)throw new Error('请先登录。');
+        if(Date.now()>=session.expiresAt){session=null;throw new Error('登录已过期，请重新登录。');}
+        const token=session.token,user=await cloudRequest('/auth/v1/user',{token});
+        if(user?.id!==session.user.id)throw new Error('账号验证不一致，请退出后重新登录。');
+        const rows=await cloudRequest('/rest/v1/lao_dictionary_records?select=record_id&owner_id=eq.'+encodeURIComponent(user.id)+'&limit=1',{token});
+        if(!Array.isArray(rows))throw new Error('数据表返回格式异常，请检查项目配置。');
+        const audio=await cloudRequest('/storage/v1/object/list/lao-dictionary-audio',{method:'POST',token,body:{prefix:user.id+'/',limit:1,offset:0}});
+        if(!Array.isArray(audio))throw new Error('音频存储返回格式异常，请检查项目配置。');
+        status('登录成功；词典数据表与音频目录读取请求成功。尚未执行同步。请进入账号词典空间，再点击“云端同步”。');
+      }
+      $('#cloudWorkspaceLabel').textContent=cloudWorkspace?'当前为账号专属本机空间：'+cloudWorkspace:'当前为原本机词典（不会自动上传）。';
+      $('#cloudGuestButton').classList.toggle('hidden',!cloudWorkspace);
+      $('#cloudGuestButton').onclick=()=>{if(!busy)switchCloudWorkspace(null);};
+      $('#cloudEnterButton').onclick=()=>{if(!busy&&session)switchCloudWorkspace(session.user.id);};
+      $('#cloudSyncButton').onclick=async()=>{
+        if(busy)return;
+        if(!session){status('请先登录。');return;}
+        if(session.user.id!==cloudWorkspace){status('请先点击“进入此账号词典”；原本机词典保留不变。');return;}
+        busy=true;updateUI();
+        try{
+          await checkConnection();
+          const uid=session.user.id,token=session.token;
+          const task=()=>runCloudSync(uid,(path,options={})=>cloudRequest(path,{...options,token}),status);
+          if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
+          else await task();
+        }catch(error){status('同步未完成：'+error.message+' 已成功上传的项目可能已在云端保存，请重试；不要清空本机数据。');}
+        finally{busy=false;updateUI();}
+      };
+      $('#cloudLoginForm').onsubmit=async event=>{
+        event.preventDefault();if(busy)return;
+        const email=$('#cloudEmail').value.trim(),password=$('#cloudPassword').value;
+        if(!email||!password){status('请填写词典账号的邮箱和密码。');return;}
+        busy=true;updateUI();status('正在登录并检查连接…');
+        try{
+          const data=await cloudRequest('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});
+          if(!data?.access_token||!data?.user?.id||!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<=0)throw new Error('登录返回信息不完整，请重试。');
+          session={token:data.access_token,user:data.user,expiresAt:Date.now()+Number(data.expires_in)*1000};
+          await checkConnection();
+        }catch(error){status((session?'账号已登录，但连接检查未完成：':'登录未完成：')+error.message);}
+        finally{$('#cloudPassword').value='';busy=false;updateUI();}
+      };
+      $('#cloudCheckButton').onclick=async()=>{
+        if(busy)return;busy=true;updateUI();status('正在检查连接…');
+        try{await checkConnection();}catch(error){status(error.message);}finally{busy=false;updateUI();}
+      };
+      $('#cloudLogoutButton').onclick=async()=>{
+        if(busy)return;const token=session?.token;session=null;busy=true;updateUI();$('#cloudPassword').value='';
+        try{if(token)await cloudRequest('/auth/v1/logout?scope=local',{method:'POST',token});status('已退出登录。本机缓存仍保留；共享设备请点“返回原本机词典”。');}
+        catch(_){status('本页已退出登录，但未能通知云端撤销会话。请勿在共享设备上保留已登录页面。');}
+        finally{busy=false;updateUI();}
+      };
+      updateUI();
+    })();
   </script>
 </body>
 </html>

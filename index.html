@@ -37,11 +37,12 @@
     <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令（不是 Azure 密钥）<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
     <details class="dictionary-settings" id="cloudAccountPanel">
       <summary>云端账号 · 手动同步</summary>
-      <p class="tag-hint">登录后先进入该账号的独立词典空间，再点“云端同步”。首次迁移请先导出原本机备份，在账号空间同步导入。离线可用，修改不会自动上传；刷新后需重新登录。共享设备请退出并返回原本机空间，离线数据未加密。</p>
+      <p class="tag-hint">登录后打开你的账号词典，点击“云端同步”即可同步。勾选“记住登录”后，刷新或下次打开会恢复登录；不会保存密码。首次迁移仍需先导出原本机备份，再在账号词典“同步导入”。修改不会自动上传。共享设备请勿记住登录；离线数据未加密。</p>
       <p id="cloudWorkspaceLabel" class="tag-hint"></p><button type="button" id="cloudGuestButton">返回原本机词典</button>
       <form id="cloudLoginForm">
         <div class="two"><label>词典登录邮箱<input id="cloudEmail" type="email" autocomplete="username" required /></label><label>词典登录密码<input id="cloudPassword" type="password" autocomplete="current-password" required /></label></div>
-        <button class="primary" id="cloudLoginButton" type="submit">登录并检查连接</button>
+        <label style="display:flex;align-items:center;gap:.5rem;margin:.7rem 0"><input id="cloudRemember" type="checkbox" checked style="width:auto" />记住登录（仅限自己的设备）</label>
+        <button class="primary" id="cloudLoginButton" type="submit">登录并打开词典</button>
       </form>
       <div id="cloudLoggedIn" class="hidden"><p id="cloudUserLabel" class="tag-hint"></p><button type="button" id="cloudEnterButton">进入此账号词典</button> <button type="button" id="cloudSyncButton" class="primary">云端同步</button> <button type="button" id="cloudCheckButton">重新检查连接</button> <button type="button" id="cloudLogoutButton">退出登录</button></div>
       <p id="cloudStatus" class="tag-hint" role="status" aria-live="polite">尚未登录。现有本地词典可照常使用。</p>
@@ -97,8 +98,9 @@
     const cloudWorkspace=(()=>{try{const id=localStorage.getItem('lao-cloud-workspace');return /^[0-9a-f-]{36}$/i.test(id||'')?id:null;}catch(_){return null;}})();
     const workspaceName=name=>name+(cloudWorkspace?'-account-'+cloudWorkspace:'');
     function switchCloudWorkspace(owner) {
+      if(owner===cloudWorkspace)return true;
       if(recorder||editingId!==null||ttsPending.size||backupBusy){alert('请先完成录音、修改、音频生成或备份操作。');return;}
-      if(!confirm('将切换本机词典空间并刷新页面，未保存的输入会丢失。原词典不会删除。首次迁移：先在原本机词典导出备份，进入账号词典后用“同步导入”导入。继续吗？'))return;
+      if(!confirm('将打开'+(owner?'此账号词典':'原本机词典')+'。原数据不会删除，未保存的输入会丢失。继续吗？'))return false;
       try{if(owner)localStorage.setItem('lao-cloud-workspace',owner);else localStorage.removeItem('lao-cloud-workspace');location.reload();}catch(_){alert('无法保存账号空间选择，请允许浏览器本地存储。');}
     }
     let db, dbOpening = null, recorder, chunks = [], currentBlob = null, removePersonalAudio = false, editingId = null, currentPreviewUrl = null, practiceId = null, practiceDirection = null, practiceEvaluated = false, dictionaryPage = 1;
@@ -633,13 +635,67 @@
     (()=>{
       const project='https://eqfxljkthrrjekquqnbr.supabase.co';
       const publishableKey='sb_publishable_9rDDNlUlHTgUYeW0nl1m4A_oyetJzie';
-      let session=null,busy=false;
+      const sessionKey='lao-auth-eqfxljkthrrjekquqnbr-v1';
+      let session=null,busy=false,remember=true,persisted=false,refreshing=null,authEpoch=0,storageNotice='';
+      function storage(persistent){return persistent?localStorage:sessionStorage;}
+      function readSaved(persistent){
+        try{const s=JSON.parse(storage(persistent).getItem(sessionKey));return s&&typeof s.token==='string'&&typeof s.refreshToken==='string'&&typeof s.user?.id==='string'&&typeof s.user?.email==='string'&&Number.isFinite(s.expiresAt)?s:null;}catch(_){return null;}
+      }
+      function clearSaved(){for(const flag of [true,false])try{storage(flag).removeItem(sessionKey);}catch(_){}persisted=false;}
+      function saveSession(){
+        persisted=false;storageNotice='';
+        const value=JSON.stringify({token:session.token,refreshToken:session.refreshToken,user:{id:session.user.id,email:session.user.email},expiresAt:session.expiresAt});
+        try{
+          storage(remember).setItem(sessionKey,value);
+          try{storage(!remember).removeItem(sessionKey);}catch(_){}
+          persisted=true;
+        }catch(_){storageNotice=' 浏览器不允许保存登录状态；本页仍可使用，但刷新后需重新登录。';}
+      }
+      function acceptSession(data,expectedUid){
+        if(!data?.access_token||!data?.refresh_token||!data?.user?.id||!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<=0)throw new Error('登录返回信息不完整，请重试。');
+        if(expectedUid&&data.user.id!==expectedUid)throw new Error('续期账号不一致，已停止。');
+        session={token:data.access_token,refreshToken:data.refresh_token,user:{id:data.user.id,email:data.user.email||''},expiresAt:Date.now()+Number(data.expires_in)*1000};
+      }
+      async function ensureSession(){
+        if(refreshing)return refreshing;
+        const epoch=authEpoch;
+        const work=async()=>{
+          if(!session)throw new Error('请先登录。');
+          if(persisted){
+            const saved=readSaved(remember);
+            if(!saved||saved.user.id!==session.user.id){session=null;persisted=false;throw new Error('登录状态已在其他页面改变，请重新登录。');}
+            session=saved;
+          }
+          if(Date.now()<session.expiresAt-60000)return;
+          const uid=session.user.id;
+          try{
+            const data=await cloudRequest('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:session.refreshToken}});
+            if(epoch!==authEpoch)throw new Error('登录状态已改变，请重新操作。');
+            if(persisted){const latest=readSaved(remember);if(!latest||latest.user.id!==uid){session=null;persisted=false;throw new Error('登录状态已在其他页面改变，请重新登录。');}}
+            acceptSession(data,uid);saveSession();
+          }catch(error){
+            if(epoch===authEpoch&&[400,401,403].includes(error.status)){session=null;clearSaved();}
+            throw error;
+          }
+        };
+        const task=navigator.locks?navigator.locks.request(sessionKey+'-refresh',work):work();
+        refreshing=task;
+        try{await task;}finally{refreshing=null;updateUI();}
+      }
+      async function authenticatedRequest(path,options={},expectedUid){
+        await ensureSession();
+        if(expectedUid&&session?.user.id!==expectedUid)throw new Error('账号已改变，同步已停止。');
+        return cloudRequest(path,{...options,token:session.token});
+      }
       const status=message=>{$('#cloudStatus').textContent=message;};
       function updateUI(){
         $('#cloudLoginForm').classList.toggle('hidden',Boolean(session));
         $('#cloudLoggedIn').classList.toggle('hidden',!session);
         $('#cloudUserLabel').textContent=session?'已登录：'+session.user.email:'';
-        for(const id of ['cloudLoginButton','cloudCheckButton','cloudLogoutButton','cloudEmail','cloudPassword','cloudEnterButton','cloudSyncButton','cloudGuestButton'])$('#'+id).disabled=busy;
+        const inAccount=Boolean(session&&session.user.id===cloudWorkspace);
+        $('#cloudEnterButton').classList.toggle('hidden',!session||inAccount);
+        for(const id of ['cloudLoginButton','cloudCheckButton','cloudLogoutButton','cloudEmail','cloudPassword','cloudRemember','cloudEnterButton','cloudSyncButton','cloudGuestButton'])$('#'+id).disabled=busy;
+        $('#cloudSyncButton').disabled=busy||!inAccount;
       }
       async function cloudRequest(path,{method='GET',body,token,rawBody,blobResponse=false,extraHeaders={}}={}){
         const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
@@ -648,7 +704,7 @@
           if(token)headers.Authorization='Bearer '+token;
           if(body!==undefined)headers['Content-Type']='application/json';
           const response=await fetch(project+path,{method,headers,body:rawBody!==undefined?rawBody:body===undefined?undefined:JSON.stringify(body),signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store'});
-          if(response.ok&&blobResponse)return response.blob();
+          if(response.ok&&blobResponse)return await response.blob();
           const data=await response.json().catch(()=>null);
           if(!response.ok){
             const code=data?.error_code||data?.code;
@@ -663,20 +719,24 @@
         }finally{clearTimeout(timer);}
       }
       async function checkConnection(){
-        if(!session)throw new Error('请先登录。');
-        if(Date.now()>=session.expiresAt){session=null;throw new Error('登录已过期，请重新登录。');}
+        await ensureSession();
         const token=session.token,user=await cloudRequest('/auth/v1/user',{token});
-        if(user?.id!==session.user.id)throw new Error('账号验证不一致，请退出后重新登录。');
+        if(user?.id!==session.user.id){const error=new Error('账号验证不一致，请退出后重新登录。');error.status=401;session=null;clearSaved();throw error;}
         const rows=await cloudRequest('/rest/v1/lao_dictionary_records?select=record_id&owner_id=eq.'+encodeURIComponent(user.id)+'&limit=1',{token});
         if(!Array.isArray(rows))throw new Error('数据表返回格式异常，请检查项目配置。');
         const audio=await cloudRequest('/storage/v1/object/list/lao-dictionary-audio',{method:'POST',token,body:{prefix:user.id+'/',limit:1,offset:0}});
         if(!Array.isArray(audio))throw new Error('音频存储返回格式异常，请检查项目配置。');
-        status('登录成功；词典数据表与音频目录读取请求成功。尚未执行同步。请进入账号词典空间，再点击“云端同步”。');
+        status((session.user.id===cloudWorkspace?'已登录，可直接点击“云端同步”。':'已登录，打开账号词典后即可同步。')+'连接检查通过；尚未上传或下载词条。'+storageNotice);
       }
       $('#cloudWorkspaceLabel').textContent=cloudWorkspace?'当前为账号专属本机空间：'+cloudWorkspace:'当前为原本机词典（不会自动上传）。';
       $('#cloudGuestButton').classList.toggle('hidden',!cloudWorkspace);
       $('#cloudGuestButton').onclick=()=>{if(!busy)switchCloudWorkspace(null);};
-      $('#cloudEnterButton').onclick=()=>{if(!busy&&session)switchCloudWorkspace(session.user.id);};
+      function enterAccount(){
+        if(!session||session.user.id===cloudWorkspace)return;
+        if(!persisted){status('登录成功，但浏览器不允许保存登录状态，暂不能免重复登录地切换词典。请允许网站存储后重试。');return;}
+        switchCloudWorkspace(session.user.id);
+      }
+      $('#cloudEnterButton').onclick=()=>{if(!busy)enterAccount();};
       $('#cloudSyncButton').onclick=async()=>{
         if(busy)return;
         if(!session){status('请先登录。');return;}
@@ -684,8 +744,8 @@
         busy=true;updateUI();
         try{
           await checkConnection();
-          const uid=session.user.id,token=session.token;
-          const task=()=>runCloudSync(uid,(path,options={})=>cloudRequest(path,{...options,token}),status);
+          const uid=session.user.id;
+          const task=()=>runCloudSync(uid,(path,options={})=>authenticatedRequest(path,options,uid),status);
           if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
           else await task();
         }catch(error){status('同步未完成：'+error.message+' 已成功上传的项目可能已在云端保存，请重试；不要清空本机数据。');}
@@ -698,9 +758,10 @@
         busy=true;updateUI();status('正在登录并检查连接…');
         try{
           const data=await cloudRequest('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});
-          if(!data?.access_token||!data?.user?.id||!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<=0)throw new Error('登录返回信息不完整，请重试。');
-          session={token:data.access_token,user:data.user,expiresAt:Date.now()+Number(data.expires_in)*1000};
+          acceptSession(data);clearSaved();remember=$('#cloudRemember').checked;saveSession();
+          $('#cloudPassword').value='';
           await checkConnection();
+          enterAccount();
         }catch(error){status((session?'账号已登录，但连接检查未完成：':'登录未完成：')+error.message);}
         finally{$('#cloudPassword').value='';busy=false;updateUI();}
       };
@@ -709,12 +770,29 @@
         try{await checkConnection();}catch(error){status(error.message);}finally{busy=false;updateUI();}
       };
       $('#cloudLogoutButton').onclick=async()=>{
-        if(busy)return;const token=session?.token;session=null;busy=true;updateUI();$('#cloudPassword').value='';
+        if(busy)return;const token=session?.token;authEpoch++;session=null;clearSaved();busy=true;updateUI();$('#cloudPassword').value='';
         try{if(token)await cloudRequest('/auth/v1/logout?scope=local',{method:'POST',token});status('已退出登录。本机缓存仍保留；共享设备请点“返回原本机词典”。');}
         catch(_){status('本页已退出登录，但未能通知云端撤销会话。请勿在共享设备上保留已登录页面。');}
         finally{busy=false;updateUI();}
       };
-      updateUI();
+      // Refresh/login restoration never uploads, downloads or switches the user's chosen workspace.
+      window.addEventListener('storage',event=>{
+        if(event.key!==sessionKey||!remember||!session)return;
+        const saved=readSaved(true);
+        if(!saved||saved.user.id!==session.user.id){authEpoch++;session=null;persisted=false;updateUI();status('登录状态已在其他页面改变，请重新登录。本机数据保留。');}
+      });
+      async function restoreLogin(){
+        const temporary=readSaved(false),saved=temporary||readSaved(true);
+        if(!saved){updateUI();return;}
+        session=saved;remember=!temporary;persisted=true;$('#cloudRemember').checked=remember;
+        busy=true;updateUI();status('正在恢复登录…');
+        try{await checkConnection();}
+        catch(error){
+          if([400,401,403].includes(error.status)){session=null;clearSaved();status('登录凭证已失效，请重新登录。词典数据不会删除。');}
+          else status('暂时无法验证登录，请检查网络后点“重新检查连接”。本机词典仍可使用。'+storageNotice);
+        }finally{busy=false;updateUI();}
+      }
+      void restoreLogin();
     })();
   </script>
 </body>

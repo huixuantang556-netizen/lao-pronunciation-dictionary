@@ -603,10 +603,12 @@
             catch(error){if(![400,409].includes(error.status))throw error;const existing=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(existing.size!==a.size||await cloudHash(existing)!==a.sha)throw new Error('已有云端音频与本机不符，未覆盖。');}
           }
           const colon=p.key.indexOf(':'),kind=p.key.slice(0,colon),id=p.key.slice(colon+1);
-          const quotedId=encodeURIComponent('"'+id.replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"');
+          // A top-level eq filter takes the literal value; extra quotes become part of the ID.
+          const encodedId=encodeURIComponent(id);
           const body={payload:p.target.payload,deleted:p.target.deleted};
-          const result=p.row?await api('/rest/v1/lao_dictionary_records?owner_id=eq.'+uid+'&record_kind=eq.'+kind+'&record_id=eq.'+quotedId+'&revision=eq.'+p.row.revision,{method:'PATCH',body,extraHeaders:{Prefer:'return=representation'}}):await api('/rest/v1/lao_dictionary_records',{method:'POST',body:{owner_id:uid,record_kind:kind,record_id:id,...body},extraHeaders:{Prefer:'return=representation'}});
-          if(!Array.isArray(result)||result.length!==1||result[0].owner_id!==uid||result[0].record_id!==id||result[0].record_kind!==kind||!Number.isSafeInteger(result[0].revision))throw new Error('其他设备刚刚修改了数据，请重新同步并处理冲突。');
+          const result=p.row?await api('/rest/v1/lao_dictionary_records?owner_id=eq.'+uid+'&record_kind=eq.'+kind+'&record_id=eq.'+encodedId+'&revision=eq.'+p.row.revision,{method:'PATCH',body,extraHeaders:{Prefer:'return=representation'}}):await api('/rest/v1/lao_dictionary_records',{method:'POST',body:{owner_id:uid,record_kind:kind,record_id:id,...body},extraHeaders:{Prefer:'return=representation'}});
+          if(Array.isArray(result)&&result.length===0)throw new Error('更新未匹配到记录：可能其他设备已修改版本，或记录不可访问。请重新同步；若反复出现，请保留数据并联系排查。');
+          if(!Array.isArray(result)||result.length!==1||result[0].owner_id!==uid||result[0].record_id!==id||result[0].record_kind!==kind||!Number.isSafeInteger(result[0].revision))throw new Error('云端更新返回格式或记录身份不符，已停止；请保留本机数据并联系排查。');
           p.row=result[0];
         }
         // Downloads may complete after another local tab edits: refuse overwriting that tab's entries.

@@ -34,10 +34,10 @@
   <main>
     <h1>老挝语私人发音词典</h1>
     <p class="subtitle">收集词条、音标和你自己的示范发音，也用它复习字母。</p>
-    <div class="notice">数据和录音只保存在这台设备的浏览器里。清除浏览器网站数据会一并删除它们。</div>
+    <div class="notice" id="localDataNotice"><span>词典和录音会保存在当前浏览器。清除网站数据会删除本机副本；未备份或未同步的内容可能丢失。</span><label style="display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dismissLocalDataNotice" style="width:auto;margin:0" />已读，不再显示</label></div>
     <nav class="view-nav" id="viewNav" aria-label="词典页面"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
-    <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令（不是 Azure 密钥）<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
+    <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
     <details class="dictionary-settings" id="cloudAccountPanel">
       <summary>云端账号 · 手动同步</summary>
       <p class="tag-hint">登录后打开你的账号词典，点击“云端同步”即可同步。勾选“记住登录”后，刷新或下次打开会恢复登录；不会保存密码。首次迁移仍需先导出原本机备份，再在账号词典“同步导入”。修改不会自动上传。共享设备请勿记住登录；离线数据未加密。</p>
@@ -98,6 +98,16 @@
   </main>
   <script>
     const $ = s => document.querySelector(s);
+    function initLocalDataNotice() {
+      const notice=$('#localDataNotice'),checkbox=$('#dismissLocalDataNotice'),key='lao-local-data-notice-dismissed-v1';
+      try{notice.classList.toggle('hidden',localStorage.getItem(key)==='1');}catch(_){}
+      checkbox.onchange=()=>{
+        if(!checkbox.checked)return;
+        try{localStorage.setItem(key,'1');}catch(_){}
+        notice.classList.add('hidden');
+      };
+    }
+    initLocalDataNotice();
     const cloudWorkspace=(()=>{try{const id=localStorage.getItem('lao-cloud-workspace');return /^[0-9a-f-]{36}$/i.test(id||'')?id:null;}catch(_){return null;}})();
     const workspaceName=name=>name+(cloudWorkspace?'-account-'+cloudWorkspace:'');
     function switchCloudWorkspace(owner) {

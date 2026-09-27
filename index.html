@@ -19,7 +19,15 @@
     .bulk { margin-top:18px; border-top:1px solid var(--line); padding-top:14px; } .bulk summary { cursor:pointer; color:var(--brand); font-weight:600; } .bulk p { font-size:13px; color:var(--muted); } .bulk textarea { min-height:150px; } .bulk-preview { overflow:auto; max-height:320px; margin-top:12px; } .bulk-preview table { border-collapse:collapse; width:100%; font-size:13px; } .bulk-preview th,.bulk-preview td { text-align:left; padding:8px; border:1px solid var(--line); white-space:pre-wrap; min-width:70px; } .bulk-status { white-space:pre-wrap; } .bulk pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
     .selection-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; } .entry-select { display:flex; align-items:center; gap:7px; margin:0 0 9px; font-size:13px; cursor:pointer; } .entry-select input { width:18px; height:18px; margin:0; accent-color:var(--brand); } .entry:has(input[data-select]:checked) { border-color:var(--brand); background:#f5fbf8; }
     .dictionary-settings { margin-bottom:12px; } .dictionary-settings > summary { cursor:pointer; color:var(--brand); font-size:14px; padding:8px 0; } .dictionary-settings[open] > summary { margin-bottom:8px; } .dictionary-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; } .dictionary-header h2 { margin:0; } #dictionaryPanel:not(.delete-mode) .entry-select { display:none; }
-    .view-nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; } .view-nav button[aria-current="page"] { background:var(--brand); color:white; border-color:var(--brand); } .grid { grid-template-columns:minmax(0,1fr); } #addPanel { width:100%; max-width:760px; margin:0 auto; }
+    .view-nav { display:flex; flex-wrap:wrap; align-items:center; gap:12px 24px; margin-bottom:18px; }
+    .view-nav-group { display:flex; flex-wrap:wrap; gap:8px; }
+    .view-nav-tools { margin-left:auto; justify-content:flex-end; }
+    .view-nav button[aria-current="page"] { background:var(--brand); color:white; border-color:var(--brand); }
+    .view-nav-tools button { background:#fff4e6; border-color:#d8b990; color:#785024; }
+    .view-nav-tools button:hover { background:#fbe7cc; border-color:#a66b2c; }
+    .view-nav-tools button[aria-current="page"] { background:#8a5726; border-color:#8a5726; color:#fff; }
+    @media (max-width:600px) { .view-nav { gap:12px; } .view-nav-tools { width:100%; } }
+    .grid { grid-template-columns:minmax(0,1fr); } #addPanel { width:100%; max-width:760px; margin:0 auto; }
     .grid.add-view { align-items:start; } .grid.add-view > .panel { min-width:0; } @media(min-width:900px) { .grid.add-view { grid-template-columns:minmax(290px,.85fr) minmax(360px,1.4fr); } .grid.add-view .entry { grid-template-columns:minmax(0,1fr); } .grid.add-view .actions { justify-content:flex-start; } }
     .search-input-row { display:flex; align-items:center; gap:8px; flex:1 1 220px; min-width:0; } .search-input-row #search { flex:1 1 0; min-width:0; } .mobile-paste { display:none; flex:none; min-height:44px; } #searchPasteStatus:empty { display:none; }
     .question-row { display:flex; align-items:center; gap:12px; margin:8px 0 17px; } .question-row .question-ipa { flex:1; min-width:0; margin:0; overflow-wrap:anywhere; } .question-row #practicePlay { flex:none; max-width:45%; font-size:14px; min-height:44px; }
@@ -51,7 +59,10 @@
     <h1>老挝语私人发音词典</h1>
     <p class="subtitle">收集词条、音标和你自己的示范发音，也用它复习字母。</p>
     <div class="notice" id="localDataNotice"><span>词典和录音会保存在当前浏览器。清除网站数据会删除本机副本；未备份或未同步的内容可能丢失。</span><label style="display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dismissLocalDataNotice" style="width:auto;margin:0" />已读，不再显示</label></div>
-    <nav class="view-nav" id="viewNav" aria-label="词典页面"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></nav>
+    <nav class="view-nav" id="viewNav" aria-label="词典页面">
+      <div class="view-nav-group" role="group" aria-label="学习功能"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button></div>
+      <div class="view-nav-group view-nav-tools" role="group" aria-label="词条与备份管理"><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></div>
+    </nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
     <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
     <details class="dictionary-settings" id="cloudAccountPanel">

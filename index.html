@@ -1046,11 +1046,13 @@
         $('#alphabetStatus').textContent='';
       } catch(error) { $('#alphabetStatus').textContent='字母表读取失败：'+error.message; }
     }
+    let alphabetOpenRequest=0;
     async function openAlphabetCell(id,notes=false) {
       const cell=alphabetCells[id];if(!cell||activeView!=='alphabet')return;
+      const request=++alphabetOpenRequest;
       try {
         const matches=alphabetMatches(cell,await allEntries());
-        if(activeView!=='alphabet')return;
+        if(activeView!=='alphabet'||request!==alphabetOpenRequest)return;
         if(!notes&&matches.length===1&&hasAudio(matches[0])) {
           $('#alphabetStatus').textContent='播放我的录音：'+matches[0].word;
           await playStoredAudio(matches[0]);return;
@@ -1058,6 +1060,10 @@
         $('#alphabetDialogTitle').textContent=cell.forms.join(' / ')+' · '+(matches.length>1?'选择词条 / 备注':'备注');
         $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p>${noteImagesMarkup(item.noteImages)}<div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
         if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
+        if(notes&&matches.length===1&&hasAudio(matches[0])) {
+          try {await playStoredAudio(matches[0]);}
+          catch(error){$('#alphabetStatus').textContent='备注已打开，录音未能播放：'+error.message;}
+        }
       } catch(error) { $('#alphabetStatus').textContent='无法读取字母：'+error.message; }
     }
     $('#alphabetTables').onclick=e=>{
@@ -1069,7 +1075,7 @@
       cancelAlphabetClick();alphabetLastCell=id;alphabetLastTime=now;
       alphabetTimer=setTimeout(()=>{cancelAlphabetClick();void openAlphabetCell(id);},350);
     };
-    $('#alphabetTables').ondblclick=e=>{if(alphabetEditing)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();stopPracticeAudio();if(!$('#alphabetDialog').open)void openAlphabetCell(Number(button.dataset.letter),true);};
+    $('#alphabetTables').ondblclick=e=>{if(alphabetEditing)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();if(!$('#alphabetDialog').open){stopPracticeAudio();void openAlphabetCell(Number(button.dataset.letter),true);}};
     $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent='编辑字母表：'+(alphabetEditing?'开（点击格子修改）':'关');void renderAlphabet();};
     async function editAlphabetCell(id) {
       const cell=alphabetCells[id];if(!cell||alphabetSaving)return;

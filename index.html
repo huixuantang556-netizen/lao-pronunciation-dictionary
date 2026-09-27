@@ -30,7 +30,7 @@
     .grid { grid-template-columns:minmax(0,1fr); } #addPanel { width:100%; max-width:760px; margin:0 auto; }
     .grid.add-view { align-items:start; } .grid.add-view > .panel { min-width:0; } @media(min-width:900px) { .grid.add-view { grid-template-columns:minmax(290px,.85fr) minmax(360px,1.4fr); } .grid.add-view .entry { grid-template-columns:minmax(0,1fr); } .grid.add-view .actions { justify-content:flex-start; } }
     .search-input-row { display:flex; align-items:center; gap:8px; flex:1 1 220px; min-width:0; } .search-input-row #search { flex:1 1 0; min-width:0; } .mobile-paste { display:none; flex:none; min-height:44px; } #searchPasteStatus:empty { display:none; }
-    .question-row { display:flex; align-items:center; justify-content:flex-start; gap:12px; margin:8px 0 17px; } .question-row .question-ipa { flex:0 1 auto; min-width:0; margin:0; overflow-wrap:anywhere; } .question-row #practicePlay { flex:none; white-space:nowrap; font-size:14px; min-height:44px; }
+    .question-row { display:flex; align-items:center; justify-content:flex-start; gap:12px; margin:8px 0 17px; } .question-row .question-ipa { flex:0 1 auto; min-width:min(230px,calc(100% - 90px)); margin:0; overflow-wrap:anywhere; } .question-row #practicePlay { flex:none; white-space:nowrap; font-size:14px; min-height:44px; }
     @media(max-width:760px) { .search-input-row { flex:0 0 auto; width:100%; } .search-input-row #search { height:44px; min-height:44px; padding:8px 10px; font-size:16px; } .mobile-paste { display:inline-block; } .question-row { gap:8px; } .question-row #practicePlay { padding:8px; font-size:13px; } }
     #backupStatus { margin:0 0 16px; color:var(--brand); font-size:13px; overflow-wrap:anywhere; } #backupStatus:empty { display:none; }
     .tag-search { display:block; width:100%; max-width:260px; padding:7px 10px; margin:8px 0; font-size:16px; border-radius:8px; }
@@ -117,6 +117,7 @@
             <input id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
             <div style="margin-top:11px"><button type="button" class="primary" id="checkAnswer">检查答案</button><button type="button" class="secondary" id="showAnswer">显示答案</button><button type="button" class="secondary" id="nextQuestion">换一题</button></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
+            <p id="practiceProgress" class="tag-hint" aria-live="polite"></p>
           </div>
           <aside class="practice-side"><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><p><strong>标签筛选（可多选）</strong></p><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
         </div>
@@ -500,7 +501,35 @@
     function practiceItems(items) { const scope=$('#practiceScope').value, selectedTags=[...selectedPracticeTags], mode=$('#practiceMode').value; return items.filter(item=>matchesSelectedTags(item,selectedTags,$('#practiceTagMode').value) && (scope==='all'||(scope==='mistakes'?(Number(item.mistakes)||0)>0:Boolean(item.needsExtraPractice))) && (mode==='mixed'?availableModes(item).length:Boolean(reviewModes[mode]?.answer(item)?.trim()))); }
     function updatePracticeSummary(items) { const eligible=practiceItems(items), mistakes=eligible.filter(x=>(Number(x.mistakes)||0)>0).length, focus=eligible.filter(x=>x.needsExtraPractice).length, tagText=selectedPracticeTags.size?`已选 ${selectedPracticeTags.size} 个标签；`:''; $('#practiceSummary').textContent=`${tagText}当前可练习 ${eligible.length} 项；错题 ${mistakes} 项；重点 ${focus} 项。`; }
     function setPracticeEmpty(message) { setPracticeAudio(null); practiceId=null; practiceDirection=null; practiceEvaluated=false; $('#questionPrompt').textContent='选择出题方向后开始练习。'; $('#questionIPA').textContent='—'; $('#practiceAnswer').value=''; $('#practiceAnswer').placeholder='输入答案'; $('#practiceAnswer').disabled=true; $('#checkAnswer').disabled=true; $('#showAnswer').disabled=true; $('#practiceResult').className='practice-result'; $('#practiceResult').textContent=message; }
-    async function choosePractice() { setPracticeAudio(null); const eligible=practiceItems(await allEntries()); if(!eligible.length) { setPracticeEmpty('当前筛选没有可练习的词条。请添加必要的 IPA 或中文信息，或调整出题方向、标签和复习范围。'); return; } const priority=item=>(item.needsExtraPractice?100:0)+(Number(item.mistakes)||0)*15-(Number(item.reviews)||0)*0.2+(Date.now()-(Number(item.lastReviewed)||0))/1e12; eligible.sort((a,b)=>priority(b)-priority(a)); const pool=eligible.slice(0,Math.min(5,eligible.length)); let item,direction; for(let attempts=0;attempts<10;attempts++){item=pool[Math.floor(Math.random()*pool.length)];direction=modeForItem(item);if(direction)break;} if(!direction){setPracticeEmpty('当前筛选没有适合此出题方向的资料。');return;} setPracticeAudio(item); const mode=reviewModes[direction]; practiceId=item.id; practiceDirection=direction; practiceEvaluated=false; $('#questionPrompt').textContent=mode.prompt; $('#questionIPA').textContent=mode.question(item); $('#practiceAnswer').value=''; $('#practiceAnswer').placeholder=mode.placeholder; $('#practiceAnswer').disabled=false; $('#checkAnswer').disabled=false; $('#showAnswer').disabled=false; if(activeView==='practice')$('#practiceAnswer').focus(); $('#practiceResult').className='practice-result'; $('#practiceResult').textContent='输入答案后点击“检查答案”。'; }
+    let practiceRound=null,practiceRequest=0,practiceLastId=null;
+    function shufflePracticeIds(ids) {
+      const result=[...ids];for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]];}
+      // Avoid repeating the previous round's last entry at the next round's start.
+      if(result.length>1&&result[result.length-1]===practiceLastId)[result[0],result[result.length-1]]=[result[result.length-1],result[0]];
+      return result;
+    }
+    async function choosePractice(options={}) {
+      const requestId=++practiceRequest;
+      const eligible=practiceItems(await allEntries());if(requestId!==practiceRequest)return;
+      setPracticeAudio(null);
+      if(!eligible.length){practiceRound=null;$('#practiceProgress').textContent='';$('#nextQuestion').textContent='换一题';setPracticeEmpty('当前筛选没有可练习的词条。请添加必要的 IPA 或中文信息，或调整出题方向、标签和复习范围。');return;}
+      const key=JSON.stringify([$('#practiceMode').value,$('#practiceScope').value,$('#practiceTagMode').value,[...selectedPracticeTags].sort(),eligible.map(x=>[x.id,x.word,x.ipa,x.meaning]).sort((a,b)=>a[0]-b[0])]);
+      if(!practiceRound||practiceRound.key!==key||options.restart===true){
+        practiceRound={key,queue:shufflePracticeIds(eligible.map(x=>x.id)),total:eligible.length,shown:0,completed:false};
+      }
+      if(!practiceRound.queue.length){
+        practiceRound.completed=true;setPracticeEmpty('本轮范围内的词条已全部展示。点击“继续下一轮”重新随机抽查。');
+        $('#questionPrompt').textContent='本轮抽查完成';$('#questionIPA').textContent='完成';$('#nextQuestion').textContent='继续下一轮';
+        $('#practiceProgress').textContent=`本轮已展示 ${practiceRound.total} / ${practiceRound.total} 项（跳过的题目也计入本轮）。`;return;
+      }
+      const id=practiceRound.queue.pop(),item=eligible.find(x=>x.id===id),direction=modeForItem(item);
+      practiceRound.shown++;practiceLastId=id;setPracticeAudio(item);
+      const mode=reviewModes[direction];practiceId=item.id;practiceDirection=direction;practiceEvaluated=false;
+      $('#questionPrompt').textContent=mode.prompt;$('#questionIPA').textContent=mode.question(item);$('#practiceAnswer').value='';$('#practiceAnswer').placeholder=mode.placeholder;
+      $('#practiceAnswer').disabled=false;$('#checkAnswer').disabled=false;$('#showAnswer').disabled=false;$('#nextQuestion').textContent='换一题';
+      if(activeView==='practice')$('#practiceAnswer').focus();$('#practiceResult').className='practice-result';$('#practiceResult').textContent='输入答案后点击“检查答案”。';
+      $('#practiceProgress').textContent=`本轮第 ${practiceRound.shown} / ${practiceRound.total} 项 · 随机不重复；更改筛选或题目资料会开始新一轮。`;
+    }
     function answersMatch(answer,target,mode) { const normalized=mode.normalize(answer); return target.split(/[,，、；;\/]/).map(mode.normalize).filter(Boolean).includes(normalized); }
     function fullAnswer(item,direction) { const mode=reviewModes[direction]; return mode.answer(item); }
     async function checkPracticeAnswer() { if(!practiceId||!practiceDirection||practiceEvaluated)return; const mode=reviewModes[practiceDirection], answer=$('#practiceAnswer').value; if(!mode.normalize(answer)){ $('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent='请先输入你的答案。';return;} const item=await getEntry(practiceId); if(!item)return choosePractice(); const correct=answersMatch(answer,mode.answer(item),mode), stats={...(item.reviewStats||{})}, modeStats={...(stats[practiceDirection]||{})}; stats[practiceDirection]={reviews:(Number(modeStats.reviews)||0)+1,correct:(Number(modeStats.correct)||0)+(correct?1:0),mistakes:(Number(modeStats.mistakes)||0)+(correct?0:1)}; const updated={...item,reviews:(Number(item.reviews)||0)+1,correct:(Number(item.correct)||0)+(correct?1:0),mistakes:(Number(item.mistakes)||0)+(correct?0:1),needsExtraPractice:correct?Boolean(item.needsExtraPractice):true,lastReviewed:Date.now(),updatedAt:item.updatedAt,reviewStats:stats}; await putEntry(updated); practiceEvaluated=true; $('#checkAnswer').disabled=true; $('#practiceResult').className=`practice-result ${correct?'ok':'wrong'}`; $('#practiceResult').textContent=correct?'答对了！可以点击“换一题”继续。':`这次不对。答案是：${fullAnswer(item,practiceDirection)}。已加入重点复习。`; await render(); }
@@ -542,7 +571,7 @@
     $('#importButton').onclick=()=>$('#importFile').click();
     $('#importFile').onchange=e=>importBackup(e.target.files[0]);
     $('#practicePlay').onclick=async()=>{const id=practiceId;try{const item=await getEntry(id);if(item&&practiceId===id&&activeView==='practice')await playEntrySpeech(item);}catch(error){alert(error.message);}};
-    $('#checkAnswer').onclick=checkPracticeAnswer; $('#showAnswer').onclick=revealPracticeAnswer; $('#nextQuestion').onclick=choosePractice;
+    $('#checkAnswer').onclick=checkPracticeAnswer; $('#showAnswer').onclick=revealPracticeAnswer; $('#nextQuestion').onclick=()=>choosePractice({restart:Boolean(practiceRound?.completed)});
     $('#practiceAnswer').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();checkPracticeAnswer();}};
     $('#practiceScope').onchange=choosePractice; $('#practiceMode').onchange=choosePractice;
     $('#practiceTags').onclick=e=>{const button=e.target.closest('[data-practice-tag]');if(!button)return;const tag=button.dataset.practiceTag;selectedPracticeTags.has(tag)?selectedPracticeTags.delete(tag):selectedPracticeTags.add(tag);render().then(choosePractice);};

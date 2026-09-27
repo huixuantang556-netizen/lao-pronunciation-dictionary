@@ -53,8 +53,7 @@
     #alphabetDialog .alphabet-note { white-space:pre-wrap; overflow-wrap:anywhere; }
     .note-images { display:flex; flex-wrap:wrap; gap:12px; margin:10px 0; }
     .note-images figure { margin:0; max-width:100%; }
-    .note-images img { display:block; max-width:100%; width:auto; max-height:420px; object-fit:contain; border:1px solid var(--line); border-radius:8px; background:white; }
-    #noteImagePreview img { max-height:180px; }
+    .note-images img { display:block; max-width:min(100%, 180px); width:auto; height:auto; max-height:180px; object-fit:contain; border:1px solid var(--line); border-radius:8px; background:white; }
     #alphabetDialog .actions { justify-content:flex-start; }
   </style>
 </head>

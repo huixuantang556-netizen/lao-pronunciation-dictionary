@@ -118,7 +118,7 @@
         <div id="alphabetTables"></div>
       </section>
     </div>
-    <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><p class="tag-hint">单击备注或浮窗外即可关闭。</p><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
+    <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><p class="tag-hint">轻点备注或浮窗外关闭；长按选字、复制时保持打开。</p><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
   </main>
   <script>
     const $ = s => document.querySelector(s);
@@ -917,10 +917,33 @@
     $('#alphabetTables').ondblclick=e=>{const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();stopPracticeAudio();if(!$('#alphabetDialog').open)void openAlphabetCell(Number(button.dataset.letter),true);};
     $('#alphabetTables').onkeydown=e=>{if(e.key!=='F2')return;const button=e.target.closest('[data-letter]');if(button){e.preventDefault();cancelAlphabetClick();void openAlphabetCell(Number(button.dataset.letter),true);}};
     $('#alphabetNoteMode').onclick=()=>{cancelAlphabetClick();alphabetNotesOnly=!alphabetNotesOnly;$('#alphabetNoteMode').setAttribute('aria-pressed',String(alphabetNotesOnly));$('#alphabetNoteMode').textContent='查看备注模式：'+(alphabetNotesOnly?'开（单击看备注）':'关');};
-    $('#alphabetDialog').addEventListener('close',()=>{cancelAlphabetClick();stopPracticeAudio();});
+    let alphabetNoteGesture=null;
+    function alphabetHasSelection() {
+      const selection=window.getSelection();
+      return Boolean(selection&&!selection.isCollapsed&&
+        ($('#alphabetDialog').contains(selection.anchorNode)||$('#alphabetDialog').contains(selection.focusNode)));
+    }
+    $('#alphabetDialog').onpointerdown=e=>{
+      alphabetNoteGesture={started:Date.now(),x:e.clientX,y:e.clientY,blocked:e.button!==0||alphabetHasSelection()};
+    };
+    $('#alphabetDialog').onpointermove=e=>{
+      if(alphabetNoteGesture&&Math.hypot(e.clientX-alphabetNoteGesture.x,e.clientY-alphabetNoteGesture.y)>8)alphabetNoteGesture.blocked=true;
+    };
+    $('#alphabetDialog').onpointerup=()=>{
+      if(alphabetNoteGesture&&(Date.now()-alphabetNoteGesture.started>=350||alphabetHasSelection()))alphabetNoteGesture.blocked=true;
+    };
+    function protectAlphabetSelection() {
+      if(alphabetNoteGesture)alphabetNoteGesture.blocked=true;
+      else alphabetNoteGesture={blocked:true};
+    }
+    // Do not prevent default: native text selection, copy menu and scrolling must work.
+    $('#alphabetDialog').onpointercancel=protectAlphabetSelection;
+    $('#alphabetDialog').oncontextmenu=protectAlphabetSelection;
+    $('#alphabetDialog').oncopy=protectAlphabetSelection;
+    $('#alphabetDialog').addEventListener('close',()=>{alphabetNoteGesture=null;cancelAlphabetClick();stopPracticeAudio();});
     $('#alphabetDialog').onclick=e=>{
-      // Keep playback/edit controls usable; any non-control click dismisses the notes.
       if(e.target.closest('button, input, select, textarea, a'))return;
+      if(alphabetNoteGesture?.blocked||alphabetHasSelection()||e.detail>1)return;
       $('#alphabetDialog').close();
     };
     $('#alphabetDialogBody').onclick=async e=>{

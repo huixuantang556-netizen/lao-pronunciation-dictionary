@@ -114,6 +114,8 @@
         <h2 id="alphabetTitle">老语字母 · 点读表</h2>
         <p class="tag-hint">单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
         <button type="button" id="alphabetNoteMode" aria-pressed="false">查看备注模式：关</button>
+        <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表：关</button>
+        <p class="tag-hint">开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
         <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
         <div id="alphabetTables"></div>
       </section>
@@ -392,7 +394,7 @@
       if(!rows.length)return;
       await withDefaultAudioStore('readwrite',store=>{for(const row of rows)store.put(row.blob,row.key);});
     }
-    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:2,exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||''}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音（及自己的录音与同步标识）。请在下载或共享面板中保存到 iCloud Drive。`; }
+    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:2,exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides()}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音、自己的录音与字母表修改。请在下载或共享面板中保存到 iCloud Drive。`; }
     function isValidBackup(value) { return value && value.format===backupFormat && [1,2].includes(value.version) && Array.isArray(value.entries) && value.entries.every(item=>item&&typeof item.word==='string' && typeof item.meaning==='string' && (item.audio===null || typeof item.audio==='string')); }
     function syncKeys(item) { return [...new Set([item.syncId,...(Array.isArray(item.syncAliases)?item.syncAliases:[])].filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim()))]; }
     function sameWord(a,b) { return a.word.normalize('NFC').trim()===b.word.normalize('NFC').trim(); }
@@ -442,6 +444,15 @@
       try {
         const backup=JSON.parse(await file.text());
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
+        const alphabetBefore=await readAlphabetOverrides(),alphabetIncoming=validateAlphabetOverrides(backup.alphabetCells===undefined?{}:backup.alphabetCells),alphabetAfter={...alphabetBefore};
+        for(const [key,value] of Object.entries(alphabetIncoming)){
+          if(Object.hasOwn(alphabetBefore,key)&&alphabetBefore[key]!==value){
+            const choice=prompt('字母表格子 '+key+' 与备份不同。\n本机：'+JSON.stringify(alphabetBefore[key])+'\n备份：'+JSON.stringify(value)+'\n输入 1 保留本机，输入 2 使用备份；取消停止导入。','1');
+            if(choice===null||!['1','2'].includes(choice.trim()))return;
+            if(choice.trim()==='1')continue;
+          }
+          alphabetAfter[key]=value;
+        }
         if(!confirm(`将同步 ${backup.entries.length} 个词条及默认音频。已关联词条按最后保存时间更新；疑似相同的旧词条会请你确认，不会直接重复新增。是否继续？`))return;
         const preparedAudio=prepareDefaultAudio(backup),incoming=[];
         for(const raw of backup.entries){
@@ -450,17 +461,18 @@
         }
         const current=await allEntries(),plan=planSync(current,incoming,askSyncConflict);
         if(!plan){$('#backupStatus').textContent='已取消导入，词条未修改。';return;}
-        const database=await openDB(),tx=database.transaction(storeName,'readwrite'),done=transactionDone(tx),store=tx.objectStore(storeName);
+        const database=await openDB(),tx=database.transaction([storeName,'cloud_meta'],'readwrite'),done=transactionDone(tx),store=tx.objectStore(storeName);
+        const chart=tx.objectStore('cloud_meta').get('alphabetCells');
         const check=store.getAll();
         check.onsuccess=()=>{
           const before=JSON.stringify(current.slice().sort((a,b)=>a.id-b.id)),now=JSON.stringify(check.result.slice().sort((a,b)=>a.id-b.id));
-          if(before!==now){tx.abort();return;}
-          try{for(const item of plan.writes)store.put(item);}catch(_){tx.abort();}
+          if(before!==now||!cloudSame(chart.result||{},alphabetBefore)){tx.abort();return;}
+          try{for(const item of plan.writes)store.put(item);tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');}catch(_){tx.abort();}
         };
         await done;committed=true;
         await restoreDefaultAudio(preparedAudio);await requestPersistentStorage();
         $('#backupStatus').textContent=`同步完成：新增 ${plan.added} 个，更新 ${plan.updated} 个，保留本机 ${plan.unchanged} 个，建立关联 ${plan.linked} 个；恢复 ${preparedAudio.length} 段默认音频。${plan.skipped?'另有 '+plan.skipped+' 个未处理（包括多条同名候选），请保留备份并核对；没有自动删除或合并这些词条。':''}`;
-        await render();choosePractice();
+        await render();choosePractice();if(activeView==='alphabet')await renderAlphabet();
       }catch(error){$('#backupStatus').textContent=(committed?'词条已同步，但后续音频恢复或刷新未完成：':'本次词条导入未保存：')+(error.message||'请重试；若其他页面修改过数据，请关闭后重试。');}
       finally{backupBusy=false;$('#importButton').disabled=false;$('#exportButton').disabled=false;$('#importFile').value='';}
     }
@@ -533,6 +545,24 @@
     $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
     (async()=>{try{await openDB();await migrateLegacyAudio();await seed();await migrateSyncIds();await render();await choosePractice();}catch(e){alert('无法打开本地词典数据库：'+e.message)}})();
     // Cloud sync core: three-way merge, immutable audio and conditional writes.
+    // Chart cells use reserved entry IDs but distinct payloads; older clients fail validation safely.
+    function alphabetConfigKey(key) { return /^entry:alphabet-cell-v1:(?:[0-9]|10):[0-9]+$/.test(key); }
+    function validateAlphabetOverrides(value) {
+      if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('字母表配置格式无效。');
+      const result={};
+      for(const [key,text] of Object.entries(value)){
+        const match=/^(\d+):(\d+)$/.exec(key),row=match?Number(match[1]):-1,col=match?Number(match[2]):-1;
+        if(row<0||row>10||col<0||col>=(row<6?12:row<10?9:4)||typeof text!=='string'||text.length>120)throw new Error('字母表格子格式无效。');
+        result[key]=text;
+      }
+      return result;
+    }
+    async function readAlphabetOverrides() {
+      const database=await openDB();return new Promise((resolve,reject)=>{
+        const tx=database.transaction('cloud_meta','readonly'),r=tx.objectStore('cloud_meta').get('alphabetCells');
+        tx.oncomplete=()=>{try{resolve(validateAlphabetOverrides(r.result||{}));}catch(e){reject(e);}};tx.onabort=()=>reject(tx.error);
+      });
+    }
     function cloudStable(value) { if(Array.isArray(value))return '['+value.map(cloudStable).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+cloudStable(value[k])).join(',')+'}';return JSON.stringify(value); }
     function cloudSame(a,b) { return cloudStable(a)===cloudStable(b); }
     function cloudValue(row) { return row?{deleted:row.deleted,payload:row.deleted?{}:row.payload}:null; }
@@ -555,15 +585,16 @@
     async function cloudReadCheckpoint() { const database=await openDB();return new Promise((resolve,reject)=>{const tx=database.transaction('cloud_meta','readonly'),r=tx.objectStore('cloud_meta').get('checkpoint');tx.oncomplete=()=>resolve(r.result||{});tx.onabort=()=>reject(tx.error);}); }
     async function runCloudSync(uid,api,status) {
       if(uid!==cloudWorkspace)throw new Error('请先进入当前账号的独立词典空间。');
-      if(recorder||editingId!==null||ttsPending.size||backupBusy||deletingSelection)throw new Error('请先完成录音、修改、发音生成、备份或删除操作，再同步。');
+      if(recorder||editingId!==null||ttsPending.size||backupBusy||deletingSelection||(typeof alphabetSaving!=='undefined'&&alphabetSaving))throw new Error('请先完成录音、修改、发音生成、备份或删除操作，再同步。');
       stopPracticeAudio();
       const panels=[...document.querySelectorAll('.grid, #viewNav, details.dictionary-settings:not(#cloudAccountPanel)')];
       panels.forEach(x=>x.inert=true);
       const beforeUnload=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',beforeUnload);
       try {
         await migrateSyncIds();
-        const entries=await allEntries(),cache=await cloudCacheRows(),base=await cloudReadCheckpoint();
+        const entries=await allEntries(),cache=await cloudCacheRows(),base=await cloudReadCheckpoint(),alphabetBefore=await readAlphabetOverrides();
         const local=new Map(),blobs=new Map(),entryByKey=new Map(),cacheByKey=new Map();
+        for(const [cell,text] of Object.entries(alphabetBefore))local.set('entry:alphabet-cell-v1:'+cell,{deleted:false,payload:{version:1,alphabetCell:{cell,text}}});
         const descriptor=async blob=>{
           if(!blob)return null;if(!(blob instanceof Blob)||!blob.size||blob.size>20971520)throw new Error('音频为空或超过 20 MiB，请先处理后再同步。');
           const mime=(blob.type||'audio/webm').split(';')[0].toLowerCase();
@@ -594,7 +625,7 @@
         // Reconcile legacy/cross-device IDs only with explicit user approval.
         const linkedEntries=[];
         for(const [key,value] of [...local]){
-          if(!key.startsWith('entry:')||remote.has(key)||base[key])continue;
+          if(!key.startsWith('entry:')||alphabetConfigKey(key)||remote.has(key)||base[key])continue;
           const e=value.payload.entry;
           const candidates=[...remote].filter(([rk,rr])=>rk.startsWith('entry:')&&!rr.deleted&&rr.payload?.entry&&
             (syncKeys(e).some(id=>syncKeys(rr.payload.entry).includes(id))||sameWord(e,rr.payload.entry)));
@@ -617,8 +648,8 @@
           let action=cloudDecision(l,r,b);
           if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
           if(action==='conflict'){
-            const label=l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
-            const describe=v=>!v||v.deleted?'已删除':v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
+            const label=alphabetConfigKey(key)?'字母表格子 '+key.split(':').slice(-2).join(':'):l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
+            const describe=v=>!v||v.deleted?'已删除':v.payload.alphabetCell?JSON.stringify(v.payload.alphabetCell.text):v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
             const choice=prompt('两端都修改了“'+label+'”。\n本机：'+describe(l)+'\n云端：'+describe(r)+'\n输入 1 保留本机，输入 2 使用云端。取消则停止本次同步（此时尚未上传）。','2');
             if(choice===null)throw new Error('已取消同步，尚未上传或修改词条。');
             if(!['1','2'].includes(choice.trim()))throw new Error('未选择有效版本，已停止同步。');action=choice.trim()==='1'?'local':'remote';
@@ -634,16 +665,22 @@
           if(blob.size!==a.size||await cloudHash(blob)!==a.sha)throw new Error('下载的音频校验失败，未覆盖本机数据。');
           const typed=new Blob([blob],{type:a.mime});blobs.set(a.path,typed);return typed;
         }
-        const changes=[...linkedEntries],audioChanges=[];
+        const changes=[...linkedEntries],audioChanges=[],alphabetAfter={...alphabetBefore};
         // Validate and stage downloads before any cloud record writes.
         for(const p of plan){
           if(!p.target.deleted){
             const payload=p.target.payload;if(payload.version!==1)throw new Error('云端格式版本不支持，请更新程序。');
-            if(p.key.startsWith('entry:')){const e=payload.entry;if(!e||typeof e.word!=='string'||!e.word.trim()||e.syncId!==p.key.slice(6))throw new Error('云端词条格式无效。');}
+            if(alphabetConfigKey(p.key)){
+              const cell=p.key.slice('entry:alphabet-cell-v1:'.length),a=payload.alphabetCell;
+              if(!a||a.cell!==cell)throw new Error('云端字母表索引无效。');validateAlphabetOverrides({[cell]:a.text});
+            }else if(p.key.startsWith('entry:')){const e=payload.entry;if(!e||typeof e.word!=='string'||!e.word.trim()||e.syncId!==p.key.slice(6))throw new Error('云端词条格式无效。');}
             else {const parts=JSON.parse(payload.cacheKey);if(!Array.isArray(parts)||parts.length!==2||parts.some(x=>typeof x!=='string')||await cloudHash(new Blob([payload.cacheKey]))!==p.key.slice(14))throw new Error('云端默认音频索引不匹配。');}
           }
           if(p.action!=='remote')continue;
-          if(p.key.startsWith('entry:')){
+          if(alphabetConfigKey(p.key)){
+            const cell=p.key.slice('entry:alphabet-cell-v1:'.length);
+            if(p.target.deleted)delete alphabetAfter[cell];else alphabetAfter[cell]=p.target.payload.alphabetCell.text;
+          }else if(p.key.startsWith('entry:')){
             const old=entryByKey.get(p.key);
             if(p.target.deleted){if(old)changes.push({deleteId:old.id});}
             else {const payload=p.target.payload,audio=await audioPayload(payload.audio?await loadAudio(payload.audio):null);const value={...cloudEntryData(payload.entry),...audio};if(old)value.id=old.id;changes.push({value});}
@@ -675,12 +712,14 @@
         await new Promise((resolve,reject)=>{
           const tx=database.transaction([storeName,'cloud_meta'],'readwrite'),store=tx.objectStore(storeName);let changed=false;
           tx.oncomplete=resolve;tx.onerror=()=>{};tx.onabort=()=>reject(new Error(changed?'另一个页面修改了本机词典，请重新同步。':'本机同步保存失败，请重试。'));
+          const chart=tx.objectStore('cloud_meta').get('alphabetCells');
           const r=store.getAll();r.onsuccess=()=>{
+            if(!cloudSame(chart.result||{},alphabetBefore)){changed=true;tx.abort();return;}
             if(!cloudSame(r.result.slice().sort((a,b)=>a.id-b.id),entries.slice().sort((a,b)=>a.id-b.id))){changed=true;tx.abort();return;}
-            try{for(const change of changes){if(change.deleteId!==undefined)store.delete(change.deleteId);else store.put(change.value);}tx.objectStore('cloud_meta').put(checkpoint,'checkpoint');}catch(_){tx.abort();}
+            try{for(const change of changes){if(change.deleteId!==undefined)store.delete(change.deleteId);else store.put(change.value);}tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');tx.objectStore('cloud_meta').put(checkpoint,'checkpoint');}catch(_){tx.abort();}
           };
         });
-        await render();await choosePractice();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。两类音频已保存在本机，可离线播放。');
+        await render();await choosePractice();if(typeof activeView!=='undefined'&&activeView==='alphabet')await renderAlphabet();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。字母表修改也已同步；两类音频已保存在本机，可离线播放。');
       }finally{panels.forEach(x=>x.inert=false);window.removeEventListener('beforeunload',beforeUnload);}
     }
 
@@ -864,7 +903,7 @@
       ['特殊韵母','',['ໄx','ໃx','ເxົາ','xຳ']]
     ];
     const alphabetCells=[];
-    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0;
+    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0,alphabetEditing=false,alphabetSaving=false;
     const alphabetButton=document.createElement('button');
     alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
     $('#viewNav [data-view="dictionary"]').after(alphabetButton);
@@ -877,15 +916,16 @@
     async function renderAlphabet() {
       const version=++alphabetRenderVersion;
       try {
-        const items=await allEntries();
+        const items=await allEntries(),overrides=await readAlphabetOverrides();
         if(version!==alphabetRenderVersion||activeView!=='alphabet')return;
         alphabetCells.length=0;
         function rowMarkup(row,index) {
           const [group,kind,letters]=row;
-          return '<tr>'+((index%2===0||!kind)?`<th scope="rowgroup" rowspan="${kind?2:1}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map(raw=>{
-            if(!raw)return '<td></td>';
-            const forms=raw.split('|'),cell={forms,word:forms[0],group,kind},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
-            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label)}：单击播放，双击备注"><span lang="lo">${forms.map(escapeHtml).join('<br>')}</span><small>${matches.length>1?'选择词条':recorded?'● 我的录音':matches.length?'待补录音':'未添加'}</small></button></td>`;
+          return '<tr>'+((index%2===0||!kind)?`<th scope="rowgroup" rowspan="${kind?2:1}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map((original,col)=>{
+            const key=alphabetRows.indexOf(row)+':'+col,raw=Object.hasOwn(overrides,key)?overrides[key]:original;
+            if(!raw&&!alphabetEditing)return '<td></td>';
+            const forms=raw.split('|').map(x=>x.trim()).filter(Boolean),cell={forms,word:forms[0]||'',group,kind,key,raw,original,override:overrides[key]},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
+            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetEditing?'修改字母':'单击播放，双击备注'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span><small>${alphabetEditing?'✎ 修改字母':matches.length>1?'选择词条':recorded?'● 我的录音':matches.length?'待补录音':'未添加'}</small></button></td>`;
           }).join('')+'</tr>';
         }
         $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}表，可横向滚动"><table class="alphabet-table" aria-label="${title}"><tbody>${rows.map(rowMarkup).join('')}</tbody></table></div>`).join('');
@@ -909,12 +949,35 @@
     $('#alphabetTables').onclick=e=>{
       const button=e.target.closest('[data-letter]');if(!button)return;
       const id=Number(button.dataset.letter),now=Date.now();
+      if(alphabetEditing){cancelAlphabetClick();void editAlphabetCell(id);return;}
       if(alphabetNotesOnly||e.detail===0){cancelAlphabetClick();void openAlphabetCell(id,alphabetNotesOnly);return;}
       if(alphabetLastCell===id&&now-alphabetLastTime<350){cancelAlphabetClick();stopPracticeAudio();void openAlphabetCell(id,true);return;}
       cancelAlphabetClick();alphabetLastCell=id;alphabetLastTime=now;
       alphabetTimer=setTimeout(()=>{cancelAlphabetClick();void openAlphabetCell(id);},350);
     };
-    $('#alphabetTables').ondblclick=e=>{const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();stopPracticeAudio();if(!$('#alphabetDialog').open)void openAlphabetCell(Number(button.dataset.letter),true);};
+    $('#alphabetTables').ondblclick=e=>{if(alphabetEditing)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();stopPracticeAudio();if(!$('#alphabetDialog').open)void openAlphabetCell(Number(button.dataset.letter),true);};
+    $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent='编辑字母表：'+(alphabetEditing?'开（点击格子修改）':'关');void renderAlphabet();};
+    async function editAlphabetCell(id) {
+      const cell=alphabetCells[id];if(!cell||alphabetSaving)return;
+      const answer=prompt('修改 '+cell.group+' / '+cell.kind+' 的字母。\n多个写法用 | 分隔；留空可清空这个格子。\n只修改表格，不会更改已有词条、备注或录音。',cell.raw);
+      if(answer===null)return;
+      const value=answer.split('|').map(x=>x.trim()).filter(Boolean).join('|');
+      try {
+        validateAlphabetOverrides({[cell.key]:value});alphabetSaving=true;
+        await saveAlphabetCell(cell.key,value,cell.override);
+        await renderAlphabet();$('#alphabetStatus').textContent='字母表已保存到本机。'+(cloudWorkspace?'请点击“云端同步”上传，其他设备同步后会看到修改。':'当前为原本机词典；可导出备份，在账号词典导入后同步。');
+      }catch(error){$('#alphabetStatus').textContent='字母表未保存：'+error.message;}
+      finally{alphabetSaving=false;}
+    }
+    async function saveAlphabetCell(key,value,expected) {
+      validateAlphabetOverrides({[key]:value});
+      const database=await openDB();
+      return new Promise((resolve,reject)=>{
+        const tx=database.transaction('cloud_meta','readwrite'),store=tx.objectStore('cloud_meta'),r=store.get('alphabetCells');let error;
+        r.onsuccess=()=>{try{const map=validateAlphabetOverrides(r.result||{});if(map[key]!==expected)throw new Error('另一个页面已修改这个格子，请重新打开字母表。');map[key]=value;store.put(map,'alphabetCells');}catch(e){error=e;tx.abort();}};
+        tx.oncomplete=resolve;tx.onabort=()=>reject(error||tx.error||new Error('本机保存失败。'));
+      });
+    }
     $('#alphabetTables').onkeydown=e=>{if(e.key!=='F2')return;const button=e.target.closest('[data-letter]');if(button){e.preventDefault();cancelAlphabetClick();void openAlphabetCell(Number(button.dataset.letter),true);}};
     $('#alphabetNoteMode').onclick=()=>{cancelAlphabetClick();alphabetNotesOnly=!alphabetNotesOnly;$('#alphabetNoteMode').setAttribute('aria-pressed',String(alphabetNotesOnly));$('#alphabetNoteMode').textContent='查看备注模式：'+(alphabetNotesOnly?'开（单击看备注）':'关');};
     let alphabetNoteGesture=null;

@@ -51,6 +51,10 @@
     #alphabetDialog::backdrop { background:#102d2866; }
     #alphabetDialog .alphabet-detail { padding:12px 0; border-top:1px solid var(--line); }
     #alphabetDialog .alphabet-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .note-images { display:flex; flex-wrap:wrap; gap:12px; margin:10px 0; }
+    .note-images figure { margin:0; max-width:100%; }
+    .note-images img { display:block; max-width:100%; width:auto; max-height:420px; object-fit:contain; border:1px solid var(--line); border-radius:8px; background:white; }
+    #noteImagePreview img { max-height:180px; }
     #alphabetDialog .actions { justify-content:flex-start; }
   </style>
 </head>
@@ -85,6 +89,8 @@
           <div class="two"><label>IPA 音标 <input id="ipa" placeholder="例如：sa.bāːj.diː" autocomplete="off" /></label><label>中文意思（可留空） <input id="meaning" placeholder="例如：你好；字母可不填" autocomplete="off" /></label></div>
           <label>标签（可多个） <input id="category" list="categoryChoices" placeholder="例如：辅音，基本辅音，单辅音" autocomplete="off" /><small>用中文或英文逗号分隔多个标签。</small></label><datalist id="categoryChoices"></datalist>
           <label>学习备注（可留空） <textarea id="note" placeholder="例如：发音要点、容易混淆的字母、例句、自己的记忆方法……"></textarea><small>支持换行；备注会显示在词条卡片上，并随备份一起导出。</small></label>
+          <label>备注图片（例如字母书写示范）<input id="noteImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple /><small>最多 3 张，支持 PNG、JPEG、WebP。自动压缩；保存词条后生效，随备份和手动云端同步保留。</small></label>
+          <div id="noteImagePreview" class="note-images"></div><p id="noteImageStatus" class="tag-hint" role="status"></p>
           <div class="recording" id="entryRecording"><p id="recordStatus">还没有录音。可直接保存词条，也可录下你的示范发音。</p><button type="button" id="recordButton" class="record">● 开始录音</button> <button type="button" id="previewButton" disabled>▶ 试听</button> <button type="button" id="removeAudioButton" class="danger" disabled>删除自己的录音</button></div>
           <button class="primary" id="saveButton">保存词条</button> <button type="button" id="cancelButton" class="hidden">取消修改</button>
         </form>
@@ -448,7 +454,7 @@
       return {writes:[...writes].map(index=>rows[index]),added,updated,unchanged,skipped,linked};
     }
     function askSyncConflict(local,incoming) {
-      const describe=item=>`中文：${item.meaning||'（空）'}\n音标：${item.ipa||'（空）'}\n备注：${item.note||'（空）'}\n个人录音：${hasAudio(item)?'有':'无'}`;
+      const describe=item=>`中文：${item.meaning||'（空）'}\n音标：${item.ipa||'（空）'}\n备注：${item.note||'（空）'}\n备注图片：${(item.noteImages||[]).length} 张\n个人录音：${hasAudio(item)?'有':'无'}`;
       const answer=prompt(`发现疑似同一词条“${incoming.word}”，但同步编号不同。\n\n本机：\n${describe(local)}\n\n备份：\n${describe(incoming)}\n\n输入 1：关联并使用备份内容（包含录音，会替换本机版本）\n输入 2：关联并保留本机内容\n输入 3：确实是不同词条，另外新增\n输入其他内容：跳过此词条\n取消：取消本次导入，词条不变。`,'2');
       return answer===null?'cancel':({'1':'incoming','2':'local','3':'separate'}[answer.trim()]||'skip');
     }
@@ -474,7 +480,7 @@
         const preparedAudio=prepareDefaultAudio(backup),incoming=[];
         for(const raw of backup.entries){
           const audio=await audioPayload(raw.audio?dataURLToBlob(raw.audio):null);
-          incoming.push({word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
+          incoming.push({noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
         }
         const current=await allEntries(),plan=planSync(current,incoming,askSyncConflict);
         if(!plan){$('#backupStatus').textContent='已取消导入，词条未修改。';return;}
@@ -541,7 +547,42 @@
       if(recording.nextElementSibling!==anchor)form.insertBefore(recording,anchor);
     }
     mobileRecordingLayout.addEventListener('change',syncRecordingPosition);
-    function resetForm() { $('#entryForm').reset(); editingId=null; syncRecordingPosition(); removePersonalAudio=false; clearCurrentAudio(); $('#editNote').classList.add('hidden'); $('#saveButton').textContent='保存词条'; $('#cancelButton').classList.add('hidden'); $('#recordStatus').textContent='还没有录音。可直接保存词条，也可录下你的示范发音。'; }
+    function resetForm() { $('#entryForm').reset();loadNoteImages(null); editingId=null; syncRecordingPosition(); removePersonalAudio=false; clearCurrentAudio(); $('#editNote').classList.add('hidden'); $('#saveButton').textContent='保存词条'; $('#cancelButton').classList.add('hidden'); $('#recordStatus').textContent='还没有录音。可直接保存词条，也可录下你的示范发音。'; }
+    let noteImageDraft=[],noteImagesBusy=false,noteImageGeneration=0;
+    function renderNoteImagePreview() {
+      $('#noteImagePreview').innerHTML=validateNoteImages(noteImageDraft).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}" /><button type="button" data-remove-note-image="${i}">移除图片 ${i+1}</button></figure>`).join('');
+    }
+    function loadNoteImages(item) {
+      noteImageGeneration++;noteImagesBusy=false;noteImageDraft=validateNoteImages(item?.noteImages);
+      $('#noteImageFiles').value='';$('#noteImageStatus').textContent='';$('#saveButton').disabled=false;renderNoteImagePreview();
+    }
+    async function compressNoteImage(file) {
+      if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024)throw new Error('请选择不超过 20 MB 的 PNG、JPEG 或 WebP 图片。');
+      const url=URL.createObjectURL(file);
+      try {
+        const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('无法读取图片。'));image.src=url;});
+        let width=Math.min(1200,img.naturalWidth),height=Math.max(1,Math.round(img.naturalHeight*width/img.naturalWidth));
+        if(height>1200){width=Math.max(1,Math.round(width*1200/height));height=1200;}
+        const canvas=document.createElement('canvas');
+        for(let attempt=0;attempt<9;attempt++){
+          canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,width,height);context.drawImage(img,0,0,width,height);
+          const encoded=canvas.toDataURL('image/jpeg',0.8);
+          if(encoded.length<=60000){validateNoteImages([encoded]);return encoded;}
+          width=Math.max(1,Math.round(width*0.8));height=Math.max(1,Math.round(height*0.8));
+        }
+        throw new Error('图片内容太复杂，请先裁剪书写示范区域再添加。');
+      }finally{URL.revokeObjectURL(url);}
+    }
+    $('#noteImageFiles').onchange=async e=>{
+      if(noteImagesBusy)return;
+      const files=[...e.target.files];if(!files.length)return;
+      if(files.length+noteImageDraft.length>3){alert('每个词条最多 3 张图片，请先移除不需要的图片。');e.target.value='';return;}
+      const generation=++noteImageGeneration;noteImagesBusy=true;$('#saveButton').disabled=true;$('#noteImageStatus').textContent='正在压缩图片…';
+      try{const prepared=[];for(const file of files)prepared.push(await compressNoteImage(file));if(generation!==noteImageGeneration)return;noteImageDraft=validateNoteImages([...noteImageDraft,...prepared]);renderNoteImagePreview();$('#noteImageStatus').textContent='图片已准备好。请检查清晰度，然后保存词条。';}
+      catch(error){if(generation===noteImageGeneration)$('#noteImageStatus').textContent=error.message;}
+      finally{if(generation===noteImageGeneration){noteImagesBusy=false;$('#saveButton').disabled=false;e.target.value='';}}
+    };
+    $('#noteImagePreview').onclick=e=>{const b=e.target.closest('[data-remove-note-image]');if(!b||noteImagesBusy)return;noteImageDraft.splice(Number(b.dataset.removeNoteImage),1);renderNoteImagePreview();$('#noteImageStatus').textContent='图片移除将在保存词条后生效。';};
     function clearCurrentAudio() { currentBlob=null; if(currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl); currentPreviewUrl=null; $('#previewButton').disabled=true; $('#removeAudioButton').disabled=true; }
     function setBlob(blob,text='已录好新的示范发音。保存词条后会永久保留。') { clearCurrentAudio(); removePersonalAudio=false; currentBlob=blob; currentPreviewUrl=URL.createObjectURL(blob); $('#previewButton').disabled=false; $('#removeAudioButton').disabled=false; $('#recordStatus').textContent=text; }
     function playStoredAudio(item) { return playEntrySpeech(item, 'personal'); }
@@ -579,7 +620,7 @@
     restoreTagMode('dictionaryTagMode','any');restoreTagMode('practiceTagMode','all');
     $('#dictionaryTagMode').onchange=()=>{saveTagMode('dictionaryTagMode');dictionaryPage=1;render();};
     $('#practiceTagMode').onchange=()=>{saveTagMode('practiceTagMode');render().then(choosePractice);};
-    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
+    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
     $('#cancelButton').onclick=()=>{if(recorder){alert('请先停止录音，等录音准备完成。');return;}resetForm();showView('dictionary');}; $('#search').oninput=()=>{dictionaryPage=1;render();}; $('#pageSize').onchange=()=>{dictionaryPage=1;render();};
     $('#dictionaryTags').onclick=e=>{const button=e.target.closest('[data-dictionary-tag]');if(!button)return;const tag=button.dataset.dictionaryTag;selectedDictionaryTags.has(tag)?selectedDictionaryTags.delete(tag):selectedDictionaryTags.add(tag);dictionaryPage=1;render();};
     $('#clearDictionaryTags').onclick=()=>{selectedDictionaryTags.clear();dictionaryPage=1;render();};
@@ -587,9 +628,17 @@
     $('#practiceTagSearch').oninput=()=>filterTagChoices('practice');
     $('#dictionaryFields').onclick=e=>{const button=e.target.closest('[data-dictionary-field]');if(!button)return;const field=button.dataset.dictionaryField;if(selectedDictionaryFields.has(field)){if(selectedDictionaryFields.size===1){alert('卡片至少保留一项显示内容。');return;}selectedDictionaryFields.delete(field);}else selectedDictionaryFields.add(field);saveDictionaryFields();render();};
     $('#pagination').onclick=e=>{const button=e.target.closest('[data-page]');if(!button||button.disabled)return;const action=button.dataset.page;if(action==='first')dictionaryPage=1;if(action==='previous')dictionaryPage--;if(action==='next')dictionaryPage++;if(action==='last')dictionaryPage=Number.MAX_SAFE_INTEGER;render();};
-    $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
+    $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){loadNoteImages(item);removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
     (async()=>{try{await openDB();await migrateLegacyAudio();await seed();await migrateSyncIds();await render();await choosePractice();}catch(e){alert('无法打开本地词典数据库：'+e.message)}})();
     // Cloud sync core: three-way merge, immutable audio and conditional writes.
+    function validateNoteImages(value) {
+      if(value===undefined)return [];
+      if(!Array.isArray(value)||value.length>3||value.some(x=>typeof x!=='string'||x.length>60000||!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(x)))throw new Error('备注图片格式无效或过大（最多 3 张压缩图片）。');
+      return [...value];
+    }
+    function noteImagesMarkup(value) {
+      return '<div class="note-images">'+validateNoteImages(value).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}：书写或学习示范" loading="lazy" /></figure>`).join('')+'</div>';
+    }
     // Chart cells use reserved entry IDs but distinct payloads; older clients fail validation safely.
     function alphabetConfigKey(key) { return /^entry:alphabet-cell-v1:(?:[0-9]|10):[0-9]+$/.test(key); }
     function validateAlphabetOverrides(value) {
@@ -622,6 +671,7 @@
     async function cloudHash(blob) { if(!crypto.subtle)throw new Error('当前页面不支持安全摘要，请在 HTTPS 词典页面使用云端同步。');return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join(''); }
     function cloudEntryData(item) {
       const value={};for(const key of ['word','ipa','meaning','category','note'])value[key]=typeof item[key]==='string'?item[key]:'';
+      if(item.noteImages!==undefined)value.noteImages=validateNoteImages(item.noteImages);
       value.syncId=item.syncId;value.syncAliases=syncKeys(item).filter(x=>x!==item.syncId);
       for(const key of ['updatedAt','mistakes','reviews','correct','lastReviewed'])value[key]=Number(item[key])||0;
       value.needsExtraPractice=Boolean(item.needsExtraPractice);value.reviewStats=item.reviewStats||{};return value;
@@ -647,6 +697,7 @@
           const sha=await cloudHash(blob),path=uid+'/'+sha+'-'+mime.replace(/[^a-z0-9]/g,'_');blobs.set(path,blob);return {path,sha,mime,size:blob.size};
         };
         for(const item of entries){
+          if(new Blob([JSON.stringify(cloudEntryData(item))]).size>245000)throw new Error('词条“'+item.word+'”的备注和图片过大，请精简后同步。');
           if(!item.syncId||item.syncId.length>512)throw new Error('词条同步编号无效，请先导出备份。');
           const key='entry:'+item.syncId;if(local.has(key))throw new Error('发现重复同步编号，请先核对重复词条。');
           local.set(key,{deleted:false,payload:{version:1,entry:cloudEntryData(item),audio:await descriptor(audioBlobFor(item))}});entryByKey.set(key,item);
@@ -694,7 +745,7 @@
           if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
           if(action==='conflict'){
             const label=alphabetConfigKey(key)?'字母表格子 '+key.split(':').slice(-2).join(':'):l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
-            const describe=v=>!v||v.deleted?'已删除':v.payload.alphabetCell?JSON.stringify(v.payload.alphabetCell.text):v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
+            const describe=v=>!v||v.deleted?'已删除':v.payload.alphabetCell?JSON.stringify(v.payload.alphabetCell.text):v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,备注图片:(v.payload.entry.noteImages||[]).length,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
             const choice=prompt('两端都修改了“'+label+'”。\n本机：'+describe(l)+'\n云端：'+describe(r)+'\n输入 1 保留本机，输入 2 使用云端。取消则停止本次同步（此时尚未上传）。','2');
             if(choice===null)throw new Error('已取消同步，尚未上传或修改词条。');
             if(!['1','2'].includes(choice.trim()))throw new Error('未选择有效版本，已停止同步。');action=choice.trim()==='1'?'local':'remote';
@@ -718,7 +769,7 @@
             if(alphabetConfigKey(p.key)){
               const cell=p.key.slice('entry:alphabet-cell-v1:'.length),a=payload.alphabetCell;
               if(!a||a.cell!==cell)throw new Error('云端字母表索引无效。');validateAlphabetOverrides({[cell]:a.text});
-            }else if(p.key.startsWith('entry:')){const e=payload.entry;if(!e||typeof e.word!=='string'||!e.word.trim()||e.syncId!==p.key.slice(6))throw new Error('云端词条格式无效。');}
+            }else if(p.key.startsWith('entry:')){const e=payload.entry;if(!e||typeof e.word!=='string'||!e.word.trim()||e.syncId!==p.key.slice(6))throw new Error('云端词条格式无效。');validateNoteImages(e.noteImages);}
             else {const parts=JSON.parse(payload.cacheKey);if(!Array.isArray(parts)||parts.length!==2||parts.some(x=>typeof x!=='string')||await cloudHash(new Blob([payload.cacheKey]))!==p.key.slice(14))throw new Error('云端默认音频索引不匹配。');}
           }
           if(p.action!=='remote')continue;
@@ -997,7 +1048,7 @@
           await playStoredAudio(matches[0]);return;
         }
         $('#alphabetDialogTitle').textContent=cell.forms.join(' / ')+' · '+(matches.length>1?'选择词条 / 备注':'备注');
-        $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p><div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
+        $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p>${noteImagesMarkup(item.noteImages)}<div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
         if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
       } catch(error) { $('#alphabetStatus').textContent='无法读取字母：'+error.message; }
     }
@@ -1060,7 +1111,7 @@
     $('#alphabetDialog').oncopy=protectAlphabetSelection;
     $('#alphabetDialog').addEventListener('close',()=>{alphabetNoteGesture=null;cancelAlphabetClick();stopPracticeAudio();});
     $('#alphabetDialog').onclick=e=>{
-      if(e.target.closest('button, input, select, textarea, a'))return;
+      if(e.target.closest('button, input, select, textarea, a, img'))return;
       if(alphabetNoteGesture?.blocked||alphabetHasSelection()||e.detail>1)return;
       $('#alphabetDialog').close();
     };
@@ -1078,6 +1129,7 @@
         if(item){
           editingId=item.id;syncRecordingPosition();
           for(const field of ['word','ipa','meaning','category','note'])$('#'+field).value=item[field]||'';
+          loadNoteImages(item);
           const blob=audioBlobFor(item);if(blob)setBlob(blob,'已保留原有录音；重新录音会替换它。');
           $('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');$('#form-title').textContent='修改词条';
         }else if(cell){$('#word').value=cell.word;$('#category').value=[cell.group,cell.kind].filter(Boolean).join('，');}

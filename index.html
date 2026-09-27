@@ -28,6 +28,22 @@
     .tag-search { display:block; width:100%; max-width:260px; padding:7px 10px; margin:8px 0; font-size:16px; border-radius:8px; }
     .tag-search-status { font-size:12px; color:var(--muted); margin:4px 0; }
     .tag-picker [hidden] { display:none!important; }
+    #alphabetPanel { grid-column:1/-1; min-width:0; }
+    .alphabet-scroll { overflow-x:auto; margin:12px 0 28px; border:1px solid var(--line); border-radius:12px; }
+    .alphabet-table { width:100%; min-width:940px; border-collapse:collapse; table-layout:fixed; }
+    .alphabet-table th,.alphabet-table td { border:1px solid #fff; padding:4px; text-align:center; background:#eef2f0; }
+    .alphabet-table th { width:64px; font-size:13px; font-weight:500; background:#dce8e2; }
+    .alphabet-table tr:nth-child(odd) td { background:#e0e8e4; }
+    .alphabet-cell { width:100%; min-height:76px; padding:8px 2px; border:1px solid transparent; background:transparent; touch-action:manipulation; }
+    .alphabet-cell span { display:block; font-family:"Noto Sans Lao",sans-serif; font-size:27px; line-height:1.8; }
+    .alphabet-cell small { display:block; color:#64756d; font-size:10px; }
+    .alphabet-cell.has-audio small { color:var(--brand); }
+    .alphabet-cell:hover,.alphabet-cell:focus-visible { background:white; outline:2px solid var(--brand); }
+    #alphabetDialog { width:min(520px,calc(100% - 28px)); max-height:85vh; overflow:auto; border:1px solid var(--line); border-radius:16px; padding:22px; color:var(--ink); background:var(--paper); }
+    #alphabetDialog::backdrop { background:#102d2866; }
+    #alphabetDialog .alphabet-detail { padding:12px 0; border-top:1px solid var(--line); }
+    #alphabetDialog .alphabet-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+    #alphabetDialog .actions { justify-content:flex-start; }
   </style>
 </head>
 <body>
@@ -94,7 +110,15 @@
           <aside class="practice-side"><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><p><strong>标签筛选（可多选）</strong></p><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
         </div>
       </section>
+      <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
+        <h2 id="alphabetTitle">老语字母 · 点读表</h2>
+        <p class="tag-hint">单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
+        <button type="button" id="alphabetNoteMode" aria-pressed="false">查看备注模式：关</button>
+        <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
+        <div id="alphabetTables"></div>
+      </section>
     </div>
+    <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
   </main>
   <script>
     const $ = s => document.querySelector(s);
@@ -124,10 +148,12 @@
     function stopPracticeAudio() { playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
     function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':practiceAudioBlob?'▶ 播放我的录音':'▶ 默认发音'; }
     function showView(view) {
-      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel'};
+      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel'};
       if(!panels[view])return;
       if(activeView==='add'&&view!=='add'&&recorder){alert('请先停止录音，等试听按钮可用后再切换页面。');return;}
+      cancelAlphabetClick();
       activeView=view;
+      if(view==='alphabet')void renderAlphabet();
       Object.entries(panels).forEach(([name,id])=>$('#'+id).classList.toggle('hidden',name!==view&&!(view==='add'&&name==='dictionary')));
       $('.grid').classList.toggle('add-view',view==='add');
       if(view!=='practice')stopPracticeAudio();
@@ -821,6 +847,97 @@
       }
       void restoreLogin();
     })();
+  </script>
+  <script>
+    // The chart is a view over existing entries: no duplicate records or separate audio store.
+    const alphabetRows = [
+      ['中辅音','基本辅音',['ກ','ຈ','ດ','ຕ','ບ','ປ','ຢ','ອ','','','','']],
+      ['中辅音','复合辅音',['ກວ','ຈວ','','ຕວ','','','','ອວ','','','','']],
+      ['低辅音','基本辅音',['ຄ','ງ','ຊ','ຍ','ທ','ນ','ມ','ພ','ຟ','ລ','ວ','ຮ']],
+      ['低辅音','复合辅音',['ຄວ','ງວ','ຊວ','','ທວ','','','','','ລວ','','ຮວ']],
+      ['高辅音','基本辅音',['ຂ','','ສ','','ຖ','','','ຜ','ຝ','','','ຫ']],
+      ['高辅音','复合辅音',['ຂວ','ຫງ','ສວ','ຫຍ','ຖວ','ໜ|ຫນ','ໝ|ຫມ','ຜວ','','ຫຼ|ຫລ','ຫວ','']],
+      ['单元音','短元音',['xະ','xິ','xຶ','xຸ','ເxະ','ແxະ','ໂxະ','ເxາະ','ເxິ']],
+      ['单元音','长元音',['xາ','xີ','xື','xູ','ເx','ແx','ໂx','xໍ','ເxີ']],
+      ['复合元音','短元音',['','ເxັຍ','ເxຶອ','xົວະ','','','','','']],
+      ['复合元音','长元音',['','ເxຍ','ເxືອ','xົວ','','','','','']],
+      ['特殊韵母','',['ໄx','ໃx','ເxົາ','xຳ']]
+    ];
+    const alphabetCells=[];
+    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0;
+    const alphabetButton=document.createElement('button');
+    alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
+    $('#viewNav [data-view="practice"]').after(alphabetButton);
+    function alphabetKey(word) { return String(word||'').normalize('NFC').replace(/[\s\u200b◌x×_\-–—]/g,''); }
+    function alphabetMatches(cell,items) {
+      const keys=cell.forms.map(alphabetKey);
+      return items.filter(item=>keys.includes(alphabetKey(item.word)));
+    }
+    function cancelAlphabetClick() { clearTimeout(alphabetTimer);alphabetTimer=null;alphabetLastCell=null;alphabetLastTime=0; }
+    async function renderAlphabet() {
+      const version=++alphabetRenderVersion;
+      try {
+        const items=await allEntries();
+        if(version!==alphabetRenderVersion||activeView!=='alphabet')return;
+        alphabetCells.length=0;
+        function rowMarkup(row,index) {
+          const [group,kind,letters]=row;
+          return '<tr>'+((index%2===0||!kind)?`<th scope="rowgroup" rowspan="${kind?2:1}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map(raw=>{
+            if(!raw)return '<td></td>';
+            const forms=raw.split('|'),cell={forms,word:forms[0],group,kind},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
+            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label)}：单击播放，双击备注"><span lang="lo">${forms.map(escapeHtml).join('<br>')}</span><small>${matches.length>1?'选择词条':recorded?'● 我的录音':matches.length?'待补录音':'未添加'}</small></button></td>`;
+          }).join('')+'</tr>';
+        }
+        $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}表，可横向滚动"><table class="alphabet-table" aria-label="${title}"><tbody>${rows.map(rowMarkup).join('')}</tbody></table></div>`).join('');
+        $('#alphabetStatus').textContent='已关联 '+alphabetCells.filter(cell=>alphabetMatches(cell,items).some(hasAudio)).length+' 个有录音的格子。缺少内容时，可在备注浮窗中添加或修改词条。';
+      } catch(error) { $('#alphabetStatus').textContent='字母表读取失败：'+error.message; }
+    }
+    async function openAlphabetCell(id,notes=false) {
+      const cell=alphabetCells[id];if(!cell||activeView!=='alphabet')return;
+      try {
+        const matches=alphabetMatches(cell,await allEntries());
+        if(activeView!=='alphabet')return;
+        if(!notes&&matches.length===1&&hasAudio(matches[0])) {
+          $('#alphabetStatus').textContent='播放我的录音：'+matches[0].word;
+          await playStoredAudio(matches[0]);return;
+        }
+        $('#alphabetDialogTitle').textContent=cell.forms.join(' / ')+' · '+(matches.length>1?'选择词条 / 备注':'备注');
+        $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p><div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
+        if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
+      } catch(error) { $('#alphabetStatus').textContent='无法读取字母：'+error.message; }
+    }
+    $('#alphabetTables').onclick=e=>{
+      const button=e.target.closest('[data-letter]');if(!button)return;
+      const id=Number(button.dataset.letter),now=Date.now();
+      if(alphabetNotesOnly||e.detail===0){cancelAlphabetClick();void openAlphabetCell(id,alphabetNotesOnly);return;}
+      if(alphabetLastCell===id&&now-alphabetLastTime<350){cancelAlphabetClick();stopPracticeAudio();void openAlphabetCell(id,true);return;}
+      cancelAlphabetClick();alphabetLastCell=id;alphabetLastTime=now;
+      alphabetTimer=setTimeout(()=>{cancelAlphabetClick();void openAlphabetCell(id);},350);
+    };
+    $('#alphabetTables').ondblclick=e=>{const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();stopPracticeAudio();if(!$('#alphabetDialog').open)void openAlphabetCell(Number(button.dataset.letter),true);};
+    $('#alphabetTables').onkeydown=e=>{if(e.key!=='F2')return;const button=e.target.closest('[data-letter]');if(button){e.preventDefault();cancelAlphabetClick();void openAlphabetCell(Number(button.dataset.letter),true);}};
+    $('#alphabetNoteMode').onclick=()=>{cancelAlphabetClick();alphabetNotesOnly=!alphabetNotesOnly;$('#alphabetNoteMode').setAttribute('aria-pressed',String(alphabetNotesOnly));$('#alphabetNoteMode').textContent='查看备注模式：'+(alphabetNotesOnly?'开（单击看备注）':'关');};
+    $('#alphabetDialog').addEventListener('close',()=>{cancelAlphabetClick();stopPracticeAudio();});
+    $('#alphabetDialogBody').onclick=async e=>{
+      const b=e.target.closest('button');if(!b)return;
+      try {
+        if('letterPlay' in b.dataset){const item=await getEntry(Number(b.dataset.letterPlay));if(item)await playStoredAudio(item);return;}
+        if(!('letterAdd' in b.dataset)&&!('letterEdit' in b.dataset))return;
+        if(recorder){alert('请先停止当前录音。');return;}
+        if((editingId!==null||$('#word').value||currentBlob)&&!confirm('打开字母编辑会替换尚未保存的表单内容，继续吗？'))return;
+        const item='letterEdit' in b.dataset?await getEntry(Number(b.dataset.letterEdit)):null;
+        if('letterEdit' in b.dataset&&!item){alert('词条已不存在，请重新打开字母表。');return;}
+        const cell=alphabetCells[Number(b.dataset.letterAdd)];
+        resetForm();$('#alphabetDialog').close();
+        if(item){
+          editingId=item.id;syncRecordingPosition();
+          for(const field of ['word','ipa','meaning','category','note'])$('#'+field).value=item[field]||'';
+          const blob=audioBlobFor(item);if(blob)setBlob(blob,'已保留原有录音；重新录音会替换它。');
+          $('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');$('#form-title').textContent='修改词条';
+        }else if(cell){$('#word').value=cell.word;$('#category').value=[cell.group,cell.kind].filter(Boolean).join('，');}
+        showView('add');$('#word').focus();
+      } catch(error){alert('无法打开词条：'+error.message);}
+    };
   </script>
 </body>
 </html>

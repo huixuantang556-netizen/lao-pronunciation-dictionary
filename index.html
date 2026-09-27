@@ -118,7 +118,7 @@
         <div id="alphabetTables"></div>
       </section>
     </div>
-    <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
+    <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><p class="tag-hint">单击备注或浮窗外即可关闭。</p><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
   </main>
   <script>
     const $ = s => document.querySelector(s);
@@ -867,7 +867,7 @@
     let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0;
     const alphabetButton=document.createElement('button');
     alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
-    $('#viewNav [data-view="practice"]').after(alphabetButton);
+    $('#viewNav [data-view="dictionary"]').after(alphabetButton);
     function alphabetKey(word) { return String(word||'').normalize('NFC').replace(/[\s\u200b◌x×_\-–—]/g,''); }
     function alphabetMatches(cell,items) {
       const keys=cell.forms.map(alphabetKey);
@@ -918,6 +918,11 @@
     $('#alphabetTables').onkeydown=e=>{if(e.key!=='F2')return;const button=e.target.closest('[data-letter]');if(button){e.preventDefault();cancelAlphabetClick();void openAlphabetCell(Number(button.dataset.letter),true);}};
     $('#alphabetNoteMode').onclick=()=>{cancelAlphabetClick();alphabetNotesOnly=!alphabetNotesOnly;$('#alphabetNoteMode').setAttribute('aria-pressed',String(alphabetNotesOnly));$('#alphabetNoteMode').textContent='查看备注模式：'+(alphabetNotesOnly?'开（单击看备注）':'关');};
     $('#alphabetDialog').addEventListener('close',()=>{cancelAlphabetClick();stopPracticeAudio();});
+    $('#alphabetDialog').onclick=e=>{
+      // Keep playback/edit controls usable; any non-control click dismisses the notes.
+      if(e.target.closest('button, input, select, textarea, a'))return;
+      $('#alphabetDialog').close();
+    };
     $('#alphabetDialogBody').onclick=async e=>{
       const b=e.target.closest('button');if(!b)return;
       try {

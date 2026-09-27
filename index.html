@@ -30,7 +30,7 @@
     .grid { grid-template-columns:minmax(0,1fr); } #addPanel { width:100%; max-width:760px; margin:0 auto; }
     .grid.add-view { align-items:start; } .grid.add-view > .panel { min-width:0; } @media(min-width:900px) { .grid.add-view { grid-template-columns:minmax(290px,.85fr) minmax(360px,1.4fr); } .grid.add-view .entry { grid-template-columns:minmax(0,1fr); } .grid.add-view .actions { justify-content:flex-start; } }
     .search-input-row { display:flex; align-items:center; gap:8px; flex:1 1 220px; min-width:0; } .search-input-row #search { flex:1 1 0; min-width:0; } .mobile-paste { display:none; flex:none; min-height:44px; } #searchPasteStatus:empty { display:none; }
-    .question-row { display:flex; align-items:center; gap:12px; margin:8px 0 17px; } .question-row .question-ipa { flex:1; min-width:0; margin:0; overflow-wrap:anywhere; } .question-row #practicePlay { flex:none; max-width:45%; font-size:14px; min-height:44px; }
+    .question-row { display:flex; align-items:center; justify-content:flex-start; gap:12px; margin:8px 0 17px; } .question-row .question-ipa { flex:0 1 auto; min-width:0; margin:0; overflow-wrap:anywhere; } .question-row #practicePlay { flex:none; white-space:nowrap; font-size:14px; min-height:44px; }
     @media(max-width:760px) { .search-input-row { flex:0 0 auto; width:100%; } .search-input-row #search { height:44px; min-height:44px; padding:8px 10px; font-size:16px; } .mobile-paste { display:inline-block; } .question-row { gap:8px; } .question-row #practicePlay { padding:8px; font-size:13px; } }
     #backupStatus { margin:0 0 16px; color:var(--brand); font-size:13px; overflow-wrap:anywhere; } #backupStatus:empty { display:none; }
     .tag-search { display:block; width:100%; max-width:260px; padding:7px 10px; margin:8px 0; font-size:16px; border-radius:8px; }
@@ -164,7 +164,7 @@
     let activeView = 'dictionary';
     let practiceAudio=null, practiceAudioUrl=null, practiceAudioBlob=null;
     function stopPracticeAudio() { playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
-    function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':practiceAudioBlob?'▶ 播放我的录音':'▶ 默认发音'; }
+    function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':practiceAudioBlob?'播放我的录音':'播放默认发音'; }
     function showView(view) {
       const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel'};
       if(!panels[view])return;

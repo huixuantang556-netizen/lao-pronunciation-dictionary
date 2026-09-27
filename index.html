@@ -112,12 +112,17 @@
       </section>
       <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
         <h2 id="alphabetTitle">老语字母 · 点读表</h2>
-        <p class="tag-hint">单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
+        <div id="alphabetHelpTop"><div id="alphabetHelp" class="tag-hint">
+          <p>单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
+          <p>开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
+          <p id="alphabetSummary"></p>
+          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="alphabetHelpRead" style="width:auto;margin:0" />已读，将说明放到页面底部</label>
+        </div></div>
         <button type="button" id="alphabetNoteMode" aria-pressed="false">查看备注模式：关</button>
         <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表：关</button>
-        <p class="tag-hint">开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
         <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
         <div id="alphabetTables"></div>
+        <div id="alphabetHelpBottom"></div>
       </section>
     </div>
     <dialog id="alphabetDialog" aria-labelledby="alphabetDialogTitle"><h2 id="alphabetDialogTitle"></h2><p class="tag-hint">轻点备注或浮窗外关闭；长按选字、复制时保持打开。</p><div id="alphabetDialogBody"></div><form method="dialog"><button autofocus>关闭</button></form></dialog>
@@ -907,6 +912,14 @@
     const alphabetButton=document.createElement('button');
     alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
     $('#viewNav [data-view="dictionary"]').after(alphabetButton);
+    function initAlphabetHelp() {
+      const checkbox=$('#alphabetHelpRead'),key='lao-alphabet-help-read-v1';
+      try{checkbox.checked=localStorage.getItem(key)==='1';}catch(_){}
+      const position=()=>$(checkbox.checked?'#alphabetHelpBottom':'#alphabetHelpTop').append($('#alphabetHelp'));
+      checkbox.onchange=()=>{try{localStorage.setItem(key,checkbox.checked?'1':'0');}catch(_){}position();};
+      position();
+    }
+    initAlphabetHelp();
     function alphabetKey(word) { return String(word||'').normalize('NFC').replace(/[\s\u200b◌x×_\-–—]/g,''); }
     function alphabetMatches(cell,items) {
       const keys=cell.forms.map(alphabetKey);
@@ -925,11 +938,13 @@
             const key=alphabetRows.indexOf(row)+':'+col,raw=Object.hasOwn(overrides,key)?overrides[key]:original;
             if(!raw&&!alphabetEditing)return '<td></td>';
             const forms=raw.split('|').map(x=>x.trim()).filter(Boolean),cell={forms,word:forms[0]||'',group,kind,key,raw,original,override:overrides[key]},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
-            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetEditing?'修改字母':'单击播放，双击备注'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span><small>${alphabetEditing?'✎ 修改字母':matches.length>1?'选择词条':recorded?'● 我的录音':matches.length?'待补录音':'未添加'}</small></button></td>`;
+            const hint=alphabetEditing?'✎ 修改字母':matches.length>1?'选择词条':recorded?'':matches.length?'待补录音':'未添加';
+            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetEditing?'修改字母':'单击播放，双击备注'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span>${hint?`<small>${hint}</small>`:''}</button></td>`;
           }).join('')+'</tr>';
         }
         $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}表，可横向滚动"><table class="alphabet-table" aria-label="${title}"><tbody>${rows.map(rowMarkup).join('')}</tbody></table></div>`).join('');
-        $('#alphabetStatus').textContent='已关联 '+alphabetCells.filter(cell=>alphabetMatches(cell,items).some(hasAudio)).length+' 个有录音的格子。缺少内容时，可在备注浮窗中添加或修改词条。';
+        $('#alphabetSummary').textContent='已关联 '+alphabetCells.filter(cell=>alphabetMatches(cell,items).some(hasAudio)).length+' 个有录音的格子。缺少内容时，可在备注浮窗中添加或修改词条。';
+        $('#alphabetStatus').textContent='';
       } catch(error) { $('#alphabetStatus').textContent='字母表读取失败：'+error.message; }
     }
     async function openAlphabetCell(id,notes=false) {

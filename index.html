@@ -52,8 +52,10 @@
     #alphabetDialog .alphabet-detail { padding:12px 0; border-top:1px solid var(--line); }
     #alphabetDialog .alphabet-note { white-space:pre-wrap; overflow-wrap:anywhere; }
     .note-images { display:flex; flex-wrap:wrap; gap:12px; margin:10px 0; }
-    .note-images figure { margin:0; max-width:100%; }
-    .note-images img { display:block; max-width:min(100%, 180px); width:auto; height:auto; max-height:180px; object-fit:contain; border:1px solid var(--line); border-radius:8px; background:white; }
+    .note-images figure { margin:0; width:180px; max-width:100%; }
+    .note-images img { display:block; width:100%; height:auto; aspect-ratio:1; object-fit:contain; border:1px solid var(--line); border-radius:8px; background:white; }
+    .note-image-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+    .note-image-actions button { padding:5px 8px; font-size:13px; }
     #alphabetDialog .actions { justify-content:flex-start; }
   </style>
 </head>
@@ -549,7 +551,7 @@
     function resetForm() { $('#entryForm').reset();loadNoteImages(null); editingId=null; syncRecordingPosition(); removePersonalAudio=false; clearCurrentAudio(); $('#editNote').classList.add('hidden'); $('#saveButton').textContent='保存词条'; $('#cancelButton').classList.add('hidden'); $('#recordStatus').textContent='还没有录音。可直接保存词条，也可录下你的示范发音。'; }
     let noteImageDraft=[],noteImagesBusy=false,noteImageGeneration=0;
     function renderNoteImagePreview() {
-      $('#noteImagePreview').innerHTML=validateNoteImages(noteImageDraft).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}" /><button type="button" data-remove-note-image="${i}">移除图片 ${i+1}</button></figure>`).join('');
+      $('#noteImagePreview').innerHTML=validateNoteImages(noteImageDraft).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}" /><figcaption>图片 ${i+1}</figcaption><div class="note-image-actions"><button type="button" data-move-note-image="${i}" data-step="-1" aria-label="前移图片 ${i+1}" ${i===0?'disabled':''}>前移</button><button type="button" data-move-note-image="${i}" data-step="1" aria-label="后移图片 ${i+1}" ${i===noteImageDraft.length-1?'disabled':''}>后移</button><button type="button" data-remove-note-image="${i}">移除</button></div></figure>`).join('');
     }
     function loadNoteImages(item) {
       noteImageGeneration++;noteImagesBusy=false;noteImageDraft=validateNoteImages(item?.noteImages);
@@ -581,7 +583,14 @@
       catch(error){if(generation===noteImageGeneration)$('#noteImageStatus').textContent=error.message;}
       finally{if(generation===noteImageGeneration){noteImagesBusy=false;$('#saveButton').disabled=false;e.target.value='';}}
     };
-    $('#noteImagePreview').onclick=e=>{const b=e.target.closest('[data-remove-note-image]');if(!b||noteImagesBusy)return;noteImageDraft.splice(Number(b.dataset.removeNoteImage),1);renderNoteImagePreview();$('#noteImageStatus').textContent='图片移除将在保存词条后生效。';};
+    $('#noteImagePreview').onclick=e=>{
+      const b=e.target.closest('[data-remove-note-image], [data-move-note-image]');if(!b||b.disabled||noteImagesBusy)return;
+      const removing='removeNoteImage' in b.dataset,index=Number(removing?b.dataset.removeNoteImage:b.dataset.moveNoteImage);
+      if(!Number.isInteger(index)||index<0||index>=noteImageDraft.length)return;
+      if(removing)noteImageDraft.splice(index,1);
+      else {const step=Number(b.dataset.step),next=index+step;if(![-1,1].includes(step)||next<0||next>=noteImageDraft.length)return;[noteImageDraft[index],noteImageDraft[next]]=[noteImageDraft[next],noteImageDraft[index]];}
+      renderNoteImagePreview();$('#noteImageStatus').textContent='图片调整将在保存词条后生效，第一张最先展示。';
+    };
     function clearCurrentAudio() { currentBlob=null; if(currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl); currentPreviewUrl=null; $('#previewButton').disabled=true; $('#removeAudioButton').disabled=true; }
     function setBlob(blob,text='已录好新的示范发音。保存词条后会永久保留。') { clearCurrentAudio(); removePersonalAudio=false; currentBlob=blob; currentPreviewUrl=URL.createObjectURL(blob); $('#previewButton').disabled=false; $('#removeAudioButton').disabled=false; $('#recordStatus').textContent=text; }
     function playStoredAudio(item) { return playEntrySpeech(item, 'personal'); }

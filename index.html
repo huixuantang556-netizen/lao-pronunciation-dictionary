@@ -1089,6 +1089,7 @@
         }
         $('#alphabetDialogTitle').textContent=cell.forms.join(' / ')+' · '+(matches.length>1?'选择词条 / 备注':'备注');
         $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p>${noteImagesMarkup(item.noteImages)}<div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
+        $('#alphabetDialogBody').innerHTML+=`<label>这个格子的颜色 <select data-letter-color="${cell.key}">${[['default','默认 · 清除标记'],['yellow','黄色 · 需加强'],['red','红色 · 重点'],['green','绿色 · 已熟悉']].map(([value,label])=>`<option value="${value}" ${value===(cell.color||'default')?'selected':''}>${label}</option>`).join('')}</select></label><p id="alphabetColorStatus" class="tag-hint" role="status">选择后自动保存，不影响字母、录音或备注。</p>`;
         if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
         if(notes&&matches.length===1&&hasAudio(matches[0])) {
           try {await playStoredAudio(matches[0]);}
@@ -1172,6 +1173,19 @@
       if(e.target.closest('button, input, select, textarea, a, img'))return;
       if(alphabetNoteGesture?.blocked||alphabetHasSelection()||e.detail>1)return;
       $('#alphabetDialog').close();
+    };
+    $('#alphabetDialogBody').onchange=async e=>{
+      const select=e.target.closest('[data-letter-color]');if(!select)return;
+      const cell=alphabetCells.find(item=>item.key===select.dataset.letterColor);
+      if(!cell)return;
+      if(alphabetSaving){select.value=cell.color||'default';return;}
+      const status=$('#alphabetColorStatus');
+      try{
+        alphabetSaving=true;select.disabled=true;status.textContent='正在保存颜色…';
+        await saveAlphabetCell('color:'+cell.key,select.value,cell.color);
+        await renderAlphabet();status.textContent='颜色已保存到本机。点击“云端同步”可上传此标记。';
+      }catch(error){select.value=cell.color||'default';status.textContent='颜色未保存：'+error.message;}
+      finally{alphabetSaving=false;select.disabled=false;}
     };
     $('#alphabetDialogBody').onclick=async e=>{
       const b=e.target.closest('button');if(!b)return;

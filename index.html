@@ -91,6 +91,8 @@
           <label>标签（可多个） <input id="category" list="categoryChoices" placeholder="例如：辅音，基本辅音，单辅音" autocomplete="off" /><small>用中文或英文逗号分隔多个标签。</small></label><datalist id="categoryChoices"></datalist>
           <label>学习备注（可留空） <textarea id="note" placeholder="例如：发音要点、容易混淆的字母、例句、自己的记忆方法……"></textarea><small>支持换行；备注会显示在词条卡片上，并随备份一起导出。</small></label>
           <label>备注图片（例如字母书写示范）<input id="noteImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple /><small>最多 3 张，支持 PNG、JPEG、WebP。自动压缩；保存词条后生效，随备份和手动云端同步保留。</small></label>
+          <button type="button" id="noteImagePasteTarget">点这里，再按 ⌘V 粘贴截图</button>
+          <p class="tag-hint">Mac：按 Control + Command + Shift + 4 框选截图，回到这里按 ⌘V。可连续截图、粘贴，无需打开文件窗口；最多 3 张。</p>
           <div id="noteImagePreview" class="note-images"></div><p id="noteImageStatus" class="tag-hint" role="status"></p>
           <div class="recording" id="entryRecording"><p id="recordStatus">还没有录音。可直接保存词条，也可录下你的示范发音。</p><button type="button" id="recordButton" class="record">● 开始录音</button> <button type="button" id="previewButton" disabled>▶ 试听</button> <button type="button" id="removeAudioButton" class="danger" disabled>删除自己的录音</button></div>
           <button class="primary" id="saveButton">保存词条</button> <button type="button" id="cancelButton" class="hidden">取消修改</button>
@@ -124,6 +126,7 @@
             <input id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
             <div style="margin-top:11px"><button type="button" class="primary" id="checkAnswer">检查答案</button><button type="button" class="secondary" id="showAnswer">显示答案</button><button type="button" class="secondary" id="nextQuestion">换一题</button></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
+            <button type="button" id="practiceNotes" hidden>查看完整备注</button>
             <p id="practiceProgress" class="tag-hint" aria-live="polite"></p>
           </div>
           <aside class="practice-side"><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><p><strong>标签筛选（可多选）</strong></p><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
@@ -516,6 +519,7 @@
       return result;
     }
     async function choosePractice(options={}) {
+      $('#practiceNotes').hidden=true;
       const requestId=++practiceRequest;
       const eligible=practiceItems(await allEntries());if(requestId!==practiceRequest)return;
       setPracticeAudio(null);
@@ -540,7 +544,19 @@
     function answersMatch(answer,target,mode) { const normalized=mode.normalize(answer); return target.split(/[,，、；;\/]/).map(mode.normalize).filter(Boolean).includes(normalized); }
     function fullAnswer(item,direction) { const mode=reviewModes[direction]; return mode.answer(item); }
     async function checkPracticeAnswer() { if(!practiceId||!practiceDirection||practiceEvaluated)return; const mode=reviewModes[practiceDirection], answer=$('#practiceAnswer').value; if(!mode.normalize(answer)){ $('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent='请先输入你的答案。';return;} const item=await getEntry(practiceId); if(!item)return choosePractice(); const correct=answersMatch(answer,mode.answer(item),mode), stats={...(item.reviewStats||{})}, modeStats={...(stats[practiceDirection]||{})}; stats[practiceDirection]={reviews:(Number(modeStats.reviews)||0)+1,correct:(Number(modeStats.correct)||0)+(correct?1:0),mistakes:(Number(modeStats.mistakes)||0)+(correct?0:1)}; const updated={...item,reviews:(Number(item.reviews)||0)+1,correct:(Number(item.correct)||0)+(correct?1:0),mistakes:(Number(item.mistakes)||0)+(correct?0:1),needsExtraPractice:correct?Boolean(item.needsExtraPractice):true,lastReviewed:Date.now(),updatedAt:item.updatedAt,reviewStats:stats}; await putEntry(updated); practiceEvaluated=true; $('#checkAnswer').disabled=true; $('#practiceResult').className=`practice-result ${correct?'ok':'wrong'}`; $('#practiceResult').textContent=correct?'答对了！可以点击“换一题”继续。':`这次不对。答案是：${fullAnswer(item,practiceDirection)}。已加入重点复习。`; await render(); }
-    async function revealPracticeAnswer() { if(!practiceId||!practiceDirection)return; const item=await getEntry(practiceId); if(item){$('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent=`答案是：${fullAnswer(item,practiceDirection)}。先记一遍，再点击“换一题”。`; } }
+    async function revealPracticeAnswer() { if(!practiceId||!practiceDirection)return; const id=practiceId,request=practiceRequest,item=await getEntry(id); if(item&&id===practiceId&&request===practiceRequest){$('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent=`答案是：${fullAnswer(item,practiceDirection)}。先记一遍，再点击“换一题”。`;$('#practiceNotes').hidden=false; } }
+    async function openPracticeNotes() {
+      if($('#practiceNotes').hidden||!practiceId||activeView!=='practice')return;
+      const id=practiceId,request=practiceRequest;
+      try {
+        const item=await getEntry(id);
+        if(!item||id!==practiceId||request!==practiceRequest||activeView!=='practice')return;
+        $('#alphabetDialogTitle').textContent=item.word+' · 完整备注';
+        $('#alphabetDialogBody').innerHTML=`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'这个词条暂无文字备注。')}</p>${noteImagesMarkup(item.noteImages)}</section>`;
+        if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
+      }catch(error){$('#practiceResult').textContent='备注读取失败：'+error.message;}
+    }
+    $('#practiceNotes').onclick=openPracticeNotes;
     const mobileRecordingLayout = window.matchMedia('(max-width:760px)');
     function syncRecordingPosition() {
       const form=$('#entryForm'),recording=$('#entryRecording');
@@ -574,14 +590,21 @@
         throw new Error('图片内容太复杂，请先裁剪书写示范区域再添加。');
       }finally{URL.revokeObjectURL(url);}
     }
-    $('#noteImageFiles').onchange=async e=>{
-      if(noteImagesBusy)return;
-      const files=[...e.target.files];if(!files.length)return;
-      if(files.length+noteImageDraft.length>3){alert('每个词条最多 3 张图片，请先移除不需要的图片。');e.target.value='';return;}
+    async function addNoteImageFiles(files){
+      if(noteImagesBusy){$('#noteImageStatus').textContent='上一张图片还在处理中，请稍候再粘贴。';return;}
+      if(!files.length)return;
+      if(files.length+noteImageDraft.length>3){alert('每个词条最多 3 张图片，请先移除不需要的图片。');return;}
       const generation=++noteImageGeneration;noteImagesBusy=true;$('#saveButton').disabled=true;$('#noteImageStatus').textContent='正在压缩图片…';
       try{const prepared=[];for(const file of files)prepared.push(await compressNoteImage(file));if(generation!==noteImageGeneration)return;noteImageDraft=validateNoteImages([...noteImageDraft,...prepared]);renderNoteImagePreview();$('#noteImageStatus').textContent='图片已准备好。请检查清晰度，然后保存词条。';}
       catch(error){if(generation===noteImageGeneration)$('#noteImageStatus').textContent=error.message;}
-      finally{if(generation===noteImageGeneration){noteImagesBusy=false;$('#saveButton').disabled=false;e.target.value='';}}
+      finally{if(generation===noteImageGeneration){noteImagesBusy=false;$('#saveButton').disabled=false;}}
+    }
+    $('#noteImageFiles').onchange=async e=>{const files=[...e.target.files];e.target.value='';await addNoteImageFiles(files);};
+    $('#noteImagePasteTarget').onclick=()=>{$('#noteImagePasteTarget').focus();$('#noteImageStatus').textContent='请按 ⌘V（Windows 按 Ctrl+V）粘贴剪贴板中的截图。';};
+    $('#entryForm').onpaste=e=>{
+      const files=[...(e.clipboardData?.items||[])].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);
+      if(!files.length)return;
+      e.preventDefault();void addNoteImageFiles(files);
     };
     $('#noteImagePreview').onclick=e=>{
       const b=e.target.closest('[data-remove-note-image], [data-move-note-image]');if(!b||b.disabled||noteImagesBusy)return;

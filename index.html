@@ -537,7 +537,7 @@
       practiceRound.shown++;practiceLastId=id;setPracticeAudio(item);
       const mode=reviewModes[direction];practiceId=item.id;practiceDirection=direction;practiceEvaluated=false;
       $('#questionPrompt').textContent=mode.prompt;$('#questionIPA').textContent=mode.question(item);$('#practiceAnswer').value='';$('#practiceAnswer').placeholder=mode.placeholder;
-      $('#practiceAnswer').disabled=false;$('#checkAnswer').disabled=false;$('#showAnswer').disabled=false;$('#nextQuestion').textContent='换一题';
+      $('#practiceAnswer').disabled=false;$('#checkAnswer').disabled=false;$('#showAnswer').disabled=false;$('#practiceNotes').hidden=false;$('#nextQuestion').textContent='换一题';
       if(activeView==='practice')$('#practiceAnswer').focus();$('#practiceResult').className='practice-result';$('#practiceResult').textContent='输入答案后点击“检查答案”。';
       $('#practiceProgress').textContent=`本轮第 ${practiceRound.shown} / ${practiceRound.total} 项 · 随机不重复；更改筛选或题目资料会开始新一轮。`;
     }
@@ -552,7 +552,7 @@
         const item=await getEntry(id);
         if(!item||id!==practiceId||request!==practiceRequest||activeView!=='practice')return;
         $('#alphabetDialogTitle').textContent=item.word+' · 完整备注';
-        $('#alphabetDialogBody').innerHTML=`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'这个词条暂无文字备注。')}</p>${noteImagesMarkup(item.noteImages)}</section>`;
+        $('#alphabetDialogBody').innerHTML=`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><div>${tagsFor(item).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div><p class="alphabet-note">${escapeHtml(item.note||'这个词条暂无文字备注。')}</p>${noteImagesMarkup(item.noteImages)}</section>`;
         if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
       }catch(error){$('#practiceResult').textContent='备注读取失败：'+error.message;}
     }

@@ -47,6 +47,9 @@
     .alphabet-cell small { display:block; color:#64756d; font-size:10px; }
     .alphabet-cell.has-audio small { color:var(--brand); }
     .alphabet-cell:hover,.alphabet-cell:focus-visible { background:white; outline:2px solid var(--brand); }
+    .alphabet-cell[data-color="yellow"] { background:#fff0a6; color:#493800; }
+    .alphabet-cell[data-color="red"] { background:#ffd0cc; color:#721c19; }
+    .alphabet-cell[data-color="green"] { background:#cdebd2; color:#174b28; }
     #alphabetDialog { width:min(520px,calc(100% - 28px)); max-height:85vh; overflow:auto; border:1px solid var(--line); border-radius:16px; padding:22px; color:var(--ink); background:var(--paper); }
     #alphabetDialog::backdrop { background:#102d2866; }
     #alphabetDialog .alphabet-detail { padding:12px 0; border-top:1px solid var(--line); }
@@ -142,6 +145,9 @@
         </div></div>
         <button type="button" id="alphabetNoteMode" aria-pressed="false">查看备注模式：关</button>
         <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表：关</button>
+        <button type="button" id="alphabetColorMode" aria-pressed="false">标记颜色：关</button>
+        <label>格子颜色 <select id="alphabetColor"><option value="yellow">黄色 · 需加强</option><option value="red">红色 · 重点</option><option value="green">绿色 · 已熟悉</option><option value="default">默认 · 清除标记</option></select></label>
+        <p class="tag-hint">开启“标记颜色”后，单击格子应用所选颜色；关闭后恢复点读。颜色自动保存在本机，可随备份及手动云端同步保留。</p>
         <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
         <div id="alphabetTables"></div>
         <div id="alphabetHelpBottom"></div>
@@ -671,12 +677,13 @@
       return '<div class="note-images">'+validateNoteImages(value).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}：书写或学习示范" loading="lazy" /></figure>`).join('')+'</div>';
     }
     // Chart cells use reserved entry IDs but distinct payloads; older clients fail validation safely.
-    function alphabetConfigKey(key) { return /^entry:alphabet-cell-v1:(?:[0-9]|10):[0-9]+$/.test(key); }
+    function alphabetConfigKey(key) { return /^entry:alphabet-cell-v1:(?:color:)?(?:[0-9]|10):[0-9]+$/.test(key); }
     function validateAlphabetOverrides(value) {
       if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('字母表配置格式无效。');
       const result={};
       for(const [key,text] of Object.entries(value)){
-        const match=/^(\d+):(\d+)$/.exec(key),row=match?Number(match[1]):-1,col=match?Number(match[2]):-1;
+        const match=/^(?:color:)?(\d+):(\d+)$/.exec(key),row=match?Number(match[1]):-1,col=match?Number(match[2]):-1;
+        if(key.startsWith('color:')&&!['default','yellow','red','green'].includes(text))throw new Error('字母表颜色无效。');
         if(row<0||row>10||col<0||col>=(row<6?12:row<10?9:4)||typeof text!=='string'||text.length>120)throw new Error('字母表格子格式无效。');
         result[key]=text;
       }
@@ -1030,7 +1037,7 @@
       ['特殊韵母','',['ໄx','ໃx','ເxົາ','xຳ']]
     ];
     const alphabetCells=[];
-    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0,alphabetEditing=false,alphabetSaving=false;
+    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0,alphabetEditing=false,alphabetSaving=false,alphabetColoring=false;
     const alphabetButton=document.createElement('button');
     alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
     $('#viewNav [data-view="dictionary"]').after(alphabetButton);
@@ -1059,9 +1066,9 @@
           return '<tr>'+((index%2===0||!kind)?`<th scope="rowgroup" rowspan="${kind?2:1}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map((original,col)=>{
             const key=alphabetRows.indexOf(row)+':'+col,raw=Object.hasOwn(overrides,key)?overrides[key]:original;
             if(!raw&&!alphabetEditing)return '<td></td>';
-            const forms=raw.split('|').map(x=>x.trim()).filter(Boolean),cell={forms,word:forms[0]||'',group,kind,key,raw,original,override:overrides[key]},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
+            const forms=raw.split('|').map(x=>x.trim()).filter(Boolean),cell={forms,word:forms[0]||'',group,kind,key,raw,original,override:overrides[key],color:overrides['color:'+key]},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
             const hint=alphabetEditing?'✎ 修改字母':matches.length>1?'选择词条':recorded?'':matches.length?'待补录音':'未添加';
-            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetEditing?'修改字母':'单击播放，双击备注'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span>${hint?`<small>${hint}</small>`:''}</button></td>`;
+            return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-color="${cell.color||'default'}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetColoring?'标记颜色':alphabetEditing?'修改字母':'单击播放，双击备注'}；${({yellow:'需加强',red:'重点',green:'已熟悉'})[cell.color]||'未标记'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span>${hint?`<small>${hint}</small>`:''}</button></td>`;
           }).join('')+'</tr>';
         }
         $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}表，可横向滚动"><table class="alphabet-table" aria-label="${title}"><tbody>${rows.map(rowMarkup).join('')}</tbody></table></div>`).join('');
@@ -1092,14 +1099,28 @@
     $('#alphabetTables').onclick=e=>{
       const button=e.target.closest('[data-letter]');if(!button)return;
       const id=Number(button.dataset.letter),now=Date.now();
+      if(alphabetColoring){cancelAlphabetClick();void colorAlphabetCell(id);return;}
       if(alphabetEditing){cancelAlphabetClick();void editAlphabetCell(id);return;}
       if(alphabetNotesOnly||e.detail===0){cancelAlphabetClick();void openAlphabetCell(id,alphabetNotesOnly);return;}
       if(alphabetLastCell===id&&now-alphabetLastTime<350){cancelAlphabetClick();stopPracticeAudio();void openAlphabetCell(id,true);return;}
       cancelAlphabetClick();alphabetLastCell=id;alphabetLastTime=now;
       alphabetTimer=setTimeout(()=>{cancelAlphabetClick();void openAlphabetCell(id);},350);
     };
-    $('#alphabetTables').ondblclick=e=>{if(alphabetEditing)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();if(!$('#alphabetDialog').open){stopPracticeAudio();void openAlphabetCell(Number(button.dataset.letter),true);}};
-    $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent='编辑字母表：'+(alphabetEditing?'开（点击格子修改）':'关');void renderAlphabet();};
+    $('#alphabetTables').ondblclick=e=>{if(alphabetEditing||alphabetColoring)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();if(!$('#alphabetDialog').open){stopPracticeAudio();void openAlphabetCell(Number(button.dataset.letter),true);}};
+    $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetColoring=false;updateAlphabetColorMode();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent='编辑字母表：'+(alphabetEditing?'开（点击格子修改）':'关');void renderAlphabet();};
+    function updateAlphabetColorMode(){ $('#alphabetColorMode').setAttribute('aria-pressed',String(alphabetColoring));$('#alphabetColorMode').textContent='标记颜色：'+(alphabetColoring?'开（点击格子上色）':'关'); }
+    $('#alphabetColorMode').onclick=()=>{
+      if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetColoring=!alphabetColoring;alphabetEditing=false;
+      $('#alphabetEditMode').setAttribute('aria-pressed','false');$('#alphabetEditMode').textContent='编辑字母表：关';updateAlphabetColorMode();void renderAlphabet();
+    };
+    async function colorAlphabetCell(id){
+      const cell=alphabetCells[id];if(!cell||alphabetSaving)return;
+      try{
+        alphabetSaving=true;await saveAlphabetCell('color:'+cell.key,$('#alphabetColor').value,cell.color);
+        await renderAlphabet();$('#alphabetStatus').textContent='颜色已保存。关闭“标记颜色”可继续点读；点击“云端同步”上传颜色标记。';
+      }catch(error){$('#alphabetStatus').textContent='颜色未保存：'+error.message;}
+      finally{alphabetSaving=false;}
+    }
     async function editAlphabetCell(id) {
       const cell=alphabetCells[id];if(!cell||alphabetSaving)return;
       const answer=prompt('修改 '+cell.group+' / '+cell.kind+' 的字母。\n多个写法用 | 分隔；留空可清空这个格子。\n只修改表格，不会更改已有词条、备注或录音。',cell.raw);

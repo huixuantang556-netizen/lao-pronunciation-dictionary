@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>老挝语私人发音词典</title>
-  <link rel="stylesheet" href="coda-chapter.css" />
+  <style data-coda-bundle="styles">
+#codaPanel{grid-column:1/-1;min-width:0} .coda-header{display:flex;justify-content:space-between;gap:16px;align-items:start}.coda-header p{color:var(--muted);font-size:13px;margin:5px 0 18px}.coda-nav{display:flex;gap:7px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:22px}.coda-nav button{border-radius:99px;font-size:13px;padding:7px 12px}.coda-nav button[aria-current=page]{background:var(--brand);color:white;border-color:var(--brand)}.coda-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:14px 0 24px}.coda-card{border:1px solid var(--line);border-radius:12px;background:white;padding:18px;text-align:left}.coda-card strong{font-size:28px;font-weight:500;display:block;color:var(--brand)}.coda-card small,.coda-muted{font-size:12px;color:var(--muted)}.coda-card:hover{background:var(--soft)}.coda-rule{font-size:25px;color:var(--brand);overflow-wrap:anywhere}.coda-word-list{display:grid;gap:8px}.coda-word-list button{text-align:left;display:flex;justify-content:space-between;gap:14px}.coda-word-list span:first-child{font-size:22px}.coda-note{padding:12px 15px;border-radius:10px;background:var(--soft);font-size:13px;line-height:1.8;margin:12px 0}.coda-scroll{overflow:auto}.coda-table{border-collapse:collapse;width:100%;margin:12px 0}.coda-table td,.coda-table th{border:1px solid var(--line);padding:10px;text-align:left;font-size:14px}.coda-table th{background:var(--soft)}.coda-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.coda-toolbar label{flex:1 1 140px;margin:0}.coda-toolbar select{font-size:14px}.coda-exercise{max-width:700px;border:1px solid var(--line);border-radius:15px;padding:24px;background:white}.coda-exercise h3{font-size:25px;white-space:pre-wrap;overflow-wrap:anywhere}.coda-exercise input{font-size:22px;margin:14px 0}.coda-actions{display:flex;gap:8px;flex-wrap:wrap}.coda-detail{max-width:720px}.coda-detail dl{display:grid;grid-template-columns:150px 1fr;gap:8px 14px}.coda-detail dt{color:var(--muted)}.coda-detail dd{margin:0;overflow-wrap:anywhere}.coda-status{min-height:24px;color:var(--brand);font-size:13px}.coda-route{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.coda-route button{text-align:left;padding:15px}.coda-route small{display:block;color:var(--muted);margin-top:7px}@media(max-width:600px){.coda-detail dl{grid-template-columns:110px 1fr;font-size:14px}.coda-exercise{padding:16px}.coda-header{display:block}}
+  </style>
   <style>
     :root { --ink:#203334; --muted:#667878; --brand:#087e6b; --soft:#eaf6f1; --line:#dce7e3; --paper:#fbfdfc; }
     * { box-sizing:border-box; } body { margin:0; color:var(--ink); background:#f1f6f4; font:16px/1.5 system-ui,-apple-system,"PingFang SC","Noto Sans Lao",sans-serif; }
@@ -224,13 +226,16 @@
       cancelAlphabetClick();
       activeView=view;
       if(view==='alphabet')void renderAlphabet();
-      if(view==='coda')void renderCodaChapter();
       Object.entries(panels).forEach(([name,id])=>$('#'+id).classList.toggle('hidden',name!==view&&!(view==='add'&&name==='dictionary')));
       $('.grid').classList.toggle('add-view',view==='add');
       if(view!=='practice')stopPracticeAudio();
       document.querySelectorAll('[data-view]').forEach(button=>{if(button.dataset.view===view)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
       if(view!=='dictionary')setDeleteMode(false);
       window.scrollTo({top:0,behavior:'smooth'});
+      if(view==='coda'){
+        if(typeof renderCodaChapter==='function')void renderCodaChapter();
+        else $('#codaStatus').textContent='尾辅音章节未能加载，请保存未完成的编辑后刷新本页面。';
+      }
     }
     const selectedEntryIds = new Set();
     let visibleEntryIds = [], selectionFilter = '', deletingSelection = false, deleteMode = false;
@@ -1316,7 +1321,155 @@
       } catch(error){alert('无法打开词条：'+error.message);}
     };
   </script>
-  <script src="coda-data.js"></script>
-  <script src="coda-chapter.js"></script>
+  <script data-coda-bundle="data">
+/* User-supplied curriculum. Tone names are textbook labels, not inferred from audio. */
+const CodaLesson = (() => {
+  const source10='第10课 死闭音节尾辅音及其声调',source11='第11课 活闭音节尾辅音及其声调';
+  const codas=[['ກ','k','dead'],['ດ','t','dead'],['ບ','p','dead'],['ງ','ŋ','live'],['ນ','n','live'],['ມ','m','live'],['ຍ','j','live'],['ວ','w','live']].map(([letter,sound,type])=>({id:'coda-'+letter,letter,sound,type,source:type==='dead'?source10:source11}));
+  const vowels=[['◌ະ','◌ັ◌','short','single'],['ເ◌ະ','ເ◌ັ◌','short','single'],['ແ◌ະ','ແ◌ັ◌','short','single'],['ໂ◌ະ','◌ົ◌','short','single'],['ເ◌າະ','◌ັອ◌','short','single'],['◌ໍ','◌ອ◌','long','single'],['ເ◌ັຍ','◌ັຽ◌','short','compound'],['ເ◌ຍ','◌ຽ◌','long','compound'],['◌ົວະ','◌ັວ◌','short','compound'],['◌ົວ','◌ວ◌','long','compound']].map(([baseVowel,closedVowel,vowelLength,vowelType],i)=>({ruleId:'v'+(i+1),baseVowel,closedVowel,vowelLength,vowelType,relatedWordIds:[],validCodas:[],note:'仅登记已提供教材词验证过的组合；不是完整合法组合矩阵。',source:'用户提供的元音形变教材整理'}));
+  const specialVowels=['ໄ◌','ໃ◌','ເ◌ົາ','◌ຳ'].map(baseVowel=>({baseVowel,canAddCoda:false}));
+  const deadTones={middle:{short:'短调',long:'中降调'},low:{short:'短调',long:'四声'},high:{short:'短调',long:'中降调'}};
+  const liveTones={middle:{none:'三声','່':'一声','້':'四声'},low:{none:'二声','່':'一声','້':'四声'},high:{none:'三声','່':'一声','້':'中降调'}};
+  const words=[];
+  function add(word,meaning,source,fields={}){
+    const old=words.find(x=>x.word===word);if(old){if(meaning)old.meaning=meaning;if(!old.sources.includes(source))old.sources.push(source);Object.assign(old,fields);return old;}
+    const value={id:'word-'+words.length,word,meaning,initial:null,initialClass:null,baseVowel:null,closedVowel:null,vowelLength:null,vowelType:null,codaLetter:null,codaSound:null,codaType:null,toneMark:null,textbookTone:null,vowelRuleId:null,source,sources:[source],sourceType:'textbook_word',isRealWord:true,analysisScope:'整词（未分析字段待教材核对）',...fields};words.push(value);return value;
+  }
+  const classes={middle:'ກຈດຕບປຢອ',high:'ຂສຖຜຝຫ',low:'ຄງຊຍທນພຟມຣລວຮ'};
+  const initialClass=letter=>letter==='ໝ'?'high':Object.keys(classes).find(k=>classes[k].includes(letter))||null;
+  function analyzed(word,meaning,ruleId,initial){
+    const rule=vowels.find(r=>r.ruleId===ruleId),coda=codas.find(c=>c.letter===word.slice(-1)),cls=initialClass(initial),toneMark=word.includes('້')?'້':word.includes('່')?'່':'none';
+    const value=add(word,meaning,source10,{initial,initialClass:cls,baseVowel:rule.baseVowel,closedVowel:rule.closedVowel,vowelLength:rule.vowelLength,vowelType:rule.vowelType,codaLetter:coda.letter,codaSound:coda.sound,codaType:coda.type,toneMark,textbookTone:coda.type==='dead'?deadTones[cls][rule.vowelLength]:liveTones[cls][toneMark],vowelRuleId:ruleId,analysisScope:'单音节；教材声调由本章规则推导'});
+    rule.relatedWordIds.push(value.id);if(!rule.validCodas.includes(coda.letter))rule.validCodas.push(coda.letter);
+  }
+  const groups=[
+    ['v1','ກັບ|ຈັກ|ຕັກ|ຕັບ|ຈັບ|ຕັດ|ຜັກ|ຫັກ|ຮັບ|ມັດ|ພັບ'],
+    ['v2','ເຮັດ=做|ເຈັບ=疼、痛|ເປັດ=鸭|ເກັບ=收、保存|ເຜັດ=辣|ເຫັດ=蘑菇|ເດັກ=儿童、小孩|ເມັດ=粒、颗|ເລັບ=指甲'],
+    ['v4','ຫົກ=六|ຫົດ=浇水|ສົດ=新鲜|ສົບ=尸体|ມົດ=蚂蚁|ລົດ=车|ຖົມ=填、填满、填平|ຈົບ=结束|ຕົກ=落、掉|ຈົດ=记录'],
+    ['v8','ປຽກ=湿|ຄຽດ=生气|ວຽກ=工作|ຂຽດ=小青蛙|ກຽດ=荣誉、名誉'],
+    ['v10','ກວດ=检查|ໝວກ=帽子|ນວດ=按摩']
+  ];
+  for(const [ruleId,list] of groups)for(const part of list.split('|')){const [word,meaning='']=part.split('=');analyzed(word,meaning,ruleId,word.startsWith('ເ')?word[1]:word[0]);}
+  for(const part of 'ຖືກ=被、让；正确；便宜|ຜິດ=错|ເຈັບ=疼、痛|ເຮັດ=做|ວຽກ=事情、工作|ມັກ=喜欢|ຈອກ=杯子|ແຕກ=破裂|ເລືອດ=血|ເກືອບ=几乎、差不多|ແພດ=医生|ຕົກໃຈ=受惊、吃惊|ອອກ=出|ບາດ=割伤|ສັກຢາ=打针|ແຊບ=好吃、美味'.split('|')){const [word,meaning]=part.split('=');add(word,meaning,source10);}
+  for(const part of 'ສະບາຍດີ=你好|ຂ້ອຍ=我|ຊ່ວຍ=帮助、帮忙|ຫ້ອງ=房间；间|ລາວ=老挝；他/她|ອ່ານ=读|ຮຽນ=学、学习|ພາສາ=语言|ອື່ນ=别的、其他的|ຫຼາຍ=多、大量；很、非常|ບົດຮຽນ=课文|ທຸກ=每、每个|ຂໍໂທດ=对不起、抱歉|ຊື່=名字|ຫຍັງ=什么|ນຳກັນ=一起、共同|ຄືກັນ=同样、一样、相似|ອາຈານ=老师|ຍາກ=难、困难|ງ່າຍ=容易、简单|ຜູ້ດຽວ=一个人、独自一人|ແລ້ວ=完成、结束；已经……了|ທົບທວນ=复习|ຮູ້ສຶກ=觉得、感觉|ຄົນ=人|ຫັດ=练习|ຂຽນ=写|ເປັນ=是、为、成为等|ອອກສຽງ=发音|ເລື້ອຍໆ=经常、常常|ບໍ່...ປານໃດ=不怎么……|ແມ່ນ=是；对、正确；肯定回答'.split('|')){const [word,meaning]=part.split('=');add(word,meaning,source11);}
+  // Explicit curriculum associations, never a last-character guess on multi-syllable words.
+  const associations={'ງ':['ຫ້ອງ','ຫຍັງ','ອອກສຽງ'],'ນ':['ອ່ານ','ຮຽນ','ອື່ນ','ບົດຮຽນ','ນຳກັນ','ຄືກັນ','ອາຈານ','ທົບທວນ','ຄົນ','ຂຽນ','ເປັນ','ແມ່ນ'],'ຍ':['ຂ້ອຍ','ຊ່ວຍ','ຫຼາຍ','ງ່າຍ','ເລື້ອຍໆ'],'ວ':['ລາວ','ຜູ້ດຽວ','ແລ້ວ'],'ດ':['ຜິດ','ບາດ','ເລືອດ']};
+  for(const [letter,list] of Object.entries(associations)){const c=codas.find(c=>c.letter===letter);for(const word of list){const w=words.find(w=>w.word===word);if(w&&!w.codaLetter)Object.assign(w,{codaLetter:letter,codaSound:c.sound,codaType:c.type,analysisScope:'教材关联的目标尾音；多音节词不代表每个音节的类别'});}}
+  const toneRules=[];
+  for(const cls of ['middle','high','low']){
+    for(const length of ['short','long'])toneRules.push({id:'dead-'+cls+'-'+length,codaType:'dead',initialClass:cls,vowelLength:length,toneMark:'none',textbookTone:deadTones[cls][length],source:source10});
+    for(const mark of ['none','່','້'])toneRules.push({id:'live-'+cls+'-'+mark,codaType:'live',initialClass:cls,vowelLength:null,toneMark:mark,textbookTone:liveTones[cls][mark],source:source11});
+  }
+  // Reserved collections require actual textbook tables before any generated drill is enabled.
+  const validCombinationMatrix=words.filter(w=>w.vowelRuleId).map(w=>({initial:w.initial,vowelRuleId:w.vowelRuleId,codaLetter:w.codaLetter,wordId:w.id,sourceType:'textbook_word'}));
+  return {version:1,codas,vowels,specialVowels,words,toneRules,deadTones,liveTones,drills:[],sentences:[],validCombinationMatrix,source10,source11};
+})();
+  </script>
+  <script data-coda-bundle="chapter">
+/* Independent chapter: no seeding, reinitialization or writes to private dictionary entries. */
+const codaLabels={middle:'中辅音',high:'高辅音',low:'低辅音',short:'短元音',long:'长元音',single:'单元音',compound:'复合元音',dead:'死尾',live:'活尾',none:'无声调符号'};
+const codaTabs=[['route','学习路线'],['basics','尾辅音基础'],['vowels','元音形变'],['dead','死闭音节'],['live','活闭音节'],['tones','声调规则'],['words','教材词库'],['practice','多方向默写'],['listen','听力训练'],['review','错题复习']];
+let codaTab='route',codaStats={},codaQuestion=null,codaQueue=[],codaChecked=false,codaBusy=false,codaRenderId=0,codaTrainingKey='';
+function codaEscape(s){return escapeHtml(String(s??''));}
+function validateCodaProgress(value){
+  if(value===undefined)return {};
+  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>3000)throw new Error('尾辅音练习记录格式无效');
+  const out={};for(const [key,row] of Object.entries(value)){
+    if(!/^(?:coda-|v\d|dead-|live-|word-)/.test(key)||key.length>160||!row||typeof row!=='object')throw new Error('尾辅音练习索引无效');
+    for(const field of ['correctCount','wrongCount','consecutiveCorrect','lastPracticedAt'])if(!Number.isSafeInteger(row[field])||row[field]<0)throw new Error('尾辅音练习次数无效');
+    out[key]={correctCount:row.correctCount,wrongCount:row.wrongCount,consecutiveCorrect:row.consecutiveCorrect,lastPracticedAt:row.lastPracticedAt,accuracy:(row.correctCount+row.wrongCount)?row.correctCount/(row.correctCount+row.wrongCount):0};
+  }return out;
+}
+function mergeCodaProgress(local,incoming){const out={...validateCodaProgress(local)};for(const [key,row] of Object.entries(validateCodaProgress(incoming)))if(!out[key]||row.lastPracticedAt>out[key].lastPracticedAt)out[key]=row;return out;}
+async function readCodaProgress(){const database=await openDB();return new Promise((resolve,reject)=>{const tx=database.transaction('cloud_meta','readonly'),request=tx.objectStore('cloud_meta').get('codaProgress');tx.oncomplete=()=>{try{resolve(validateCodaProgress(request.result));}catch(e){reject(e);}};tx.onabort=()=>reject(tx.error);});}
+async function recordCodaAnswer(key,correct){
+  const database=await openDB();return new Promise((resolve,reject)=>{const tx=database.transaction('cloud_meta','readwrite'),store=tx.objectStore('cloud_meta'),r=store.get('codaProgress');let result,failure;
+    r.onsuccess=()=>{try{result=validateCodaProgress(r.result);const old=result[key]||{correctCount:0,wrongCount:0,consecutiveCorrect:0};const row={correctCount:old.correctCount+(correct?1:0),wrongCount:old.wrongCount+(correct?0:1),consecutiveCorrect:correct?old.consecutiveCorrect+1:0,lastPracticedAt:Date.now()};row.accuracy=row.correctCount/(row.correctCount+row.wrongCount);result[key]=row;store.put(result,'codaProgress');}catch(e){failure=e;tx.abort();}};
+    tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(failure||tx.error||new Error('练习记录保存失败'));
+  });
+}
+function codaState(id){const s=codaStats[id];return !s?'未开始':s.consecutiveCorrect>=3?'已掌握':s.wrongCount&&s.consecutiveCorrect<2?'需要复习':'学习中';}
+function codaWordButtons(words){return words.length?'<div class="coda-word-list">'+words.map(w=>`<button type="button" data-coda-word="${w.id}"><span lang="lo">${codaEscape(w.word)}</span><span>${codaEscape(w.meaning||'释义待补充')}</span></button>`).join('')+'</div>':'<p class="coda-muted">教材例词待补充，不生成替代词。</p>';}
+function codaToneTable(type){return `<div class="coda-scroll"><table class="coda-table"><thead><tr><th>开头辅音</th><th>${type==='dead'?'元音长短':'声调符号'}</th><th>教材声调</th></tr></thead><tbody>`+CodaLesson.toneRules.filter(r=>r.codaType===type).map(r=>`<tr><td>${codaLabels[r.initialClass]}</td><td>${codaLabels[type==='dead'?r.vowelLength:r.toneMark]||r.toneMark}</td><td>${r.textbookTone}</td></tr>`).join('')+'</tbody></table></div>';}
+function codaCards(type){return '<div class="coda-cards">'+CodaLesson.codas.filter(c=>!type||c.type===type).map(c=>`<button class="coda-card" data-coda-letter="${c.letter}"><strong lang="lo">${c.letter}</strong>/${c.sound}/ · ${codaLabels[c.type]}<br><small>${codaState(c.id)}</small></button>`).join('')+'</div>';}
+async function renderCodaChapter(){
+  const version=++codaRenderId;
+  try{codaStats=await readCodaProgress();if(version!==codaRenderId||activeView!=='coda')return;
+    $('#codaNav').innerHTML=codaTabs.map(([key,label])=>`<button type="button" data-coda-tab="${key}" ${key===codaTab?'aria-current="page"':''}>${label}</button>`).join('');
+    let html='';
+    if(codaTab==='route')html='<div class="coda-note">独立学习资料，不会自动加入私人词典。声调名称严格使用你提供的教材体系；未核对的结构字段留空，不从 AI 音频推断。练习记录保存在本机并包含在导出备份中，暂不参与云端同步。</div><div class="coda-route">'+[['basics','认识 8 个尾辅音'],['dead','区分死尾与活尾'],['vowels','学习 10 个元音形变'],['dead','死闭拼读与结构'],['tones','死闭声调'],['live','活闭拼读与结构'],['tones','活闭声调符号'],['words','教材真实词'],['listen','听力训练'],['practice','综合规则与拆词']].map(([tab,label],i)=>`<button data-coda-tab="${tab}">${i+1}. ${label}<small>自由进入，不锁定学习顺序</small></button>`).join('')+'</div><p class="coda-muted">第一版：规则默写和单词听辨可用。完整教材拼读矩阵、双音频短长对比与逐音节分析待补充教材后扩展。</p>';
+    if(codaTab==='basics')html='<h3>死闭尾辅音</h3>'+codaCards('dead')+'<h3>活闭尾辅音</h3>'+codaCards('live')+'<div class="coda-note">这里是尾音读法，不是辅音字母名称：ດ 作尾辅音读 /t/，ບ 作尾辅音读 /p/。请通过教材词听尾音，避免用孤立字母的 AI 读音代替尾音。</div>';
+    if(codaTab==='vowels')html='<p>死闭与活闭共同引用这一套形变规则。特别注意：ຽ ≠ ຍ。</p><div class="coda-cards">'+CodaLesson.vowels.map(r=>`<button class="coda-card" data-coda-rule="${r.ruleId}"><strong>${r.baseVowel}<br>↓<br>${r.closedVowel}</strong>${codaLabels[r.vowelLength]} · ${codaLabels[r.vowelType]}<br><small>${codaState(r.ruleId)} · ${r.relatedWordIds.length} 个例词</small></button>`).join('')+'</div><h3>特殊元音</h3><p>'+CodaLesson.specialVowels.map(v=>v.baseVowel).join('　')+'</p><p class="coda-muted">本课程设定 canAddCoda = false，不再次添加尾辅音。</p>';
+    if(['dead','live'].includes(codaTab)){const dead=codaTab==='dead';html=`<h3>${dead?'死闭':'活闭'}音节</h3>`+codaCards(codaTab)+`<div class="coda-note">${dead?'教材规则：开头辅音类别 ＋ 元音长短 ＋ 死尾决定声调；本阶段不使用普通声调符号训练。':'教材规则：开头辅音类别 ＋ 声调符号决定声调；同类辅音、同一声调符号下，短长元音声调类别相同，元音时长不同。'}</div>`+codaToneTable(codaTab)+`<button data-coda-training="${codaTab==='dead'?'deadTone':'liveTone'}">练习这组声调规则</button><h3>已确认目标尾音的教材词</h3>`+codaWordButtons(CodaLesson.words.filter(w=>w.codaType===codaTab));}
+    if(codaTab==='tones')html='<div class="coda-note">元音长度、死尾／活尾、辅音类别、声调符号、教材声调是五个独立字段。此处声调表来自用户提供的教材，不代表所有老挝语方言的统一声调体系。</div><h3>死闭音节声调</h3>'+codaToneTable('dead')+'<button data-coda-training="deadTone">练死闭声调</button><h3>活闭音节声调</h3>'+codaToneTable('live')+'<button data-coda-training="liveTone">练活闭声调</button>';
+    if(codaTab==='words')html='<div class="coda-toolbar"><label>搜索教材词<input id="codaWordSearch" placeholder="老挝语或中文"></label>'+[['codaTypeFilter','尾音类型',[['','全部'],['dead','死尾'],['live','活尾']]],['codaLetterFilter','尾辅音',[['','全部'],...CodaLesson.codas.map(c=>[c.letter,c.letter+' /'+c.sound+'/'])]],['codaLengthFilter','元音',[['','全部'],['short','短'],['long','长']]],['codaClassFilter','开头辅音',[['','全部'],['middle','中'],['high','高'],['low','低']]],['codaToneFilter','教材声调',[['','全部'],...['一声','二声','三声','四声','短调','中降调'].map(t=>[t,t])]]].map(([id,label,options])=>`<label>${label}<select id="${id}">${options.map(([value,text])=>`<option value="${value}">${text}</option>`).join('')}</select></label>`).join('')+'</div><p class="coda-muted">多音节词按教材关联的目标尾音筛选；结构尚未确认的词不会进入对应结构筛选。</p><div id="codaWordsList">'+codaWordButtons(CodaLesson.words)+'</div>';
+    if(['practice','listen','review'].includes(codaTab))html=codaTrainingHtml();
+    $('#codaContent').innerHTML=html;$('#codaStatus').textContent='';
+    if(['practice','listen','review'].includes(codaTab)){codaTrainingKey='';codaQuestion=null;$('#codaQuestionText').textContent='选择题型，然后开始。';}
+  }catch(e){$('#codaStatus').textContent='章节读取失败：'+e.message;}
+}
+const codaModes=[['vowelForward','元音原形 → 形变'],['vowelBack','形变 → 原形'],['codaSound','尾辅音 → 尾音'],['soundCoda','尾音 → 字母'],['codaType','死尾／活尾'],['spell','教材词拼写组合'],['analysis','教材词结构拆解'],['deadTone','死闭声调'],['liveTone','活闭声调']];
+function codaTrainingHtml(){const listening=codaTab==='listen';return `<div class="coda-toolbar"><label>题型<select id="codaMode">${(listening?[['listenWord','听音写词'],['listenCoda','听音辨尾辅音'],['listenType','听音辨死／活尾'],['listenTone','听音辨教材声调']]:codaModes).map(([k,t])=>`<option value="${k}">${t}</option>`).join('')}</select></label><label>出题方式<select id="codaOrder"><option value="random">随机 · 本轮不重复</option><option value="ordered">顺序</option><option value="wrong" ${codaTab==='review'?'selected':''}>只练错题</option><option value="focus">重点 · 薄弱与久未复习优先</option></select></label></div><div class="coda-exercise"><p id="codaExerciseProgress" class="coda-muted"></p><h3 id="codaQuestionText"></h3>${listening?'<button id="codaListen" disabled>播放默认发音／首次生成</button><p class="coda-muted">点击才会调用发音服务；已有默认音频直接读取缓存。教材声调答案不由音频决定。</p>':''}<input id="codaAnswer" aria-label="尾辅音练习答案" placeholder="输入答案" disabled><div class="coda-actions"><button id="codaCheck" class="primary" disabled>检查答案</button><button id="codaReveal" disabled>显示答案</button><button id="codaNext">开始 / 下一题</button></div><p id="codaFeedback" class="coda-status" role="status"></p></div><p class="coda-muted">答题统计按规则／尾辅音／词条分别保存。连续答对 3 次显示“已掌握”。完整合法拼读矩阵与双音频对比尚未启用。</p>`;}
+function codaBuildQuestions(mode){
+  const D=CodaLesson,q=(id,prompt,answer,word)=>({id,prompt,answer,word});
+  if(mode==='vowelForward'||mode==='vowelBack')return D.vowels.map(r=>q(r.ruleId,mode==='vowelForward'?r.baseVowel+' 遇尾辅音后变成？':r.closedVowel+' 的原始元音？',mode==='vowelForward'?r.closedVowel:r.baseVowel));
+  if(['codaSound','soundCoda','codaType'].includes(mode))return D.codas.map(c=>q(c.id,mode==='soundCoda'?'/'+c.sound+'/ 对应哪个尾辅音？':c.letter+(mode==='codaSound'?' 作尾辅音读？':' 是死尾还是活尾？'),mode==='soundCoda'?c.letter:mode==='codaSound'?c.sound:codaLabels[c.type]));
+  if(['deadTone','liveTone'].includes(mode))return D.toneRules.filter(r=>r.codaType===(mode==='deadTone'?'dead':'live')).map(r=>q(r.id,codaLabels[r.initialClass]+' ＋ '+codaLabels[r.codaType]+' ＋ '+(r.codaType==='dead'?codaLabels[r.vowelLength]:codaLabels[r.toneMark]||r.toneMark),r.textbookTone));
+  if(mode==='spell')return D.words.filter(w=>w.vowelRuleId&&w.initial).map(w=>q(w.id,w.initial+' ＋ '+w.baseVowel+' ＋ '+w.codaLetter+' → 教材词拼写？',w.word));
+  if(mode==='analysis')return D.words.filter(w=>w.initial&&w.textbookTone).map(w=>q(w.id,w.word+'：依次填写开头辅音、类别、原元音、闭元音、长短、尾字母、尾音、死活、教材声调（用 | 分隔）',[w.initial,codaLabels[w.initialClass],w.baseVowel,w.closedVowel,codaLabels[w.vowelLength],w.codaLetter,w.codaSound,codaLabels[w.codaType],w.textbookTone].join(' | ')));
+  if(mode.startsWith('listen'))return D.words.filter(w=>mode==='listenWord'||(mode==='listenTone'?w.textbookTone:w.codaLetter)).map(w=>q(w.id,'先听音频，再回答。',mode==='listenWord'?w.word:mode==='listenCoda'?w.codaLetter:mode==='listenType'?codaLabels[w.codaType]:w.textbookTone,w));
+  return [];
+}
+function codaNormalize(text){return text.replace(/[\s\/\[\]]/g,'').replaceAll('｜','|');}
+function codaNextQuestion(){
+  if(codaBusy)return;stopPracticeAudio();const mode=$('#codaMode').value,order=$('#codaOrder').value,key=mode+'|'+order;
+  if(key!==codaTrainingKey||!codaQueue.length){let pool=codaBuildQuestions(mode);if(order==='wrong')pool=pool.filter(q=>codaStats[q.id]?.wrongCount>0);
+    if(order==='random'||order==='wrong')for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+    if(order==='focus')pool.sort((a,b)=>{const score=q=>{const s=codaStats[q.id];return s?(1-s.accuracy)*10+(s.consecutiveCorrect===0?3:0)+Math.min(5,(Date.now()-s.lastPracticedAt)/86400000):20;};return score(b)-score(a);});
+    codaQueue=pool;codaTrainingKey=key;
+  }
+  codaQuestion=codaQueue.shift()||null;codaChecked=false;$('#codaAnswer').value='';$('#codaFeedback').textContent='';
+  for(const id of ['codaAnswer','codaCheck','codaReveal'])$('#'+id).disabled=!codaQuestion;
+  if($('#codaListen'))$('#codaListen').disabled=!codaQuestion;
+  $('#codaQuestionText').textContent=codaQuestion?.prompt||'当前没有符合条件的题目。';$('#codaExerciseProgress').textContent=codaQuestion?'本轮剩余 '+codaQueue.length+' 题；本题完成后可继续。':'';
+  if(codaQuestion)$('#codaAnswer').focus();
+}
+async function codaCheckAnswer(){
+  if(!codaQuestion||codaChecked||codaBusy)return;const input=$('#codaAnswer').value;if(!input.trim()){ $('#codaFeedback').textContent='请先输入答案。';return;}
+  const question=codaQuestion,correct=codaNormalize(input)===codaNormalize(question.answer);codaBusy=true;
+  try{codaStats=await recordCodaAnswer(question.id,correct);if(codaQuestion!==question)return;codaChecked=true;$('#codaCheck').disabled=true;$('#codaFeedback').textContent=(correct?'答对了。':'答案：'+question.answer+'。')+' '+codaState(question.id)+(codaQueue.length?'':' 本轮完成；下一题将开始新一轮。');}
+  catch(e){$('#codaFeedback').textContent='结果未保存：'+e.message;}finally{codaBusy=false;}
+}
+async function codaWordDetail(id){
+  const w=CodaLesson.words.find(w=>w.id===id);if(!w)return;
+  const version=++codaRenderId;
+  const matches=(await allEntries()).filter(x=>x.word===w.word);if(activeView!=='coda'||version!==codaRenderId)return;
+  const fields=[['开头辅音',w.initial],['辅音类别',codaLabels[w.initialClass]],['原始元音',w.baseVowel],['闭音节元音形式',w.closedVowel],['元音长短',codaLabels[w.vowelLength]],['元音类型',codaLabels[w.vowelType]],['尾辅音',w.codaLetter],['尾音',w.codaSound?'/'+w.codaSound+'/':null],['死／活尾',codaLabels[w.codaType]],['声调符号',codaLabels[w.toneMark]||w.toneMark],['教材声调',w.textbookTone]];
+  $('#codaContent').innerHTML=`<div class="coda-detail"><button data-coda-tab="words">← 教材词库</button><h2 class="coda-rule" lang="lo">${codaEscape(w.word)}</h2><p>${codaEscape(w.meaning||'教材未提供释义，待补充')}</p><div class="coda-actions"><button data-coda-audio="${w.id}">默认发音／首次生成</button>${matches.filter(hasAudio).map((item,i)=>`<button data-coda-personal="${item.id}">我的录音${matches.length>1?' '+(i+1):''}</button>`).join('')}</div><p class="coda-muted">默认发音复用现有服务和缓存；首次点击可能产生服务费用。私人词典中的同形词录音单独保留。</p><dl>${fields.map(([k,v])=>`<dt>${k}</dt><dd>${codaEscape(v||'待教材核对')}</dd>`).join('')}</dl><p class="coda-note">${codaEscape(w.analysisScope)}</p><p class="coda-muted">教材：${codaEscape(w.sources.join('；'))}<br>类型：教材真实词（不是程序生成音节）</p></div>`;
+}
+$('#codaPanel').onclick=async e=>{
+  const b=e.target.closest('button');if(!b||codaBusy)return;
+  try{
+    if(b.dataset.codaTab){stopPracticeAudio();codaTab=b.dataset.codaTab;await renderCodaChapter();return;}
+    if(b.dataset.codaWord){await codaWordDetail(b.dataset.codaWord);return;}
+    if(b.dataset.codaAudio){const w=CodaLesson.words.find(w=>w.id===b.dataset.codaAudio);if(w)await playEntrySpeech(w,'default');return;}
+    if(b.dataset.codaPersonal){const w=await getEntry(Number(b.dataset.codaPersonal));if(w)await playEntrySpeech(w,'personal');return;}
+    if(b.dataset.codaTraining){codaTab='practice';await renderCodaChapter();$('#codaMode').value=b.dataset.codaTraining;codaNextQuestion();return;}
+    if(b.dataset.codaRule){const r=CodaLesson.vowels.find(r=>r.ruleId===b.dataset.codaRule);$('#codaContent').innerHTML=`<button data-coda-tab="vowels">← 元音形变</button><h3 class="coda-rule">${r.baseVowel} → ${r.closedVowel}</h3><p>${codaLabels[r.vowelLength]} · ${codaLabels[r.vowelType]}</p><p class="coda-muted">${r.note}</p>`+codaWordButtons(CodaLesson.words.filter(w=>r.relatedWordIds.includes(w.id)));return;}
+    if(b.dataset.codaLetter){const c=CodaLesson.codas.find(c=>c.letter===b.dataset.codaLetter);$('#codaContent').innerHTML=`<button data-coda-tab="basics">← 尾辅音基础</button><h3 class="coda-rule">${c.letter} /${c.sound}/</h3><p>${codaLabels[c.type]} · ${c.source}</p><button data-coda-training="codaSound">进入尾音练习</button><p class="coda-muted">点击教材词，播放词中尾音。</p>`+codaWordButtons(CodaLesson.words.filter(w=>w.codaLetter===c.letter));return;}
+    if(b.id==='codaNext')codaNextQuestion();if(b.id==='codaCheck')await codaCheckAnswer();
+    if(b.id==='codaReveal'&&codaQuestion)$('#codaFeedback').textContent='答案：'+codaQuestion.answer;
+    if(b.id==='codaListen'&&codaQuestion?.word)await playEntrySpeech(codaQuestion.word,'default');
+  }catch(error){$('#codaStatus').textContent=error.message;}
+};
+function filterCodaWords(){
+  if(!$('#codaWordsList'))return;const q=$('#codaWordSearch').value.trim();
+  const filters=[['codaTypeFilter','codaType'],['codaLetterFilter','codaLetter'],['codaLengthFilter','vowelLength'],['codaClassFilter','initialClass'],['codaToneFilter','textbookTone']];
+  $('#codaWordsList').innerHTML=codaWordButtons(CodaLesson.words.filter(w=>(!q||w.word.includes(q)||w.meaning.includes(q))&&filters.every(([id,key])=>!$('#'+id).value||w[key]===$('#'+id).value)));
+}
+$('#codaPanel').oninput=e=>{if(e.target.id==='codaWordSearch')filterCodaWords();};
+$('#codaPanel').onchange=e=>{if(e.target.id.endsWith('Filter'))filterCodaWords();if(['codaMode','codaOrder'].includes(e.target.id)){codaTrainingKey='';codaNextQuestion();}};
+$('#codaPanel').onkeydown=e=>{if(e.target.id==='codaAnswer'&&e.key==='Enter'){e.preventDefault();void codaCheckAnswer();}};
+  </script>
 </body>
 </html>

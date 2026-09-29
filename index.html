@@ -161,7 +161,7 @@
             <input id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
             <div class="practice-submit"><button type="button" class="primary" id="checkAnswer">检查答案</button><div class="practice-links"><button type="button" id="showAnswer">显示答案</button><button type="button" id="practiceNotes" hidden>查看完整备注</button></div></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
-            <div class="practice-footer"><div id="practiceMarkControls" hidden><span class="practice-mark-label">掌握程度</span><div class="practice-mark-options" role="group" aria-label="掌握程度"><button type="button" data-practice-mark="yellow">模糊</button><button type="button" data-practice-mark="green">熟悉</button><button type="button" data-practice-mark="red">忘记</button></div></div><div class="practice-navigation"><button type="button" id="previousQuestion" disabled>上一题</button><button type="button" id="nextQuestion">换一题</button></div></div>
+            <div class="practice-footer"><div id="practiceMarkControls" hidden><span class="practice-mark-label">掌握程度</span><div class="practice-mark-options" role="group" aria-label="掌握程度"><button type="button" data-practice-mark="red">陌生</button><button type="button" data-practice-mark="yellow">模糊</button><button type="button" data-practice-mark="green">熟悉</button></div></div><div class="practice-navigation"><button type="button" id="previousQuestion" disabled>上一题</button><button type="button" id="nextQuestion">换一题</button></div></div>
             <p id="practiceMarkStatus" class="tag-hint" role="status"></p>
             <p id="practiceProgress" class="tag-hint" aria-live="polite"></p>
           </div>
@@ -607,7 +607,7 @@
       if(activeView==='practice')$('#practiceAnswer').focus();$('#practiceResult').className='practice-result';$('#practiceResult').textContent='输入答案后点击“检查答案”。';
       if(question.answer!==undefined){$('#practiceAnswer').value=question.answer;$('#practiceResult').textContent=question.result;$('#practiceResult').className=question.resultClass;practiceEvaluated=!!question.evaluated;$('#checkAnswer').disabled=practiceEvaluated;}
       $('#previousQuestion').disabled=practiceRound.cursor<=0;$('#practiceMarkControls').hidden=false;
-      $('#practiceMarkStatus').textContent=({yellow:'已标记：模糊',green:'已标记：熟悉',red:'已标记：忘记'})[item.learningState]||'尚未标记；匹配到字母表时会同时调整对应格子的颜色。';
+      $('#practiceMarkStatus').textContent=({yellow:'已标记：模糊',green:'已标记：熟悉',red:'已标记：陌生'})[item.learningState]||'尚未标记；匹配到字母表时会同时调整对应格子的颜色。';
       $('#practiceProgress').textContent=`本轮第 ${practiceRound.cursor+1} / ${practiceRound.total} 项 · 随机不重复；更改筛选或题目资料会开始新一轮。`;persistPractice();
     }
     function answersMatch(answer,target,mode) { const normalized=mode.normalize(answer); return target.split(/[,，、；;\/]/).map(mode.normalize).filter(Boolean).includes(normalized); }
@@ -1143,8 +1143,8 @@
     }
     $('#practiceMarkControls').onclick=async e=>{
       const button=e.target.closest('[data-practice-mark]');if(!button||!practiceId||alphabetSaving)return;
-      const id=practiceId,color=button.dataset.practiceMark;alphabetSaving=true;
-      try{const count=await markPracticeEntry(id,color);if(practiceId===id)$('#practiceMarkStatus').textContent='已标记：'+({yellow:'模糊',green:'熟悉',red:'忘记'})[color]+(count?'；已同步调整 '+count+' 个字母表格子的颜色。':'。')+' 可手动云端同步。';}
+      const id=practiceId,request=practiceRequest,color=button.dataset.practiceMark;alphabetSaving=true;
+      try{await markPracticeEntry(id,color);if(practiceId===id&&practiceRequest===request&&activeView==='practice')await choosePractice();}
       catch(error){if(practiceId===id)$('#practiceMarkStatus').textContent='标记未保存：'+error.message;}
       finally{alphabetSaving=false;}
     };

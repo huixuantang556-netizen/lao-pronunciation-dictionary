@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>老挝语私人发音词典</title>
+  <link rel="stylesheet" href="coda-chapter.css" />
   <style>
     :root { --ink:#203334; --muted:#667878; --brand:#087e6b; --soft:#eaf6f1; --line:#dce7e3; --paper:#fbfdfc; }
     * { box-sizing:border-box; } body { margin:0; color:var(--ink); background:#f1f6f4; font:16px/1.5 system-ui,-apple-system,"PingFang SC","Noto Sans Lao",sans-serif; }
@@ -100,7 +101,7 @@
     <p class="subtitle">收集词条、音标和你自己的示范发音，也用它复习字母。</p>
     <div class="notice" id="localDataNotice"><span>词典和录音会保存在当前浏览器。清除网站数据会删除本机副本；未备份或未同步的内容可能丢失。</span><label style="display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dismissLocalDataNotice" style="width:auto;margin:0" />已读，不再显示</label></div>
     <nav class="view-nav" id="viewNav" aria-label="词典页面">
-      <div class="view-nav-group" role="group" aria-label="学习功能"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button></div>
+      <div class="view-nav-group" role="group" aria-label="学习功能"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button><button type="button" data-view="coda" aria-controls="codaPanel">尾辅音</button></div>
       <div class="view-nav-group view-nav-tools" role="group" aria-label="词条与备份管理"><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></div>
     </nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
@@ -168,6 +169,7 @@
           <aside class="practice-side"><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><details class="practice-tag-settings"><summary>标签筛选 · 点击展开</summary><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p></details><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
         </div>
       </section>
+      <section class="panel hidden" id="codaPanel" aria-labelledby="codaTitle"><div class="coda-header"><div><h2 id="codaTitle">尾辅音 · 从规则到教材词</h2><p>认识尾音，理解形变，再练习拼读与声调。</p></div></div><nav id="codaNav" class="coda-nav" aria-label="尾辅音学习章节"></nav><p id="codaStatus" class="coda-status" role="status"></p><div id="codaContent"></div></section>
       <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
         <h2 id="alphabetTitle">老语字母 · 点读表</h2>
         <div id="alphabetHelpTop"><div id="alphabetHelp" class="tag-hint">
@@ -216,12 +218,13 @@
     function stopPracticeAudio() { playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
     function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':practiceAudioBlob?'播放我的录音':'播放默认发音'; }
     function showView(view) {
-      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel'};
+      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel',coda:'codaPanel'};
       if(!panels[view])return;
       if(activeView==='add'&&view!=='add'&&recorder){alert('请先停止录音，等试听按钮可用后再切换页面。');return;}
       cancelAlphabetClick();
       activeView=view;
       if(view==='alphabet')void renderAlphabet();
+      if(view==='coda')void renderCodaChapter();
       Object.entries(panels).forEach(([name,id])=>$('#'+id).classList.toggle('hidden',name!==view&&!(view==='add'&&name==='dictionary')));
       $('.grid').classList.toggle('add-view',view==='add');
       if(view!=='practice')stopPracticeAudio();
@@ -460,7 +463,7 @@
       if(!rows.length)return;
       await withDefaultAudioStore('readwrite',store=>{for(const row of rows)store.put(row.blob,row.key);});
     }
-    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:2,exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides()}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音、自己的录音与字母表修改。请在下载或共享面板中保存到 iCloud Drive。`; }
+    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:2,exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress()}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音、自己的录音与字母表修改。请在下载或共享面板中保存到 iCloud Drive。`; }
     function isValidBackup(value) { return value && value.format===backupFormat && [1,2].includes(value.version) && Array.isArray(value.entries) && value.entries.every(item=>item&&typeof item.word==='string' && typeof item.meaning==='string' && (item.audio===null || typeof item.audio==='string')); }
     function syncKeys(item) { return [...new Set([item.syncId,...(Array.isArray(item.syncAliases)?item.syncAliases:[])].filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim()))]; }
     function sameWord(a,b) { return a.word.normalize('NFC').trim()===b.word.normalize('NFC').trim(); }
@@ -510,6 +513,7 @@
       try {
         const backup=JSON.parse(await file.text());
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
+        const codaIncoming=validateCodaProgress(backup.codaProgress);
         const alphabetBefore=await readAlphabetOverrides(),alphabetIncoming=validateAlphabetOverrides(backup.alphabetCells===undefined?{}:backup.alphabetCells),alphabetAfter={...alphabetBefore};
         for(const [key,value] of Object.entries(alphabetIncoming)){
           if(Object.hasOwn(alphabetBefore,key)&&alphabetBefore[key]!==value){
@@ -523,17 +527,18 @@
         const preparedAudio=prepareDefaultAudio(backup),incoming=[];
         for(const raw of backup.entries){
           const audio=await audioPayload(raw.audio?dataURLToBlob(raw.audio):null);
-          incoming.push({learningState:['yellow','green','red'].includes(raw.learningState)?raw.learningState:undefined,noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
+          incoming.push({...codaEntryFields(raw),learningState:['yellow','green','red'].includes(raw.learningState)?raw.learningState:undefined,noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
         }
         const current=await allEntries(),plan=planSync(current,incoming,askSyncConflict);
         if(!plan){$('#backupStatus').textContent='已取消导入，词条未修改。';return;}
         const database=await openDB(),tx=database.transaction([storeName,'cloud_meta'],'readwrite'),done=transactionDone(tx),store=tx.objectStore(storeName);
         const chart=tx.objectStore('cloud_meta').get('alphabetCells');
+        const codaBefore=tx.objectStore('cloud_meta').get('codaProgress');
         const check=store.getAll();
         check.onsuccess=()=>{
           const before=JSON.stringify(current.slice().sort((a,b)=>a.id-b.id)),now=JSON.stringify(check.result.slice().sort((a,b)=>a.id-b.id));
           if(before!==now||!cloudSame(chart.result||{},alphabetBefore)){tx.abort();return;}
-          try{for(const item of plan.writes)store.put(item);tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');}catch(_){tx.abort();}
+          try{for(const item of plan.writes)store.put(item);tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');tx.objectStore('cloud_meta').put(mergeCodaProgress(codaBefore.result||{},codaIncoming),'codaProgress');}catch(_){tx.abort();}
         };
         await done;committed=true;
         await restoreDefaultAudio(preparedAudio);await requestPersistentStorage();
@@ -724,7 +729,7 @@
     restoreTagMode('dictionaryTagMode','any');restoreTagMode('practiceTagMode','all');
     $('#dictionaryTagMode').onchange=()=>{saveTagMode('dictionaryTagMode');dictionaryPage=1;render();};
     $('#practiceTagMode').onchange=()=>{saveTagMode('practiceTagMode');render().then(choosePractice);};
-    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={learningState:old?.learningState,noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
+    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={...codaEntryFields(old),learningState:old?.learningState,noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
     $('#cancelButton').onclick=()=>{if(recorder){alert('请先停止录音，等录音准备完成。');return;}resetForm();showView('dictionary');}; $('#search').oninput=()=>{dictionaryPage=1;render();}; $('#pageSize').onchange=()=>{dictionaryPage=1;render();};
     $('#dictionaryTags').onclick=e=>{const button=e.target.closest('[data-dictionary-tag]');if(!button)return;const tag=button.dataset.dictionaryTag;selectedDictionaryTags.has(tag)?selectedDictionaryTags.delete(tag):selectedDictionaryTags.add(tag);dictionaryPage=1;render();};
     $('#clearDictionaryTags').onclick=()=>{selectedDictionaryTags.clear();dictionaryPage=1;render();};
@@ -742,6 +747,15 @@
     }
     function noteImagesMarkup(value) {
       return '<div class="note-images">'+validateNoteImages(value).map((src,i)=>`<figure><img src="${src}" alt="备注图片 ${i+1}：书写或学习示范" loading="lazy" /></figure>`).join('')+'</div>';
+    }
+    function codaEntryFields(item){
+      const result={},enums={initialClass:['middle','high','low'],vowelLength:['short','long'],vowelType:['single','compound'],codaType:['dead','live'],toneMark:['none','່','້'],textbookTone:['一声','二声','三声','四声','短调','中降调'],sourceType:['textbook_word','textbook_drill','textbook_sentence','generated_drill']};
+      for(const key of ['initial','initialClass','baseVowel','closedVowel','vowelLength','vowelType','codaLetter','codaSound','codaType','toneMark','textbookTone','vowelRuleId','source','sourceType','isRealWord']){
+        const value=item?.[key];if(value===undefined)continue;
+        if(value===null||value===''){result[key]=value;continue;}
+        if(key==='isRealWord'?typeof value!=='boolean':typeof value!=='string'||value.length>2000||(enums[key]&&!enums[key].includes(value)))throw new Error('尾辅音结构字段无效：'+key);
+        result[key]=value;
+      }return result;
     }
     // Chart cells use reserved entry IDs but distinct payloads; older clients fail validation safely.
     function alphabetConfigKey(key) { return /^entry:alphabet-cell-v1:(?:color:)?(?:[0-9]|10):[0-9]+$/.test(key); }
@@ -775,7 +789,7 @@
     }
     async function cloudHash(blob) { if(!crypto.subtle)throw new Error('当前页面不支持安全摘要，请在 HTTPS 词典页面使用云端同步。');return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join(''); }
     function cloudEntryData(item) {
-      const value={};for(const key of ['word','ipa','meaning','category','note'])value[key]=typeof item[key]==='string'?item[key]:'';
+      const value=codaEntryFields(item);for(const key of ['word','ipa','meaning','category','note'])value[key]=typeof item[key]==='string'?item[key]:'';
       if(item.noteImages!==undefined)value.noteImages=validateNoteImages(item.noteImages);
       if(['yellow','green','red'].includes(item.learningState))value.learningState=item.learningState;
       value.syncId=item.syncId;value.syncAliases=syncKeys(item).filter(x=>x!==item.syncId);
@@ -1302,5 +1316,7 @@
       } catch(error){alert('无法打开词条：'+error.message);}
     };
   </script>
+  <script src="coda-data.js"></script>
+  <script src="coda-chapter.js"></script>
 </body>
 </html>

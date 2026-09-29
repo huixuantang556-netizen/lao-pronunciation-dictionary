@@ -130,6 +130,8 @@
             <div style="margin-top:11px"><button type="button" class="primary" id="checkAnswer">检查答案</button><button type="button" class="secondary" id="showAnswer">显示答案</button><button type="button" class="secondary" id="nextQuestion">换一题</button></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
             <button type="button" id="practiceNotes" hidden>查看完整备注</button>
+            <button type="button" id="previousQuestion" disabled>上一题</button>
+            <div id="practiceMarkControls" hidden><span>掌握程度：</span><button type="button" data-practice-mark="yellow">模糊 · 黄</button><button type="button" data-practice-mark="green">熟悉 · 绿</button><button type="button" data-practice-mark="red">忘记 · 红</button><p id="practiceMarkStatus" class="tag-hint" role="status"></p></div>
             <p id="practiceProgress" class="tag-hint" aria-live="polite"></p>
           </div>
           <aside class="practice-side"><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><p><strong>标签筛选（可多选）</strong></p><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
@@ -490,7 +492,7 @@
         const preparedAudio=prepareDefaultAudio(backup),incoming=[];
         for(const raw of backup.entries){
           const audio=await audioPayload(raw.audio?dataURLToBlob(raw.audio):null);
-          incoming.push({noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
+          incoming.push({learningState:['yellow','green','red'].includes(raw.learningState)?raw.learningState:undefined,noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
         }
         const current=await allEntries(),plan=planSync(current,incoming,askSyncConflict);
         if(!plan){$('#backupStatus').textContent='已取消导入，词条未修改。';return;}
@@ -518,6 +520,23 @@
     function updatePracticeSummary(items) { const eligible=practiceItems(items), mistakes=eligible.filter(x=>(Number(x.mistakes)||0)>0).length, focus=eligible.filter(x=>x.needsExtraPractice).length, tagText=selectedPracticeTags.size?`已选 ${selectedPracticeTags.size} 个标签；`:''; $('#practiceSummary').textContent=`${tagText}当前可练习 ${eligible.length} 项；错题 ${mistakes} 项；重点 ${focus} 项。`; }
     function setPracticeEmpty(message) { setPracticeAudio(null); practiceId=null; practiceDirection=null; practiceEvaluated=false; $('#questionPrompt').textContent='选择出题方向后开始练习。'; $('#questionIPA').textContent='—'; $('#practiceAnswer').value=''; $('#practiceAnswer').placeholder='输入答案'; $('#practiceAnswer').disabled=true; $('#checkAnswer').disabled=true; $('#showAnswer').disabled=true; $('#practiceResult').className='practice-result'; $('#practiceResult').textContent=message; }
     let practiceRound=null,practiceRequest=0,practiceLastId=null;
+    let practiceRestored=false;
+    function persistPractice(){
+      try{
+        const current=practiceRound?.history?.[practiceRound.cursor];
+        if(current&&practiceId===current.id){current.answer=$('#practiceAnswer').value;current.result=$('#practiceResult').textContent;current.resultClass=$('#practiceResult').className;current.evaluated=practiceEvaluated;}
+        localStorage.setItem(workspaceName('lao-practice-session-v1'),JSON.stringify({round:practiceRound,mode:$('#practiceMode').value,scope:$('#practiceScope').value,tagMode:$('#practiceTagMode').value,tags:[...selectedPracticeTags]}));
+      }catch(_){}
+    }
+    function restorePractice(){
+      try{
+        const saved=JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1')));
+        if(!saved||!saved.round||!Array.isArray(saved.round.history)||!Array.isArray(saved.round.queue)||!Array.isArray(saved.tags))return false;
+        if(!['mixed',...Object.keys(reviewModes)].includes(saved.mode)||!['all','mistakes','focus'].includes(saved.scope)||!['all','any'].includes(saved.tagMode))return false;
+        if(!Number.isInteger(saved.round.cursor)||saved.round.cursor<0||saved.round.cursor>saved.round.history.length)return false;
+        $('#practiceMode').value=saved.mode;$('#practiceScope').value=saved.scope;$('#practiceTagMode').value=saved.tagMode;selectedPracticeTags.clear();saved.tags.forEach(t=>selectedPracticeTags.add(t));practiceRound=saved.round;return true;
+      }catch(_){return false;}
+    }
     function shufflePracticeIds(ids) {
       const result=[...ids];for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]];}
       // Avoid repeating the previous round's last entry at the next round's start.
@@ -525,32 +544,45 @@
       return result;
     }
     async function choosePractice(options={}) {
+      let restored=false;if(!practiceRestored){practiceRestored=true;restored=restorePractice();}else persistPractice();
       $('#practiceNotes').hidden=true;
+      $('#practiceMarkControls').hidden=true;
       const requestId=++practiceRequest;
-      const eligible=practiceItems(await allEntries());if(requestId!==practiceRequest)return;
+      const all=await allEntries(),eligible=practiceItems(all);if(requestId!==practiceRequest)return;
+      if(restored&&typeof renderPracticeTags==='function'){renderPracticeTags(categories(all));updatePracticeSummary(all);}
       setPracticeAudio(null);
+      $('#previousQuestion').disabled=true;
       if(!eligible.length){practiceRound=null;$('#practiceProgress').textContent='';$('#nextQuestion').textContent='换一题';setPracticeEmpty('当前筛选没有可练习的词条。请添加必要的 IPA 或中文信息，或调整出题方向、标签和复习范围。');return;}
       const key=JSON.stringify([$('#practiceMode').value,$('#practiceScope').value,$('#practiceTagMode').value,[...selectedPracticeTags].sort(),eligible.map(x=>[x.id,x.word,x.ipa,x.meaning]).sort((a,b)=>a[0]-b[0])]);
       if(!practiceRound||practiceRound.key!==key||options.restart===true){
-        practiceRound={key,queue:shufflePracticeIds(eligible.map(x=>x.id)),total:eligible.length,shown:0,completed:false};
+        practiceRound={key,queue:shufflePracticeIds(eligible.map(x=>x.id)),total:eligible.length,shown:0,completed:false,history:[],cursor:-1};restored=false;
       }
-      if(!practiceRound.queue.length){
+      if(options.back)practiceRound.cursor=Math.max(0,practiceRound.cursor-1);
+      else if(!restored)practiceRound.cursor++;
+      let question=practiceRound.history[practiceRound.cursor];
+      if(!question&&!practiceRound.queue.length){
+        practiceRound.cursor=practiceRound.history.length;
         practiceRound.completed=true;setPracticeEmpty('本轮范围内的词条已全部展示。点击“继续下一轮”重新随机抽查。');
         $('#questionPrompt').textContent='本轮抽查完成';$('#questionIPA').textContent='完成';$('#nextQuestion').textContent='继续下一轮';
-        $('#practiceProgress').textContent=`本轮已展示 ${practiceRound.total} / ${practiceRound.total} 项（跳过的题目也计入本轮）。`;return;
+        $('#previousQuestion').disabled=!practiceRound.history.length;
+        $('#practiceProgress').textContent=`本轮已展示 ${practiceRound.total} / ${practiceRound.total} 项（跳过的题目也计入本轮）。`;persistPractice();return;
       }
-      const id=practiceRound.queue.pop(),item=eligible.find(x=>x.id===id),direction=modeForItem(item);
-      practiceRound.shown++;practiceLastId=id;setPracticeAudio(item);
+      if(!question){const id=practiceRound.queue.pop(),item=eligible.find(x=>x.id===id);question={id,direction:modeForItem(item)};practiceRound.history.push(question);practiceRound.shown++;}
+      const {id,direction}=question,item=eligible.find(x=>x.id===id);
+      practiceRound.completed=false;practiceLastId=id;setPracticeAudio(item);
       const mode=reviewModes[direction];practiceId=item.id;practiceDirection=direction;practiceEvaluated=false;
       $('#questionPrompt').textContent=mode.prompt;$('#questionIPA').textContent=mode.question(item);$('#practiceAnswer').value='';$('#practiceAnswer').placeholder=mode.placeholder;
       $('#practiceAnswer').disabled=false;$('#checkAnswer').disabled=false;$('#showAnswer').disabled=false;$('#practiceNotes').hidden=false;$('#nextQuestion').textContent='换一题';
       if(activeView==='practice')$('#practiceAnswer').focus();$('#practiceResult').className='practice-result';$('#practiceResult').textContent='输入答案后点击“检查答案”。';
-      $('#practiceProgress').textContent=`本轮第 ${practiceRound.shown} / ${practiceRound.total} 项 · 随机不重复；更改筛选或题目资料会开始新一轮。`;
+      if(question.answer!==undefined){$('#practiceAnswer').value=question.answer;$('#practiceResult').textContent=question.result;$('#practiceResult').className=question.resultClass;practiceEvaluated=!!question.evaluated;$('#checkAnswer').disabled=practiceEvaluated;}
+      $('#previousQuestion').disabled=practiceRound.cursor<=0;$('#practiceMarkControls').hidden=false;
+      $('#practiceMarkStatus').textContent=({yellow:'已标记：模糊',green:'已标记：熟悉',red:'已标记：忘记'})[item.learningState]||'尚未标记；匹配到字母表时会同时调整对应格子的颜色。';
+      $('#practiceProgress').textContent=`本轮第 ${practiceRound.cursor+1} / ${practiceRound.total} 项 · 随机不重复；更改筛选或题目资料会开始新一轮。`;persistPractice();
     }
     function answersMatch(answer,target,mode) { const normalized=mode.normalize(answer); return target.split(/[,，、；;\/]/).map(mode.normalize).filter(Boolean).includes(normalized); }
     function fullAnswer(item,direction) { const mode=reviewModes[direction]; return mode.answer(item); }
-    async function checkPracticeAnswer() { if(!practiceId||!practiceDirection||practiceEvaluated)return; const mode=reviewModes[practiceDirection], answer=$('#practiceAnswer').value; if(!mode.normalize(answer)){ $('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent='请先输入你的答案。';return;} const item=await getEntry(practiceId); if(!item)return choosePractice(); const correct=answersMatch(answer,mode.answer(item),mode), stats={...(item.reviewStats||{})}, modeStats={...(stats[practiceDirection]||{})}; stats[practiceDirection]={reviews:(Number(modeStats.reviews)||0)+1,correct:(Number(modeStats.correct)||0)+(correct?1:0),mistakes:(Number(modeStats.mistakes)||0)+(correct?0:1)}; const updated={...item,reviews:(Number(item.reviews)||0)+1,correct:(Number(item.correct)||0)+(correct?1:0),mistakes:(Number(item.mistakes)||0)+(correct?0:1),needsExtraPractice:correct?Boolean(item.needsExtraPractice):true,lastReviewed:Date.now(),updatedAt:item.updatedAt,reviewStats:stats}; await putEntry(updated); practiceEvaluated=true; $('#checkAnswer').disabled=true; $('#practiceResult').className=`practice-result ${correct?'ok':'wrong'}`; $('#practiceResult').textContent=correct?'答对了！可以点击“换一题”继续。':`这次不对。答案是：${fullAnswer(item,practiceDirection)}。已加入重点复习。`; await render(); }
-    async function revealPracticeAnswer() { if(!practiceId||!practiceDirection)return; const id=practiceId,request=practiceRequest,item=await getEntry(id); if(item&&id===practiceId&&request===practiceRequest){$('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent=`答案是：${fullAnswer(item,practiceDirection)}。先记一遍，再点击“换一题”。`;$('#practiceNotes').hidden=false; } }
+    async function checkPracticeAnswer() { if(!practiceId||!practiceDirection||practiceEvaluated)return; const mode=reviewModes[practiceDirection], answer=$('#practiceAnswer').value; if(!mode.normalize(answer)){ $('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent='请先输入你的答案。';return;} const item=await getEntry(practiceId); if(!item)return choosePractice(); const correct=answersMatch(answer,mode.answer(item),mode), stats={...(item.reviewStats||{})}, modeStats={...(stats[practiceDirection]||{})}; stats[practiceDirection]={reviews:(Number(modeStats.reviews)||0)+1,correct:(Number(modeStats.correct)||0)+(correct?1:0),mistakes:(Number(modeStats.mistakes)||0)+(correct?0:1)}; const updated={...item,reviews:(Number(item.reviews)||0)+1,correct:(Number(item.correct)||0)+(correct?1:0),mistakes:(Number(item.mistakes)||0)+(correct?0:1),needsExtraPractice:correct?Boolean(item.needsExtraPractice):true,lastReviewed:Date.now(),updatedAt:item.updatedAt,reviewStats:stats}; await putEntry(updated); practiceEvaluated=true; $('#checkAnswer').disabled=true; $('#practiceResult').className=`practice-result ${correct?'ok':'wrong'}`; $('#practiceResult').textContent=correct?'答对了！可以点击“换一题”继续。':`这次不对。答案是：${fullAnswer(item,practiceDirection)}。已加入重点复习。`; await render();persistPractice(); }
+    async function revealPracticeAnswer() { if(!practiceId||!practiceDirection)return; const id=practiceId,request=practiceRequest,item=await getEntry(id); if(item&&id===practiceId&&request===practiceRequest){$('#practiceResult').className='practice-result wrong';$('#practiceResult').textContent=`答案是：${fullAnswer(item,practiceDirection)}。先记一遍，再点击“换一题”。`;$('#practiceNotes').hidden=false;persistPractice(); } }
     async function openPracticeNotes() {
       if($('#practiceNotes').hidden||!practiceId||activeView!=='practice')return;
       const id=practiceId,request=practiceRequest;
@@ -563,6 +595,10 @@
       }catch(error){$('#practiceResult').textContent='备注读取失败：'+error.message;}
     }
     $('#practiceNotes').onclick=openPracticeNotes;
+    $('#previousQuestion').onclick=()=>choosePractice({back:true});
+    $('#practiceAnswer').oninput=persistPractice;
+    window.addEventListener('pagehide',persistPractice);
+    window.addEventListener('beforeunload',persistPractice);
     const mobileRecordingLayout = window.matchMedia('(max-width:760px)');
     function syncRecordingPosition() {
       const form=$('#entryForm'),recording=$('#entryRecording');
@@ -657,7 +693,7 @@
     restoreTagMode('dictionaryTagMode','any');restoreTagMode('practiceTagMode','all');
     $('#dictionaryTagMode').onchange=()=>{saveTagMode('dictionaryTagMode');dictionaryPage=1;render();};
     $('#practiceTagMode').onchange=()=>{saveTagMode('practiceTagMode');render().then(choosePractice);};
-    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
+    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={learningState:old?.learningState,noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; dictionaryPage=1;$('#search').value='';selectedDictionaryTags.clear();await render(); choosePractice();}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
     $('#cancelButton').onclick=()=>{if(recorder){alert('请先停止录音，等录音准备完成。');return;}resetForm();showView('dictionary');}; $('#search').oninput=()=>{dictionaryPage=1;render();}; $('#pageSize').onchange=()=>{dictionaryPage=1;render();};
     $('#dictionaryTags').onclick=e=>{const button=e.target.closest('[data-dictionary-tag]');if(!button)return;const tag=button.dataset.dictionaryTag;selectedDictionaryTags.has(tag)?selectedDictionaryTags.delete(tag):selectedDictionaryTags.add(tag);dictionaryPage=1;render();};
     $('#clearDictionaryTags').onclick=()=>{selectedDictionaryTags.clear();dictionaryPage=1;render();};
@@ -710,6 +746,7 @@
     function cloudEntryData(item) {
       const value={};for(const key of ['word','ipa','meaning','category','note'])value[key]=typeof item[key]==='string'?item[key]:'';
       if(item.noteImages!==undefined)value.noteImages=validateNoteImages(item.noteImages);
+      if(['yellow','green','red'].includes(item.learningState))value.learningState=item.learningState;
       value.syncId=item.syncId;value.syncAliases=syncKeys(item).filter(x=>x!==item.syncId);
       for(const key of ['updatedAt','mistakes','reviews','correct','lastReviewed'])value[key]=Number(item[key])||0;
       value.needsExtraPractice=Boolean(item.needsExtraPractice);value.reviewStats=item.reviewStats||{};return value;
@@ -1055,6 +1092,31 @@
       return items.filter(item=>keys.includes(alphabetKey(item.word)));
     }
     function cancelAlphabetClick() { clearTimeout(alphabetTimer);alphabetTimer=null;alphabetLastCell=null;alphabetLastTime=0; }
+    async function markPracticeEntry(id,color){
+      if(!['yellow','green','red'].includes(color))throw new Error('标记无效');
+      const database=await openDB();
+      return new Promise((resolve,reject)=>{
+        const tx=database.transaction(['entries','cloud_meta'],'readwrite'),store=tx.objectStore('entries'),meta=tx.objectStore('cloud_meta'),entry=store.get(id),chart=meta.get('alphabetCells');let pending=2,failure,count=0;
+        const ready=()=>{if(--pending)return;try{
+          if(!entry.result)throw new Error('词条已不存在');
+          const map=validateAlphabetOverrides(chart.result||{});
+          alphabetRows.forEach((row,r)=>row[2].forEach((original,c)=>{
+            const key=r+':'+c,raw=Object.hasOwn(map,key)?map[key]:original;
+            const forms=raw.split('|').map(x=>x.trim()).filter(Boolean);
+            if(forms.length&&alphabetMatches({forms},[entry.result]).length){map['color:'+key]=color;count++;}
+          }));
+          store.put({...entry.result,learningState:color,updatedAt:Date.now()});meta.put(map,'alphabetCells');
+        }catch(error){failure=error;tx.abort();}};
+        entry.onsuccess=ready;chart.onsuccess=ready;tx.oncomplete=()=>resolve(count);tx.onabort=()=>reject(failure||tx.error||new Error('标记保存失败'));
+      });
+    }
+    $('#practiceMarkControls').onclick=async e=>{
+      const button=e.target.closest('[data-practice-mark]');if(!button||!practiceId||alphabetSaving)return;
+      const id=practiceId,color=button.dataset.practiceMark;alphabetSaving=true;
+      try{const count=await markPracticeEntry(id,color);if(practiceId===id)$('#practiceMarkStatus').textContent='已标记：'+({yellow:'模糊',green:'熟悉',red:'忘记'})[color]+(count?'；已同步调整 '+count+' 个字母表格子的颜色。':'。')+' 可手动云端同步。';}
+      catch(error){if(practiceId===id)$('#practiceMarkStatus').textContent='标记未保存：'+error.message;}
+      finally{alphabetSaving=false;}
+    };
     async function renderAlphabet() {
       const version=++alphabetRenderVersion;
       try {

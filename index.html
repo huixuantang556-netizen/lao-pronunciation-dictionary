@@ -903,6 +903,31 @@ async function importCodaClassroom(){
     function cloudStable(value) { if(Array.isArray(value))return '['+value.map(cloudStable).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+cloudStable(value[k])).join(',')+'}';return JSON.stringify(value); }
     function cloudSame(a,b) { return cloudStable(a)===cloudStable(b); }
     function cloudValue(row) { return row?{deleted:row.deleted,payload:row.deleted?{}:row.payload}:null; }
+    function cloudSafeSupplement(local,remote,base) {
+      if(!local||!remote||local.deleted||remote.deleted||!local.payload?.entry||!remote.payload?.entry)return null;
+      const withoutTime=v=>{const copy=JSON.parse(JSON.stringify(v.payload));delete copy.audio;delete copy.entry.updatedAt;return copy;};
+      // Do not discard tags, notes, review progress, images, aliases or structural metadata.
+      if(!cloudSame(withoutTime(local),withoutTime(remote)))return null;
+      const l=local.payload.audio||null,r=remote.payload.audio||null;
+      if(cloudSame(l,r))return 'remote';
+      if(l&&r)return null;
+      // A missing recording after an earlier synchronized recording may be an intentional deletion.
+      if(base&&(base.deleted||base.payload?.audio))return null;
+      return l?'local':'remote';
+    }
+    function cloudConflictDescription(value){if(!value||value.deleted)return '已删除';return JSON.stringify(value.payload,null,2);}
+    async function cloudResolveConflicts(items){
+      if(!items.length)return [];
+      return new Promise((resolve,reject)=>{
+        const dialog=document.createElement('dialog');dialog.style.cssText='width:min(900px,94vw);max-height:88vh;overflow:auto;border:1px solid #bdd5cf;border-radius:16px;padding:20px';
+        const title=document.createElement('h2');title.textContent='同步冲突 · '+items.length+' 项';dialog.append(title);
+        const hint=document.createElement('p');hint.textContent='请逐项选择，或统一选择后再检查。不同录音和删除不会自动覆盖。展开可查看完整差异。';dialog.append(hint);
+        const controls=document.createElement('div'),selects=[];dialog.append(controls);
+        for(const item of items){const section=document.createElement('section');section.style.cssText='padding:12px 0;border-bottom:1px solid #ddd';const label=document.createElement('strong');label.textContent=item.label;section.append(label);const select=document.createElement('select');for(const [value,text] of [['','请选择保留版本'],['local','保留本机'],['remote','使用云端']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}select.style.margin='8px';section.append(select);selects.push(select);const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='查看本机／云端完整差异';details.append(summary);const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px';pre.textContent='本机：\n'+cloudConflictDescription(item.local)+'\n\n云端：\n'+cloudConflictDescription(item.remote);details.append(pre);section.append(details);dialog.append(section);}
+        for(const [value,label] of [['local','全部选本机'],['remote','全部选云端']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>selects.forEach(s=>s.value=value);controls.append(button);}
+        const status=document.createElement('p'),save=document.createElement('button'),cancel=document.createElement('button');save.textContent='确认全部选择并继续';cancel.textContent='取消同步';dialog.append(status,save,cancel);const close=()=>{dialog.close();dialog.remove();};cancel.onclick=()=>{close();reject(new Error('已取消同步，冲突选择未应用。'));};dialog.addEventListener('cancel',e=>{e.preventDefault();cancel.onclick();});save.onclick=()=>{if(selects.some(s=>!s.value)){status.textContent='还有未选择的项目，请先选择。';return;}const result=selects.map(s=>s.value);close();resolve(result);};document.body.append(dialog);dialog.showModal();
+      });
+    }
     function cloudDecision(local,remote,base) {
       if(cloudSame(local,remote))return 'same';
       if(!base){if(!local)return 'remote';if(!remote)return 'local';return 'conflict';}
@@ -981,21 +1006,21 @@ async function importCodaClassroom(){
           linkedEntries.push({value:{...old,syncId:canonical,syncAliases:value.payload.entry.syncAliases}});
           local.delete(key);entryByKey.delete(key);local.set(targetKey,value);entryByKey.set(targetKey,old);
         }
-        const plan=[];
+        const plan=[],conflicts=[];
         for(const key of new Set([...local.keys(),...remote.keys(),...Object.keys(base)])){
           let l=local.get(key)||null;const row=remote.get(key),r=cloudValue(row),b=base[key]?.value||null;
           if(!l&&b)l=key.startsWith('entry:')?{deleted:true,payload:{}}:b; // Cache eviction is not an intentional delete.
           let action=cloudDecision(l,r,b);
+          if(action==='conflict')action=cloudSafeSupplement(l,r,b)||action;
           if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
           if(action==='conflict'){
             const label=alphabetConfigKey(key)?'字母表格子 '+key.split(':').slice(-2).join(':'):l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
-            const describe=v=>!v||v.deleted?'已删除':v.payload.alphabetCell?JSON.stringify(v.payload.alphabetCell.text):v.payload.entry?JSON.stringify({中文:v.payload.entry.meaning,音标:v.payload.entry.ipa,备注:v.payload.entry.note,备注图片:(v.payload.entry.noteImages||[]).length,个人录音:v.payload.audio?'有':'无'}):'音频版本 '+v.payload.audio?.sha?.slice(0,10);
-            const choice=prompt('两端都修改了“'+label+'”。\n本机：'+describe(l)+'\n云端：'+describe(r)+'\n输入 1 保留本机，输入 2 使用云端。取消则停止本次同步（此时尚未上传）。','2');
-            if(choice===null)throw new Error('已取消同步，尚未上传或修改词条。');
-            if(!['1','2'].includes(choice.trim()))throw new Error('未选择有效版本，已停止同步。');action=choice.trim()==='1'?'local':'remote';
+            conflicts.push({key,label,local:l,remote:r,row});continue;
           }
           const target=action==='local'?l:r;if(target)plan.push({key,action,target,row});
         }
+        const resolutions=await cloudResolveConflicts(conflicts);
+        conflicts.forEach((c,i)=>plan.push({key:c.key,row:c.row,action:resolutions[i],target:resolutions[i]==='local'?c.local:c.remote}));
         const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
         if(!confirm('将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
         function validateAudio(a){if(!a||!a.path?.startsWith(uid+'/')||!/^[0-9a-f]{64}$/.test(a.sha)||a.path!==uid+'/'+a.sha+'-'+a.mime?.replace(/[^a-z0-9]/g,'_')||!a.mime?.startsWith('audio/')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('云端音频索引无效，已停止。');}
@@ -2244,12 +2269,13 @@ async function learningCloudSync(uid,api,status){
   status('词典已同步，正在读取学习材料…');
   try{for(let offset=0;;){const rows=await api('/rest/v1/lao_learning_records?select=*&owner_id=eq.'+uid+'&order=record_kind.asc,record_id.asc&limit=500&offset='+offset);if(!Array.isArray(rows))throw new Error('学习材料云端返回格式异常。');for(const row of rows){if(row.owner_id!==uid||!learningStores.includes(row.record_kind)||row.payload?.id!==row.record_id||!Number.isSafeInteger(row.revision)||row.revision<1)throw new Error('云端学习材料身份无效。');remote.set(row.record_kind+':'+row.record_id,row);}if(rows.length<500)break;offset+=rows.length;}}
   catch(e){if(e.status===404||/lao_learning_records.*(not find|not exist)|schema cache/i.test(e.message))throw new Error('词典已同步；学习材料仍保存在本机。请先在 Supabase 执行项目中的 learning-cloud.sql，建立学习材料专用同步表，然后重试。');throw e;}
-  const plan=[];
+  const plan=[],conflicts=[];
   for(const key of new Set([...local.keys(),...remote.keys()])){
    const l=local.get(key),row=remote.get(key),r=row?{deleted:false,payload:row.payload}:null;let action=cloudDecision(l||null,r,base[key]||null);
-   if(action==='conflict'){const label=l?.payload?.textLao||r?.payload?.textLao||l?.payload?.name||key,choice=prompt('学习材料“'+label+'”两端都有变化。输入 1 保留本机，2 使用云端；取消停止学习材料同步。','1');if(!choice||!['1','2'].includes(choice.trim()))throw new Error('已取消学习材料同步。');action=choice.trim()==='1'?'local':'remote';}
+   if(action==='conflict'){conflicts.push({label:l?.payload?.textLao||r?.payload?.textLao||l?.payload?.name||key,local:l,remote:r,index:plan.length});}
    plan.push({key,kind:key.slice(0,key.indexOf(':')),id:key.slice(key.indexOf(':')+1),row,action,target:action==='local'?l:r});
   }
+  const resolutions=await cloudResolveConflicts(conflicts);conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
   const validateAudio=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('学习音频索引无效。');};
   const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));
   for(const p of plan){if(!p.target)continue;let value={...p.target.payload};if(value.id!==p.id)throw new Error('材料编号不一致。');if(p.kind==='learningAudio'){

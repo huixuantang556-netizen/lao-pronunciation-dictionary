@@ -80,6 +80,17 @@
     .tag-search-status { font-size:12px; color:var(--muted); margin:4px 0; }
     .tag-picker [hidden] { display:none!important; }
     #alphabetPanel { grid-column:1/-1; min-width:0; }
+    .alphabet-heading { display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px; }
+    .alphabet-heading h2 { margin:0; }
+    #alphabetPanel .alphabet-heading button,#alphabetPanel .alphabet-toolbar button { padding:9px 16px;font-size:14px;line-height:1.5;border-radius:10px;min-height:42px; }
+    #alphabetCodaLink { color:var(--accent,#087f70);background:#edf7f3;border-color:#c7dfd7; }
+    .alphabet-toolbar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#f0f5f3;border:1px solid var(--line);border-radius:14px;margin:16px 0; }
+    .alphabet-toolbar button[aria-pressed="true"] { background:#087f70;color:white;border-color:#087f70; }
+    #alphabetColorOptions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    #alphabetColorOptions[hidden] { display:none; }
+    #alphabetColorOptions label { margin:0;font-size:13px;display:flex;align-items:center;gap:8px; }
+    #alphabetColor { width:auto;margin:0;padding:8px 30px 8px 12px;font-size:14px; }
+    #alphabetColorOptions .tag-hint { flex-basis:100%;margin:2px 0;font-size:12px; }
     .alphabet-scroll { overflow-x:auto; margin:12px 0 28px; border:1px solid var(--line); border-radius:12px; }
     .alphabet-table { width:100%; min-width:940px; border-collapse:collapse; table-layout:fixed; }
     .alphabet-table th,.alphabet-table td { border:1px solid #fff; padding:4px; text-align:center; background:#eef2f0; }
@@ -181,18 +192,18 @@
       </section>
       <section class="panel hidden" id="codaPanel" aria-labelledby="codaTitle"><div class="coda-header"><div><button type="button" id="codaReturn">← 老挝语学习</button><h2 id="codaTitle">尾辅音·元音形变</h2><p>理解死闭规则，听自己的示范，再练元音形变。</p></div></div><nav id="codaNav" class="coda-nav" aria-label="尾辅音学习章节"></nav><p id="codaStatus" class="coda-status" role="status"></p><div id="codaContent"></div></section>
       <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
-        <h2 id="alphabetTitle">老语字母 · 点读表</h2><button type="button" id="alphabetCodaLink">尾辅音·元音形变 →</button>
+        <div class="alphabet-heading"><h2 id="alphabetTitle">老语字母 · 点读表</h2><button type="button" id="alphabetCodaLink">尾辅音·元音形变 →</button></div>
         <div id="alphabetHelpTop"><div id="alphabetHelp" class="tag-hint">
           <p>单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
           <p>开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
           <p id="alphabetSummary"></p>
           <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="alphabetHelpRead" style="width:auto;margin:0" />已读，将说明放到页面底部</label>
         </div></div>
-        <button type="button" id="alphabetNoteMode" aria-pressed="false">查看备注模式：关</button>
-        <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表：关</button>
-        <button type="button" id="alphabetColorMode" aria-pressed="false">标记颜色：关</button>
-        <label>格子颜色 <select id="alphabetColor"><option value="yellow">黄色 · 需加强</option><option value="red">红色 · 重点</option><option value="green">绿色 · 已熟悉</option><option value="default">默认 · 清除标记</option></select></label>
-        <p class="tag-hint">开启“标记颜色”后，单击格子应用所选颜色；关闭后恢复点读。颜色自动保存在本机，可随备份及手动云端同步保留。</p>
+        <div class="alphabet-toolbar" role="group" aria-label="字母表工具">
+        <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表</button>
+        <button type="button" id="alphabetColorMode" aria-pressed="false">标记颜色</button>
+        <div id="alphabetColorOptions" hidden><label>格子颜色 <select id="alphabetColor"><option value="yellow">黄色 · 需加强</option><option value="red">红色 · 重点</option><option value="green">绿色 · 已熟悉</option><option value="default">默认 · 清除标记</option></select></label>
+        <p class="tag-hint">开启“标记颜色”后，单击格子应用所选颜色；关闭后恢复点读。颜色自动保存在本机，可随备份及手动云端同步保留。</p></div></div>
         <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
         <div id="alphabetTables"></div>
         <div id="alphabetHelpBottom"></div>
@@ -1290,7 +1301,7 @@ async function importCodaClassroom(){
     ];
     if(typeof window!=='undefined')window.learningAlphabetRows=()=>alphabetRows;
     const alphabetCells=[];
-    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetNotesOnly=false,alphabetRenderVersion=0,alphabetEditing=false,alphabetSaving=false,alphabetColoring=false;
+    let alphabetTimer=null,alphabetLastCell=null,alphabetLastTime=0,alphabetRenderVersion=0,alphabetEditing=false,alphabetSaving=false,alphabetColoring=false;
     const alphabetButton=document.createElement('button');
     alphabetButton.type='button';alphabetButton.dataset.view='alphabet';alphabetButton.textContent='老语字母';alphabetButton.setAttribute('aria-controls','alphabetPanel');
     $('#viewNav [data-view="dictionary"]').after(alphabetButton);
@@ -1380,17 +1391,17 @@ async function importCodaClassroom(){
       const id=Number(button.dataset.letter),now=Date.now();
       if(alphabetColoring){cancelAlphabetClick();void colorAlphabetCell(id);return;}
       if(alphabetEditing){cancelAlphabetClick();void editAlphabetCell(id);return;}
-      if(alphabetNotesOnly||e.detail===0){cancelAlphabetClick();void openAlphabetCell(id,alphabetNotesOnly);return;}
+      if(e.detail===0){cancelAlphabetClick();void openAlphabetCell(id,false);return;}
       if(alphabetLastCell===id&&now-alphabetLastTime<350){cancelAlphabetClick();stopPracticeAudio();void openAlphabetCell(id,true);return;}
       cancelAlphabetClick();alphabetLastCell=id;alphabetLastTime=now;
       alphabetTimer=setTimeout(()=>{cancelAlphabetClick();void openAlphabetCell(id);},350);
     };
     $('#alphabetTables').ondblclick=e=>{if(alphabetEditing||alphabetColoring)return;const button=e.target.closest('[data-letter]');if(!button)return;cancelAlphabetClick();if(!$('#alphabetDialog').open){stopPracticeAudio();void openAlphabetCell(Number(button.dataset.letter),true);}};
-    $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetColoring=false;updateAlphabetColorMode();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent='编辑字母表：'+(alphabetEditing?'开（点击格子修改）':'关');void renderAlphabet();};
-    function updateAlphabetColorMode(){ $('#alphabetColorMode').setAttribute('aria-pressed',String(alphabetColoring));$('#alphabetColorMode').textContent='标记颜色：'+(alphabetColoring?'开（点击格子上色）':'关'); }
+    $('#alphabetEditMode').onclick=()=>{if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetColoring=false;updateAlphabetColorMode();alphabetEditing=!alphabetEditing;$('#alphabetEditMode').setAttribute('aria-pressed',String(alphabetEditing));$('#alphabetEditMode').textContent=alphabetEditing?'完成编辑':'编辑字母表';void renderAlphabet();};
+    function updateAlphabetColorMode(){ $('#alphabetColorOptions').hidden=!alphabetColoring; $('#alphabetColorMode').setAttribute('aria-pressed',String(alphabetColoring));$('#alphabetColorMode').textContent=alphabetColoring?'完成标记':'标记颜色'; }
     $('#alphabetColorMode').onclick=()=>{
       if(alphabetSaving)return;cancelAlphabetClick();stopPracticeAudio();alphabetColoring=!alphabetColoring;alphabetEditing=false;
-      $('#alphabetEditMode').setAttribute('aria-pressed','false');$('#alphabetEditMode').textContent='编辑字母表：关';updateAlphabetColorMode();void renderAlphabet();
+      $('#alphabetEditMode').setAttribute('aria-pressed','false');$('#alphabetEditMode').textContent='编辑字母表';updateAlphabetColorMode();void renderAlphabet();
     };
     async function colorAlphabetCell(id){
       const cell=alphabetCells[id];if(!cell||alphabetSaving)return;
@@ -1422,7 +1433,6 @@ async function importCodaClassroom(){
       });
     }
     $('#alphabetTables').onkeydown=e=>{if(e.key!=='F2')return;const button=e.target.closest('[data-letter]');if(button){e.preventDefault();cancelAlphabetClick();void openAlphabetCell(Number(button.dataset.letter),true);}};
-    $('#alphabetNoteMode').onclick=()=>{cancelAlphabetClick();alphabetNotesOnly=!alphabetNotesOnly;$('#alphabetNoteMode').setAttribute('aria-pressed',String(alphabetNotesOnly));$('#alphabetNoteMode').textContent='查看备注模式：'+(alphabetNotesOnly?'开（单击看备注）':'关');};
     let alphabetNoteGesture=null;
     function alphabetHasSelection() {
       const selection=window.getSelection();

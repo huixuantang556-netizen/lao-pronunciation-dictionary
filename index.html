@@ -111,7 +111,7 @@
     <p class="subtitle">收集词条、音标和你自己的示范发音，也用它复习字母。</p>
     <div class="notice" id="localDataNotice"><span>词典和录音会保存在当前浏览器。清除网站数据会删除本机副本；未备份或未同步的内容可能丢失。</span><label style="display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dismissLocalDataNotice" style="width:auto;margin:0" />已读，不再显示</label></div>
     <nav class="view-nav" id="viewNav" aria-label="词典页面">
-      <div class="view-nav-group" role="group" aria-label="学习功能"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button><button type="button" data-view="coda" aria-controls="codaPanel">尾辅音</button></div>
+      <div class="view-nav-group" role="group" aria-label="学习功能"><button type="button" data-view="dictionary" aria-controls="dictionaryPanel" aria-current="page">我的词典</button><button type="button" data-view="practice" aria-controls="practicePanel">默写练习</button></div>
       <div class="view-nav-group view-nav-tools" role="group" aria-label="词条与备份管理"><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></div>
     </nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
@@ -179,9 +179,9 @@
           <aside class="practice-side"><p><strong>练习大类</strong></p><select id="practiceKind" aria-label="练习大类"><option value="words">单词（含短语）</option><option value="letters">字母（辅音／元音）</option></select><p class="tag-hint">自动区分字母与单词，无需补加“单词”标签。</p><p><strong>出题方向</strong></p><select id="practiceMode"><option value="ipaToWord">音标 → 老挝语</option><option value="wordToIpa">老挝语 → 音标</option><option value="wordToMeaning">老挝语 → 中文</option><option value="meaningToWord">中文 → 老挝语</option><option value="mixed">混合随机</option></select><p><strong>复习范围</strong></p><select id="practiceScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select><details class="practice-tag-settings"><summary>标签筛选 · 点击展开</summary><label>匹配方式<select id="practiceTagMode"><option value="all">满足全部标签（缩小范围）</option><option value="any">满足任一标签（扩大范围）</option></select></label><input type="search" id="practiceTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="默写练习标签搜索" /><p id="practiceTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="practiceTags" class="tag-picker"></div><button type="button" id="clearPracticeTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p></details><p id="practiceSummary">正在准备练习…</p><p>答错会自动标为重点；在词典列表中也可手动标注或取消。</p></aside>
         </div>
       </section>
-      <section class="panel hidden" id="codaPanel" aria-labelledby="codaTitle"><div class="coda-header"><div><h2 id="codaTitle">尾辅音学习</h2><p>理解死闭规则，听自己的示范，再练元音形变。</p></div></div><nav id="codaNav" class="coda-nav" aria-label="尾辅音学习章节"></nav><p id="codaStatus" class="coda-status" role="status"></p><div id="codaContent"></div></section>
+      <section class="panel hidden" id="codaPanel" aria-labelledby="codaTitle"><div class="coda-header"><div><button type="button" id="codaReturn">← 老挝语学习</button><h2 id="codaTitle">尾辅音·元音形变</h2><p>理解死闭规则，听自己的示范，再练元音形变。</p></div></div><nav id="codaNav" class="coda-nav" aria-label="尾辅音学习章节"></nav><p id="codaStatus" class="coda-status" role="status"></p><div id="codaContent"></div></section>
       <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
-        <h2 id="alphabetTitle">老语字母 · 点读表</h2>
+        <h2 id="alphabetTitle">老语字母 · 点读表</h2><button type="button" id="alphabetCodaLink">尾辅音·元音形变 →</button>
         <div id="alphabetHelpTop"><div id="alphabetHelp" class="tag-hint">
           <p>单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
           <p>开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
@@ -342,7 +342,7 @@ async function importCodaClassroom(){
       Object.entries(panels).forEach(([name,id])=>$('#'+id).classList.toggle('hidden',name!==view&&!(view==='add'&&name==='dictionary')));
       $('.grid').classList.toggle('add-view',view==='add');
       if(view!=='practice')stopPracticeAudio();
-      document.querySelectorAll('[data-view]').forEach(button=>{if(button.dataset.view===view)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+      document.querySelectorAll('[data-view]').forEach(button=>{if(button.dataset.view===(view==='coda'?codaParentView:view))button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
       if(view!=='dictionary')setDeleteMode(false);
       window.scrollTo({top:0,behavior:'smooth'});
       if(view==='coda'){
@@ -836,6 +836,14 @@ async function importCodaClassroom(){
     $('#deleteSelected').onclick=deleteSelectedEntries;
     $('#toggleDeleteMode').onclick=()=>{setDeleteMode(!deleteMode);$('#deleteSelected').classList.remove('hidden');};
     $('#closeDictionarySettings').onclick=()=>{$('#dictionarySettings').open=false;$('#dictionarySettings > summary').focus();};
+    let codaParentView='learning';
+    function openCodaFrom(parent,tab){
+      codaParentView=parent;codaTab=tab;
+      $('#codaReturn').textContent=parent==='alphabet'?'← 老语字母':'← 老挝语学习';
+      return showView('coda');
+    }
+    $('#alphabetCodaLink').onclick=()=>openCodaFrom('alphabet','vowels');
+    $('#codaReturn').onclick=()=>showView(codaParentView);
     $('#viewNav').onclick=e=>{const button=e.target.closest('[data-view]');if(button)showView(button.dataset.view);};
     $('#entryForm').addEventListener('reset',()=>{$('#form-title').textContent='添加词条';});
     $('#ttsEndpoint').value=ttsSettings.endpoint||'';
@@ -1969,7 +1977,7 @@ async function renderLearning(){
  learningPanel.className='panel'+(activeView==='learning'?'':' hidden')+(learningSettings?' learn-settings':'');
  const h=learningEsc,nav='<button class="learn-back" data-learn="home">← 老挝语学习</button>';
  let html='';
- if(learningRoute==='home')html='<p class="learn-eyebrow">每一段声音，都可以成为学习材料</p><h2>老挝语学习</h2><div class="learn-paths"><button data-learn="teaching"><small>按章节学习</small><h3>教学型材料</h3><p>知识点 · 教材词汇 · 拼读 · 句子与跟读</p><span>进入课程 →</span></button><button data-learn="communication"><small>按生活场景学习</small><h3>交流型材料</h3><p>实用词汇 · 生活句子 · 真实对话</p><span>查看场景 →</span></button></div>';
+ if(learningRoute==='home')html='<p class="learn-eyebrow">每一段声音，都可以成为学习材料</p><h2>老挝语学习</h2><div class="learn-paths"><button data-learn="teaching"><small>按章节学习</small><h3>教学型材料</h3><p>知识点 · 教材词汇 · 拼读 · 句子与跟读</p><span>进入课程 →</span></button><button data-learn="communication"><small>按生活场景学习</small><h3>交流型材料</h3><p>实用词汇 · 生活句子 · 真实对话</p><span>查看场景 →</span></button><button data-learn="coda"><small>字音与拼读规则</small><h3>尾辅音·元音形变</h3><p>死闭音节 · 活闭音节 · 元音形变与练习</p></button></div>';
  else if(learningRoute==='communication'&&typeof lessonV2CommunicationHtml==='function')html=lessonV2CommunicationHtml(snap);
  else if(learningRoute==='communication')html=nav+'<h2>交流型材料</h2><p class="tag-hint">场景课程后续开放；教材中适用的词句将可以直接引用到这些场景。</p><div class="learn-chips">'+['购物','餐厅','交通','学校','家庭','医院','驾校','日常交流'].map(s=>'<span>'+s+'</span>').join('')+'</div>';
  else if(learningRoute==='teaching')html=nav+'<h2>教学型材料</h2><button data-learn="course-new">＋ 新建章节／课程</button>'+learningCatalog(snap);
@@ -2119,6 +2127,7 @@ async function learningAction(e){
   if(['play','play-card','glyph','gemini','audio','word-audio','compare'].includes(a))$('#learningStatus').textContent='🔊 正在准备发音…';
   if(learningRecorder&&!['record','record-reference'].includes(a))throw new Error('请先停止跟读录音。');
   if(learningPendingRecording&&!['record','record-reference','preview-recording','save-recording','save-word-recording','play','audio','own','gemini'].includes(a)){if(!confirm('本次跟读尚未保存，放弃录音并继续？'))return;learningPendingRecording=null;}
+  if(a==='coda'){openCodaFrom('learning','dead');return;}
   if(['home','teaching','communication','lesson','tab'].includes(a)){learningResetMulti();stopPracticeAudio();if(a==='tab')learningTab=b.dataset.key;else learningRoute=a;await renderLearning();return;}
   if(await learningMultiAction(a,b))return;
   if(await learningAuthorAction(a,b))return;

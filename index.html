@@ -14,6 +14,18 @@
 .coda-structure-grid{display:grid;grid-template-columns:minmax(0,1.3fr) 24px minmax(0,1fr) 24px minmax(0,1.15fr);align-items:center;justify-items:center;gap:8px 6px;width:100%;max-width:650px;margin:12px 0;text-align:center}.coda-structure-grid strong{font-size:20px}.coda-down{font-size:28px;line-height:1.2;color:var(--brand)}.coda-plus{font-size:20px;color:var(--muted)}.coda-structure-options{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;min-width:0}.coda-structure-grid .coda-term{font-size:16px;padding:5px 9px}.coda-structure-options[lang=lo] .coda-term{white-space:nowrap}@media(max-width:600px){.coda-structure-grid{grid-template-columns:minmax(0,1.3fr) 12px minmax(0,1fr) 12px minmax(0,1.15fr);gap:8px 2px}.coda-structure-grid strong{font-size:14px}.coda-structure-grid .coda-term{font-size:13px;padding:4px}.coda-structure-options{gap:2px}.coda-plus{font-size:14px}}
 .coda-reference-filters{display:grid;gap:10px;margin:16px 0}.coda-filter-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.coda-filter-row>strong{min-width:70px;font-size:13px;color:var(--muted);font-weight:500}.coda-filter-row button{font-size:13px;padding:6px 12px;border-radius:99px}.coda-reference-filters>[data-coda-filter=clear]{justify-self:start;font-size:12px;padding:4px 8px;border:0;color:var(--muted);background:transparent}@media(max-width:480px){.coda-filter-row{gap:6px}.coda-filter-row .coda-actions{gap:5px}.coda-filter-row button{padding:6px 9px}.coda-filter-row>strong{min-width:62px}}
 .coda-vowel-table .coda-vowel-audio{border:0;background:transparent;color:var(--brand);font:inherit;font-size:inherit;line-height:inherit;padding:4px 9px;border-radius:8px;cursor:pointer}.coda-vowel-table .coda-vowel-audio:hover,.coda-vowel-table .coda-vowel-audio:focus-visible{background:var(--soft);outline:2px solid var(--brand);outline-offset:1px}.coda-vowel-table .coda-vowel-audio:disabled{opacity:.65;cursor:wait}
+
+.coda-vowel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:20px 0}
+.coda-vowel-pair{background:linear-gradient(135deg,#f1faf6,#fff);border:1px solid #d4e5de;border-radius:18px;padding:18px;box-shadow:0 4px 14px #214a3710}
+.coda-vowel-pair header{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin-bottom:16px}
+.coda-vowel-badge{color:#087f70;background:#dff1e9;border-radius:20px;padding:3px 9px;font-size:12px}
+.coda-vowel-compare{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);align-items:center;gap:8px}
+.coda-vowel-compare .coda-vowel-audio{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;padding:14px 4px;border:1px solid #deebe5;border-radius:12px;background:#fff;color:#087f70}
+.coda-vowel-compare .coda-vowel-audio:hover{background:#e5f4ed;border-color:#78b9a5}
+.coda-vowel-compare .coda-vowel-audio span{font-size:38px;line-height:1.7}
+.coda-vowel-compare .coda-vowel-audio small{font-size:12px;font-weight:400;color:#657f77}
+.coda-vowel-arrow{text-align:center;color:#8ba99e}
+@media(max-width:600px){.coda-vowel-grid{grid-template-columns:1fr}.coda-vowel-pair{padding:14px}}
 </style>
   <style>
     :root { --ink:#203334; --muted:#667878; --brand:#087e6b; --soft:#eaf6f1; --line:#dce7e3; --paper:#fbfdfc; }
@@ -1720,7 +1732,17 @@ function codaLinkResults(query=''){
  return words.map(x=>'<div class="coda-link-row"><span lang="lo">'+codaEscape(x.word)+'<small>'+codaEscape(x.meaning||'')+'</small></span><select aria-label="'+codaEscape(x.word)+'的死闭参考声调" data-coda-link="'+x.id+'"><option value="">不关联</option>'+['短调','中降调','四声'].map(t=>'<option '+(x.codaType==='dead'&&x.textbookTone===t?'selected':'')+'>'+t+'</option>').join('')+'</select></div>').join('')||'<p>未找到。请先在“添加词条”中制作单词卡，再回来关联。</p>';
 }
 function codaVowelKnowledge(){
- return '<div class="coda-knowledge-header"><div><h3>元音遇到尾辅音后的形变</h3><p class="coda-muted">★ 当前重点六组 · 注意 ຽ 与 ຍ 不同</p></div><button type="button" id="codaEnterPractice" class="primary">开始练习 →</button></div><div class="coda-scroll"><table class="coda-vowel-table"><caption class="coda-muted">十组元音形变 · 点击元音形式播放默认发音</caption><thead><tr><th scope="col">重点</th><th scope="col">原始元音</th><th scope="col">遇尾辅音后</th><th scope="col">长短</th></tr></thead><tbody>'+CodaLesson.vowels.map(r=>'<tr><td>'+(codaPriority.has(r.ruleId)?'<span aria-label="当前重点">★</span>':'—')+'</td><td lang="lo"><button type="button" class="coda-vowel-audio" data-coda-vowel-speech="'+codaEscape(r.baseVowel)+'" aria-label="播放原始元音 '+codaEscape(r.baseVowel)+'" title="点击播放默认发音">'+codaEscape(r.baseVowel)+'</button></td><td lang="lo"><button type="button" class="coda-vowel-audio" data-coda-vowel-speech="'+codaEscape(r.closedVowel)+'" aria-label="播放遇尾辅音后的元音形式 '+codaEscape(r.closedVowel)+'" title="点击播放默认发音">'+codaEscape(r.closedVowel)+'</button></td><td>'+codaLabels[r.vowelLength]+'</td></tr>').join('')+'</tbody></table></div><p class="coda-muted">右侧形式中，前一个 ◌ 是开头辅音的位置，末尾 ◌ 是尾辅音的位置。形变规则不表示任意元音与尾辅音都能组合。首次播放未缓存形式时会生成并保存默认发音。</p>';
+ const form=(text,label)=>'<button type="button" class="coda-vowel-audio" data-coda-vowel-speech="'+codaEscape(text)+'" aria-label="播放'+label+' '+codaEscape(text)+'"><small>'+label+'</small><span lang="lo">'+codaEscape(text)+'</span><small>▶ 点读</small></button>';
+ return '<div class="coda-knowledge-header"><div><h3>元音形变</h3><p class="coda-muted">十组写法对照 · ★ 为当前重点 · 注意 ຽ 与 ຍ 不同</p></div><button type="button" id="codaEnterPractice" class="primary">开始练习 →</button></div><div class="coda-vowel-grid">'+CodaLesson.vowels.map((r,i)=>'<article class="coda-vowel-pair"><header><span>第 '+(i+1)+' 组 · '+codaLabels[r.vowelLength]+'</span>'+(codaPriority.has(r.ruleId)?'<span class="coda-vowel-badge">★ 重点</span>':'')+'</header><div class="coda-vowel-compare">'+form(r.baseVowel,'原始元音')+'<span class="coda-vowel-arrow" aria-hidden="true">→</span>'+form(r.closedVowel,'遇尾辅音后')+'</div></article>').join('')+'</div><p class="coda-muted">点击优先播放已有个人录音，其次使用已缓存发音。◌ 表示辅音位置，右侧末尾的 ◌ 表示尾辅音位置。形变规则不代表任意组合都成立。</p>';
+}
+async function codaPlayVowel(text){
+ const key=s=>String(s||'').normalize('NFC').replace(/[\s\u200b◌xX×_–—-]/g,'');
+ const matches=(await allEntries()).filter(x=>key(x.word)===key(text)&&hasAudio(x));
+ if(matches.length>1){$('#codaStatus').textContent='找到多条同形录音，请到“我的词典”选择对应词条播放，避免播放错误版本。';return;}
+ if(matches.length===1){await playEntrySpeech(matches[0],'personal');$('#codaStatus').textContent='正在播放已有录音：'+matches[0].word;return;}
+ const cached=(await cloudCacheRows()).find(row=>{try{return key(JSON.parse(row.key)[1])===key(text);}catch(_){return false;}});
+ if(cached){await learningPlayBlob(cached.blob);$('#codaStatus').textContent='正在播放本机已保存的发音。';return;}
+ $('#codaStatus').textContent='此写法尚未找到已保存的音频，请先在词典中为对应字母录音；形变写法不会自动套用另一种写法的录音。';
 }
 function codaVowels(){
  if(!codaVowelPracticing)return codaVowelKnowledge();
@@ -1820,7 +1842,7 @@ $('#codaPanel').onclick=async e=>{
   if(b.id==='codaEnterPractice'){codaVowelPracticing=true;await renderCodaChapter();return;}
   if(b.id==='codaBackKnowledge'){codaVowelPracticing=false;await renderCodaChapter();return;}
   if(b.dataset.codaTerm){codaOpenTerm(b.dataset.codaTerm);return;}
-  if(b.dataset.codaVowelSpeech){b.disabled=true;await playEntrySpeech({word:b.dataset.codaVowelSpeech},'default');if(await codaCachedSpeech(b.dataset.codaVowelSpeech))$('#codaStatus').textContent='该元音形式的默认发音已保存在本机。';b.disabled=false;return;}
+  if(b.dataset.codaVowelSpeech){b.disabled=true;try{await codaPlayVowel(b.dataset.codaVowelSpeech);}finally{b.disabled=false;}return;}
   if(b.dataset.codaTile){codaReferenceClick(Number(b.dataset.codaTile),e.detail);return;}
   if(b.dataset.codaFilter){
    cancelCodaReferenceClick();

@@ -136,7 +136,19 @@
 .comm-detail>.learn-knowledge{padding:16px;margin:12px 0}.comm-detail .learn-knowledge h3{font-size:18px;margin:0 0 8px}.comm-detail .tag-hint{font-size:12px;margin:6px 0 12px}.comm-detail .v2-sentences{max-width:850px;margin:12px auto;gap:10px}.comm-detail .v2-sentences .learn-card-main{padding:12px 16px;min-height:0}.comm-detail .v2-sentences .learn-card-main strong{font-size:24px;line-height:1.65}.comm-detail .v2-sentences .learn-card-main span{font-size:14px;margin-top:4px}.comm-detail .v2-sentences .learn-card-actions{padding:0 10px 6px}.comm-detail .v2-sentences .learn-card-actions button{padding:4px 10px;font-size:14px}
 @media(max-width:600px){.comm-home .learn-course-grid{grid-template-columns:1fr}.comm-detail .v2-sentences .learn-card-main strong{font-size:21px}.comm-tools{justify-content:flex-start;flex-wrap:wrap}}
 </style>
-</head>
+<style>
+.comm-manage{margin:10px 0;font-size:13px}.comm-manage>summary{cursor:pointer;color:#638479;padding:6px 0}.comm-manage .learn-chips{display:flex;flex-wrap:wrap;gap:8px}
+#learningPanel .comm-detail .v2-sentences{max-width:680px;margin:10px 0;gap:8px}
+#learningPanel .comm-detail .v2-sentences .learn-card{border-radius:10px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:0;overflow:hidden}
+#learningPanel .comm-detail .v2-sentences .learn-card-main{padding:9px 12px;min-height:0;gap:3px}
+#learningPanel .comm-detail .v2-sentences .learn-card-main strong{font-size:20px;line-height:1.55;font-weight:500}
+#learningPanel .comm-detail .v2-sentences .learn-card-main span{font-size:13px;line-height:1.5;margin:0}
+#learningPanel .comm-detail .v2-sentences .learn-card-actions{padding:4px;display:flex;flex-direction:column;gap:0}
+#learningPanel .comm-detail .v2-sentences .learn-card-actions button{font-size:12px;padding:3px 7px;min-height:26px}
+#batchAudioDialog{width:min(900px,94vw);max-height:90vh;overflow:auto;border:1px solid #c7ddd3;border-radius:18px;padding:24px}
+#batchAudioDialog input[type=checkbox]{width:auto}#batchAudioDialog button{font-size:13px;padding:8px 12px;margin:4px}
+.batch-segment{padding:12px;border-bottom:1px solid #dbe9e2}.batch-segment>div{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.batch-segment label{font-size:12px}.batch-segment input[type=number]{width:90px;font-size:13px;padding:6px}
+</style></head>
 <body>
   <main>
     <h1>老挝语私人发音词典</h1>
@@ -2665,7 +2677,7 @@ let communicationFolder='',communicationScene='';
 function communicationDownload(name,text){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 function communicationHtml(snap){
  const h=learningEsc,folders=snap.learningMaterials.filter(m=>m.communicationFolder),current=folders.find(m=>m.id===communicationFolder),courses=learningCourses(snap).filter(c=>c.library==='communication'),scenes=[...new Set(courses.flatMap(c=>c.sceneMetadata?.scenes||[]))];
- return '<div class="comm-home"><button class="comm-back" data-learn="home">← 老挝语学习</button><h2>交流型材料</h2><div class="learn-chips"><button data-learn="comm-folder" data-id="">全部来源</button>'+(current?'<button data-learn="comm-folder" data-id="'+h(current.parentFolder||'')+'">↑ 上一级</button><strong>'+h(current.textLao)+'</strong>':'')+'<button data-learn="comm-new">＋ 新建文件夹</button><button data-learn="comm-import">导入到这里</button><details class="comm-more"><summary>更多工具</summary><button data-learn="comm-template">下载新材料模板</button><button data-learn="comm-prompt">下载 AI 要求</button></details></div><label>适用场景<select id="communicationScene"><option value="">全部场景</option>'+scenes.map(s=>'<option '+(s===communicationScene?'selected':'')+'>'+h(s)+'</option>').join('')+'</select></label><div class="learn-course-grid">'+folders.filter(m=>(m.parentFolder||'')===communicationFolder).map(m=>'<button class="learn-lesson" data-learn="comm-folder" data-id="'+h(m.id)+'"><h3>📁 '+h(m.textLao)+'</h3></button>').join('')+courses.filter(c=>(communicationScene?c.sceneMetadata?.scenes?.includes(communicationScene):(c.folderId||'')===communicationFolder)).map(c=>'<article class="learn-course-tile"><button class="learn-lesson" data-learn="course-open" data-id="'+h(c.id)+'"><small>'+h(c.sourceLabel||'未填写来源')+'</small><h3>'+h(c.title)+'</h3><p>'+h((c.sceneMetadata?.scenes||[]).join(' · '))+'</p></button><details class="comm-more"><summary>管理材料</summary><button data-learn="comm-append" data-id="'+h(c.id)+'">追加／更新内容</button><button data-learn="comm-export" data-id="'+h(c.id)+'">导出带 ID 文件</button></details></article>').join('')+'</div><p class="tag-hint">场景筛选会查找所有文件夹；同名不覆盖，相同 ID 更新需在预览中确认，未提供内容保留。</p></div>';
+ return '<div class="comm-home"><button class="comm-back" data-learn="home">← 老挝语学习</button><h2>交流型材料</h2><details class="comm-manage"><summary>整理／导入</summary><div class="learn-chips"><button data-learn="comm-folder" data-id="">全部来源</button>'+(current?'<button data-learn="comm-folder" data-id="'+h(current.parentFolder||'')+'">↑ 上一级</button><strong>'+h(current.textLao)+'</strong>':'')+'<button data-learn="comm-new">＋ 新建文件夹</button><button data-learn="comm-import">导入到这里</button><details class="comm-more"><summary>更多工具</summary><button data-learn="comm-template">下载新材料模板</button><button data-learn="comm-prompt">下载 AI 要求</button></details></div></details><label>适用场景<select id="communicationScene"><option value="">全部场景</option>'+scenes.map(s=>'<option '+(s===communicationScene?'selected':'')+'>'+h(s)+'</option>').join('')+'</select></label><div class="learn-course-grid">'+folders.filter(m=>(m.parentFolder||'')===communicationFolder).map(m=>'<button class="learn-lesson" data-learn="comm-folder" data-id="'+h(m.id)+'"><h3>📁 '+h(m.textLao)+'</h3></button>').join('')+courses.filter(c=>(communicationScene?c.sceneMetadata?.scenes?.includes(communicationScene):(c.folderId||'')===communicationFolder)).map(c=>'<article class="learn-course-tile"><button class="learn-lesson" data-learn="course-open" data-id="'+h(c.id)+'"><small>'+h(c.sourceLabel||'未填写来源')+'</small><h3>'+h(c.title)+'</h3><p>'+h((c.sceneMetadata?.scenes||[]).join(' · '))+'</p></button><details class="comm-more"><summary>管理材料</summary><button data-learn="comm-append" data-id="'+h(c.id)+'">追加／更新内容</button><button data-learn="comm-export" data-id="'+h(c.id)+'">导出带 ID 文件</button></details></article>').join('')+'</div><p class="tag-hint">场景筛选会查找所有文件夹；同名不覆盖，相同 ID 更新需在预览中确认，未提供内容保留。</p></div>';
 }
 function communicationTemplate(){return {format:'lao-lesson-v2',course:{library:'communication',folderId:communicationFolder,sourceLabel:'AI 生成（请改为真实来源，可附课次／页码）',textbookId:'communication',textbookName:'交流材料',chapterId:'collection',chapterName:'材料集',lessonId:'material-'+crypto.randomUUID(),title:'请填写材料标题',description:'',sceneMetadata:{scenes:[],participants:[],goal:[],context:'',register:''}},sections:[{id:'section-1',title:'对话',topics:[],roles:['交流型材料'],blocks:[{id:'dialogue-1',contentType:'dialogue',displayType:'dialogue',title:'对话',topics:[],roles:['交流型材料'],tags:[],content:{items:[]}}]}],uncertain:[]};}
 async function communicationAction(a,b){
@@ -2691,7 +2703,7 @@ document.addEventListener('change',e=>{if(e.target.id==='communicationScene'){co
 const communicationDialogs=new Map();
 function communicationSection(s,block){
  const h=learningEsc,ds=s.blocks.filter(b=>b.contentType==='dialogue'),key=learningLesson.id+':'+s.id,selected=ds.find(b=>b.id===communicationDialogs.get(key))||ds[0];
- const tools='<div class="comm-tools"><button data-learn="comm-words" data-section="'+h(s.id)+'">＋ 导入词汇</button><button data-learn="comm-dialogue-add" data-section="'+h(s.id)+'">＋ 新增对话</button></div>';
+ const tools='<details class="comm-manage"><summary>添加内容</summary><div class="comm-tools"><button data-learn="comm-words" data-section="'+h(s.id)+'">＋ 导入词汇</button><button data-learn="comm-dialogue-add" data-section="'+h(s.id)+'">＋ 新增对话</button></div></details>';
  const nav=ds.length?'<nav class="comm-dialogue-nav" aria-label="切换对话">'+ds.map((b,i)=>'<button data-learn="comm-dialogue" data-section="'+h(key)+'" data-key="'+h(b.id)+'" aria-pressed="'+(b.id===selected.id)+'">'+(i+1)+'. '+h(b.title||'对话')+'</button>').join('')+'</nav>':'';
  return '<section class="comm-detail">'+tools+nav+s.blocks.filter(b=>b.contentType!=='dialogue'||b.id===selected?.id).filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType).map(block).join('')+'</section>';
 }
@@ -2707,6 +2719,64 @@ async function communicationPlainImport(type,sectionId){
  $('#commPlainFile').onchange=async e=>{try{if(e.target.files[0]){$('#commPlainText').value=await e.target.files[0].text();learningDraft.dirty=true;}}catch(e){$('#learningDialogStatus').textContent=e.message;}};
  $('#commPlainPreview').onclick=async()=>{try{const title=$('#commPlainTitle').value.trim();if(!title)throw Error('请填写标题');const rows=communicationPlainRows($('#commPlainText').value,type),id='manual-'+crypto.randomUUID(),b={id,contentType:type==='words'?'word-ref':'dialogue',displayType:type==='words'?'word-cards':'dialogue',title,topics:[],roles:['交流型材料'],tags:[],content:{items:rows.map((r,i)=>({...r,itemId:id+'-'+i,note:''}))}};await lessonV2Preview({format:'lao-lesson-v2',course:original.course,sections:[{...section,blocks:[b]}],uncertain:[]});}catch(e){$('#learningDialogStatus').textContent=e.message;}};
 }
+</script>
+<script data-learning-bundle="batch-audio">
+/* One request per batch; silence proposals are not speech recognition. */
+function batchSilences(buffer,minPause=.25){
+ const step=Math.max(1,Math.floor(buffer.sampleRate*.01)),rms=[];
+ for(let i=0;i<buffer.length;i+=step){let sum=0,n=0;for(let ch=0;ch<buffer.numberOfChannels;ch++){const a=buffer.getChannelData(ch);for(let j=i;j<Math.min(i+step,a.length);j++){sum+=a[j]*a[j];n++;}}rms.push(Math.sqrt(sum/Math.max(1,n)));}
+ const peak=rms.reduce((a,b)=>Math.max(a,b),0);if(peak<.0001)return [];
+ const threshold=Math.max(.0001,peak*.025),gaps=[];let start=null;
+ rms.forEach((v,i)=>{if(v<threshold){if(start===null)start=i;}else if(start!==null){if((i-start)*step/buffer.sampleRate>=minPause&&start>0)gaps.push((start+i)*step/buffer.sampleRate/2);start=null;}});return gaps;
+}
+function batchRanges(buffer,count,pause){const gaps=batchSilences(buffer,pause);if(gaps.length!==count-1)return null;const cuts=[0,...gaps,buffer.duration];return cuts.slice(0,-1).map((start,i)=>[start,cuts[i+1]]);}
+function batchValidate(ranges,duration){let previous=0;for(const [start,end] of ranges){if(!Number.isFinite(start)||!Number.isFinite(end)||start<previous-.001||start<0||end<=start||end>duration+.001)throw Error('切分时间无效：请按顺序填写，结束大于开始，不重叠且不超过总时长');previous=end;}return true;}
+function batchWav(buffer,start,end){
+ const from=Math.floor(start*buffer.sampleRate),to=Math.min(buffer.length,Math.floor(end*buffer.sampleRate)),n=to-from;if(n<=0)throw Error('片段为空');
+ const bytes=new ArrayBuffer(44+n*2),v=new DataView(bytes),str=(at,s)=>{for(let i=0;i<s.length;i++)v.setUint8(at+i,s.charCodeAt(i));};str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,buffer.sampleRate,true);v.setUint32(28,buffer.sampleRate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,n*2,true);
+ for(let i=0;i<n;i++){let sample=0;for(let c=0;c<buffer.numberOfChannels;c++)sample+=buffer.getChannelData(c)[from+i]/buffer.numberOfChannels;sample=Math.max(-1,Math.min(1,sample));v.setInt16(44+i*2,sample<0?sample*32768:sample*32767,true);}return new Blob([bytes],{type:'audio/wav'});
+}
+let batchAudioState=null,batchAudioBusy=false,batchAudioURL=null;
+const batchDraftKey=workspaceName('lao-batch-audio-draft-v1');
+const batchDialog=document.createElement('dialog');batchDialog.id='batchAudioDialog';document.body.append(batchDialog);
+function batchNotice(message){batchDialog.querySelector('[data-batch-status]').textContent=message;}
+function batchRemember(){if(batchAudioState?.key)localStorage.setItem(batchDraftKey,JSON.stringify({words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges}));}
+function batchClose(){if(batchAudioBusy)return;stopPracticeAudio();batchDialog.querySelectorAll('audio').forEach(a=>a.pause());if(batchAudioURL)URL.revokeObjectURL(batchAudioURL);batchAudioURL=null;batchDialog.close();}
+batchDialog.addEventListener('cancel',e=>{e.preventDefault();batchClose();});
+async function batchDecode(blob){const ctx=new (window.AudioContext||window.webkitAudioContext)();try{return await ctx.decodeAudioData(await blob.arrayBuffer());}finally{await ctx.close();}}
+async function openBatchAudio(){
+ if(batchAudioBusy)return;if(recorder||learningHasWork()){alert('请先保存或取消正在进行的编辑／录音。');return;}stopPracticeAudio();
+ const rows=await allEntries();batchAudioState={words:[],rows};
+ batchDialog.innerHTML='<h2>批量生成 · 音频切分</h2><p>从词典勾选 2–20 个词，一次生成整段。已有录音／缓存会跳过；不自动重试，不覆盖旧音频。</p><input id="batchSearch" type="search" placeholder="搜索词语、中文或标签"><div id="batchChoices" style="max-height:240px;overflow:auto">'+rows.map(x=>'<label style="display:block"><input type="checkbox" data-batch-word="'+x.id+'" style="width:auto" '+(selectedEntryIds.has(x.id)?'checked':'')+'> '+escapeHtml(x.word)+' · '+escapeHtml(x.meaning||'')+(hasAudio(x)?'（已有录音）':'')+'</label>').join('')+'</div><p><button id="batchGenerate">生成一整段（可能计费）</button> <button id="batchResume">继续上次切分</button> <button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
+ $('#batchSearch').oninput=e=>{const q=e.target.value.toLowerCase();batchDialog.querySelectorAll('[data-batch-word]').forEach(b=>{const x=rows.find(x=>x.id===Number(b.dataset.batchWord));b.parentElement.hidden=![x.word,x.meaning,x.category].join(' ').toLowerCase().includes(q);});};
+ $('#batchResume').onclick=async()=>{if(batchAudioBusy)return;try{const d=JSON.parse(localStorage.getItem(batchDraftKey)||'null');if(!d?.key)throw Error('没有保存的切分草稿');const blob=await ttsCache('readonly',d.key);if(!blob)throw Error('草稿原音频不存在');batchAudioState={...d,blob,buffer:await batchDecode(blob)};batchEditor();}catch(e){batchNotice(e.message);}};
+ $('#batchGenerate').onclick=async()=>{
+  if(batchAudioBusy)return;batchAudioBusy=true;$('#batchGenerate').disabled=true;
+  try{const cache=await cloudCacheRows(),chosen=rows.filter(x=>batchDialog.querySelector('[data-batch-word="'+x.id+'"]')?.checked),words=chosen.filter(x=>!hasAudio(x)&&!cache.some(r=>{try{return JSON.parse(r.key)[1]===x.word;}catch(_){return false;}})).filter((x,i,a)=>a.findIndex(y=>y.word===x.word)===i);
+   if(words.length<2||words.length>20)throw Error('跳过已有音频并去重后，请保留 2–20 个词。当前 '+words.length+' 个。');
+   const text=words.map(x=>x.word).join('.\n\n')+'.';if(text.length>500)throw Error('本批超过服务的 500 字符限制，请减少词数');
+   if(!confirm('将对 '+words.length+' 个词发起一次整段生成请求，可能计费。停顿与朗读顺序需要试听核对。继续？'))return;
+   batchNotice('正在生成整段，请勿关闭…');const key=JSON.stringify([ttsSettings.endpoint||'',text]),blob=await defaultSpeech(text);await ttsCache('readwrite',key,blob);
+   batchAudioState={words:words.map(x=>({id:x.id,word:x.word,meaning:x.meaning})),key,blob,ranges:[]};batchRemember();batchAudioState.buffer=await batchDecode(blob);batchAudioState.ranges=batchRanges(batchAudioState.buffer,words.length,.25)||[];batchRemember();batchEditor();
+  }catch(e){batchNotice(e.message);}finally{batchAudioBusy=false;if($('#batchGenerate'))$('#batchGenerate').disabled=false;}
+ };
+}
+function batchEditor(){
+ const s=batchAudioState;if(batchAudioURL)URL.revokeObjectURL(batchAudioURL);batchAudioURL=URL.createObjectURL(s.blob);
+ batchDialog.innerHTML='<h2>试听与切分</h2><p>总长 '+s.buffer.duration.toFixed(2)+' 秒。停顿识别不等于词语识别；若漏读、重复或顺序错误，请勿保存。</p><audio id="batchFull" controls src="'+batchAudioURL+'" style="width:100%"></audio><p><button id="batchDownload">下载整段原音</button> 停顿阈值（秒）<input id="batchPause" type="number" value="0.25" min="0.1" max="2" step="0.05" style="width:85px"><button id="batchSplit">重新识别停顿</button></p><div id="batchSegments">'+s.words.map((w,i)=>'<section class="batch-segment"><strong>'+escapeHtml(w.word)+' · '+escapeHtml(w.meaning||'')+'</strong><div><label>开始 <input data-start="'+i+'" type="number" min="0" step="0.01" value="'+(s.ranges[i]?.[0]?.toFixed(3)||'')+'"></label><label>结束 <input data-end="'+i+'" type="number" min="0" step="0.01" value="'+(s.ranges[i]?.[1]?.toFixed(3)||'')+'"></label><button data-mark="start" data-i="'+i+'">当前播放点→开始</button><button data-mark="end" data-i="'+i+'">当前播放点→结束</button><button data-preview="'+i+'">试听片段</button><label><input type="checkbox" data-confirm="'+i+'">已试听并确认对应</label></div></section>').join('')+'</div><p><button id="batchSave">保存为各词默认音频</button> <button data-batch-close>暂存并关闭</button></p><p data-batch-status role="status">'+(s.ranges.length?'已提出停顿切分，请逐项试听。':'停顿数与词数不一致，未强行平均切分；请试听整段并填写时间。')+'</p>';
+ const range=i=>{const a=batchDialog.querySelector('[data-start="'+i+'"]'),b=batchDialog.querySelector('[data-end="'+i+'"]');return [a.value===''?NaN:Number(a.value),b.value===''?NaN:Number(b.value)];};
+ const remember=()=>{s.ranges=s.words.map((_,i)=>range(i));batchRemember();};
+ batchDialog.querySelector('[data-batch-close]').onclick=()=>{remember();batchClose();};
+ batchDialog.oninput=e=>{if(e.target.matches('[data-start],[data-end]')){const i=e.target.dataset.start??e.target.dataset.end;batchDialog.querySelector('[data-confirm="'+i+'"]').checked=false;remember();}};
+ $('#batchSplit').onclick=()=>{try{const pause=Number($('#batchPause').value);if(!Number.isFinite(pause)||pause<.1||pause>2)throw Error('停顿阈值应在 0.1–2 秒之间');const ranges=batchRanges(s.buffer,s.words.length,pause);if(!ranges)throw Error('识别到 '+batchSilences(s.buffer,pause).length+' 个内部停顿，需要 '+(s.words.length-1)+' 个；保留现有时间，请手动校正');s.ranges=ranges;batchRemember();$('#batchFull').pause();batchEditor();}catch(e){batchNotice(e.message);}};
+ $('#batchDownload').onclick=()=>{const a=document.createElement('a');a.href=batchAudioURL;a.download='批量原音.wav';a.click();};
+ batchDialog.querySelectorAll('[data-mark]').forEach(b=>b.onclick=()=>{const i=b.dataset.i;batchDialog.querySelector('[data-'+b.dataset.mark+'="'+i+'"]').value=$('#batchFull').currentTime.toFixed(2);batchDialog.querySelector('[data-confirm="'+i+'"]').checked=false;remember();});
+ batchDialog.querySelectorAll('[data-preview]').forEach(b=>b.onclick=async()=>{try{$('#batchFull').pause();const r=range(Number(b.dataset.preview));batchValidate([r],s.buffer.duration);await learningPlayBlob(batchWav(s.buffer,...r));}catch(e){batchNotice(e.message);}});
+ $('#batchSave').onclick=async()=>{if(batchAudioBusy)return;batchAudioBusy=true;$('#batchSave').disabled=true;try{remember();batchValidate(s.ranges,s.buffer.duration);if(s.words.some((_,i)=>!batchDialog.querySelector('[data-confirm="'+i+'"]').checked))throw Error('请逐词试听并勾选确认');const current=await allEntries();if(s.words.some(w=>!current.some(x=>x.id===w.id&&x.word===w.word&&!hasAudio(x))))throw Error('词条已更改、删除或新增录音，请重新核对');const cache=await cloudCacheRows();if(s.words.some(w=>cache.some(r=>{try{return JSON.parse(r.key)[1]===w.word;}catch(_){return false;}})))throw Error('部分词已有默认音频，为避免覆盖，本次未保存');const clips=s.words.map((w,i)=>({key:JSON.stringify([ttsSettings.endpoint||'',w.word]),blob:batchWav(s.buffer,...s.ranges[i])}));await batchSaveClips(clips);localStorage.removeItem(batchDraftKey);batchNotice('已保存 '+clips.length+' 段默认音频，个人录音未改动。请导出备份保存；跨设备使用需手动同步。');$('#batchSave').textContent='已保存';}catch(e){batchNotice(e.message);$('#batchSave').disabled=false;}finally{batchAudioBusy=false;}};
+}
+function batchSaveClips(clips){return new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio'),read=store.getAllKeys();let issue;read.onsuccess=()=>{try{const words=new Set(clips.map(c=>JSON.parse(c.key)[1]));if(read.result.some(k=>{try{return words.has(JSON.parse(k)[1]);}catch(_){return false;}}))throw Error('音频缓存已变化，本次未覆盖');for(const c of clips)store.put(c.blob,c.key);}catch(e){issue=e;tx.abort();}};tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(issue||tx.error);};};});}
+const batchLaunch=document.createElement('button');batchLaunch.type='button';batchLaunch.textContent='批量生成与切分';batchLaunch.onclick=()=>openBatchAudio().catch(e=>alert(e.message));$('#dictionaryPanel').prepend(batchLaunch);
 </script>
 </body>
 </html>

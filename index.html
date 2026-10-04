@@ -183,6 +183,9 @@
 #learningPanel .learn-card-actions[aria-label="整段对话操作"] button{font-size:11px;padding:5px 8px;min-height:28px;border-radius:7px}
 #batchAudioDialog #pageFrom,#batchAudioDialog #pageTo{width:90px;margin:8px}
 @media(max-width:600px){#learningPanel .comm-detail .v2-sentences .learn-card{grid-template-columns:1fr}#learningPanel .comm-detail .v2-sentences .learn-card .learn-card-actions{justify-content:flex-end;padding:0 10px 8px}#learningPanel .v2-section-tabs{max-height:152px;overflow:auto}}
+</style>
+<style>
+#courseEditor .ce-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}#courseEditor button{font-size:13px;padding:8px 12px}#courseEditor .ce-toolbar select{width:auto;max-width:100%}#courseEditor .ce-block{border:1px solid #dbe7e1;border-radius:12px;padding:14px;margin:12px 0;background:#fbfdfb}#courseEditor summary{cursor:pointer;font-weight:600;font-size:15px}#courseEditor label{font-size:13px}#courseEditor fieldset{border:1px solid #e0e9e4;border-radius:10px;margin:14px 0;padding:12px}#courseEditor legend{font-size:12px;color:#688379}#courseEditor textarea{font-size:16px;line-height:1.6}#courseEditor input{font-size:14px}
 </style></head>
 <body>
   <main>
@@ -2700,12 +2703,12 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
  const sectionHtml=s=>(typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
- return '<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
+ return '<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+(learningSettings?'<button data-learn="v2-organize">整理分类／编辑内容</button>':'')+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
  '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
  (lessonV2Mode==='category'?'<nav class="learn-tabs">'+['all',...types].map(t=>'<button data-learn="v2-filter" data-key="'+h(t)+'" aria-current="'+(lessonV2Filter===t?'page':'false')+'">'+h(({all:'全部',knowledge:'知识','word-ref':'词汇',reading:'朗读',sentence:'句子',dialogue:'对话',table:'表格'})[t]||t)+'</button>').join('')+'</nav>'+d.sections.filter(s=>s.blocks.some(b=>lessonV2Filter==='all'||lessonV2Filter===b.contentType)).map(sectionHtml).join(''):(selected?sectionHtml(selected):'<p>本课暂无小节。</p>'));
 }
-async function lessonV2Action(a,b){if(a==='v2-stop-dialogue'){stopPracticeAudio();$('#learningStatus').textContent='已停止播放';return true;}if(a==='v2-section'){lessonV2Sections.set(learningLesson.id,b.dataset.key);lessonV2Mode='order';stopPracticeAudio();await renderLearning();return true;}if(['v2-default-audio','v2-confirm-audio','v2-remove-audio'].includes(a)){const {m,snap}=await learningResolve(b.dataset.id),i=Number(b.dataset.index),ref=m.audioSources[i];if(!ref)throw Error('音频已变化');const next={...m,audioSources:m.audioSources.map(x=>({...x})),updatedAt:Date.now()};if(a==='v2-default-audio'){if(ref.needsReview)throw Error('请先核对这份录音');next.defaultAudioKey=lessonV2AudioKey(ref);}if(a==='v2-confirm-audio'){next.audioSources[i].needsReview=false;next.audioSources[i].recordedText=m.textLao;}if(a==='v2-remove-audio'){if(!confirm('只移除此项目的音频关联，保留音频文件。继续？'))return true;next.audioSources.splice(i,1);}next.audioNeedsReview=next.audioSources.some(x=>x.needsReview);await learningWrite({learningMaterials:[next]},snap);await learningOpenDetail(m.id);return true;}if(a==='v2-order'||a==='v2-category'||a==='v2-filter'){if(a==='v2-filter')lessonV2Filter=b.dataset.key;else lessonV2Mode=a==='v2-order'?'order':'category';await renderLearning();return true;}if(a==='v2-export'){const d=lessonV2Export(await learningSnapshot(),learningLesson),url=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=learningLesson.lessonId+'-v2.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);return true;}if(a==='v2-review-audio'){const {m,snap}=await learningResolve(b.dataset.id);await learningWrite({learningMaterials:[{...m,audioNeedsReview:false,audioSources:m.audioSources.map(a=>({...a,needsReview:false,recordedText:m.textLao})),updatedAt:Date.now()}]},snap);await learningOpenDetail(m.id);return true;}return false;}
+async function lessonV2Action(a,b){if(a==='v2-organize'){await courseEditOpen();return true;}if(a==='v2-stop-dialogue'){stopPracticeAudio();$('#learningStatus').textContent='已停止播放';return true;}if(a==='v2-section'){lessonV2Sections.set(learningLesson.id,b.dataset.key);lessonV2Mode='order';stopPracticeAudio();await renderLearning();return true;}if(['v2-default-audio','v2-confirm-audio','v2-remove-audio'].includes(a)){const {m,snap}=await learningResolve(b.dataset.id),i=Number(b.dataset.index),ref=m.audioSources[i];if(!ref)throw Error('音频已变化');const next={...m,audioSources:m.audioSources.map(x=>({...x})),updatedAt:Date.now()};if(a==='v2-default-audio'){if(ref.needsReview)throw Error('请先核对这份录音');next.defaultAudioKey=lessonV2AudioKey(ref);}if(a==='v2-confirm-audio'){next.audioSources[i].needsReview=false;next.audioSources[i].recordedText=m.textLao;}if(a==='v2-remove-audio'){if(!confirm('只移除此项目的音频关联，保留音频文件。继续？'))return true;next.audioSources.splice(i,1);}next.audioNeedsReview=next.audioSources.some(x=>x.needsReview);await learningWrite({learningMaterials:[next]},snap);await learningOpenDetail(m.id);return true;}if(a==='v2-order'||a==='v2-category'||a==='v2-filter'){if(a==='v2-filter')lessonV2Filter=b.dataset.key;else lessonV2Mode=a==='v2-order'?'order':'category';await renderLearning();return true;}if(a==='v2-export'){const d=lessonV2Export(await learningSnapshot(),learningLesson),url=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=learningLesson.lessonId+'-v2.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);return true;}if(a==='v2-review-audio'){const {m,snap}=await learningResolve(b.dataset.id);await learningWrite({learningMaterials:[{...m,audioNeedsReview:false,audioSources:m.audioSources.map(a=>({...a,needsReview:false,recordedText:m.textLao})),updatedAt:Date.now()}]},snap);await learningOpenDetail(m.id);return true;}return false;}
 </script>
 <script data-learning-bundle="communication">
 let communicationFolder='',communicationScene='';
@@ -2931,6 +2934,69 @@ document.addEventListener('click',async e=>{
  try{if(button.dataset.pageAction==='stop'){lessonPageStop();bar.querySelector('[data-page-status]').textContent='已停止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPagePrepare(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
 });
 document.addEventListener('click',e=>{if(e.target.closest('[data-learn], [data-view]'))lessonPageStop();},true);
+</script>
+<script data-learning-bundle="course-editor">
+/* In-place course organization; dictionary entries and audio blobs are never replaced. */
+function courseEditTags(value){return [...new Set(value.split(/[,，、\n]/).map(x=>x.trim()).filter(Boolean))];}
+function courseEditPlan(data,snap,course){
+ lessonV2Parse(data);
+ const now=Date.now(),rows=[],key=course.packageKey;
+ const oldCourse=snap.learningMaterials.find(m=>m.id==='course:'+course.id);if(!oldCourse)throw Error('课程不存在');
+ rows.push({...oldCourse,courseDefinition:{...oldCourse.courseDefinition,v2SectionIds:data.sections.map(s=>s.id)},updatedAt:now});
+ for(const x of lessonV2Incoming(data)){
+  const old=snap.learningMaterials.find(m=>m.id===x.id);
+  if(!old&&x.kind!=='section')throw Error('编辑器不能创建新的词句，请使用添加内容');
+  const m={...(old||lessonV2Record(x.kind,x.id,x.data.title,x.data)),v2Data:lessonV2Clone(x.data),updatedAt:now};
+  if(x.kind==='section'||x.kind==='block')m.textLao=x.data.title||m.textLao;
+  if(x.kind==='item'&&x.data.itemType!=='word-ref'){m.textLao=x.data.itemType==='table'?x.data.playableText||'表格项目':x.data.textLao;m.translationZh=x.data.translationZh||'';m.note=x.data.note||'';}
+  if(x.kind==='block'&&x.data.contentType==='dialogue'){
+   const block=data.sections.flatMap(s=>s.blocks).find(b=>b.id===x.data.id);
+   m.textLao=block.content.items.map(r=>r.textLao).join('\n')||block.title||'对话';
+  }
+  if(old&&((x.kind==='item'&&old.textLao!==m.textLao)||(x.kind==='block'&&x.data.contentType==='dialogue'&&old.textLao!==m.textLao))){
+   m.audioNeedsReview=true;m.audioSources=(old.audioSources||[]).map(a=>({...a,needsReview:true,recordedText:a.recordedText||old.textLao}));
+  }
+  rows.push(m);
+ }
+ return rows;
+}
+async function courseEditOpen(){
+ if(!learningSettings)throw Error('请先进入课程设置');if(learningHasWork())throw Error('请先完成当前编辑或录音');
+ stopPracticeAudio();
+ const snap=await learningSnapshot(),course=learningLesson,d=lessonV2Export(snap,course),h=learningEsc;
+ learningDraft={kind:'course-editor',dirty:false};let selected=d.sections[0]?.id;
+ const tags=a=>(a||[]).join('、');
+ function collect(){
+  const section=d.sections.find(s=>s.id===selected);if(!section||!$('#ceTitle'))return;
+  section.title=$('#ceTitle').value.trim();section.topics=courseEditTags($('#ceTopics').value);section.roles=courseEditTags($('#ceRoles').value);
+  for(const block of section.blocks){
+   const el=learningDialog.querySelector('[data-ce-block="'+block.id+'"]');if(!el)continue;
+   block.title=el.querySelector('[data-field="title"]').value.trim();
+   for(const field of ['topics','roles','tags'])block[field]=courseEditTags(el.querySelector('[data-field="'+field+'"]').value);
+   for(const r of block.content.items||[]){
+    const row=el.querySelector('[data-ce-item="'+r.itemId+'"]');if(!row)continue;
+    for(const field of ['speaker','textLao','translationZh','note']){const input=row.querySelector('[data-field="'+field+'"]');if(input)r[field]=input.value;}
+   }
+  }
+ }
+ function draw(){
+  const section=d.sections.find(s=>s.id===selected)||d.sections[0];selected=section.id;
+  learningModal('整理分类／编辑内容','<form id="courseEditor"><p class="tag-hint">上方分类按钮是“小节”；下面主题标签是筛选信息。可改名、排序和移动内容，保留原 ID 与音频。</p><div class="ce-toolbar"><select id="ceSelect">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select><button type="button" data-ce="section-up">分类前移</button><button type="button" data-ce="section-down">分类后移</button><button type="button" data-ce="new">＋ 新分类</button></div><label>分类名称<input id="ceTitle" required value="'+h(section.title)+'"></label><div class="two"><label>主题标签（逗号分隔）<input id="ceTopics" value="'+h(tags(section.topics))+'"></label><label>用途标签<input id="ceRoles" value="'+h(tags(section.roles))+'"></label></div>'+
+   section.blocks.map(b=>'<details class="ce-block" data-ce-block="'+h(b.id)+'"><summary>'+h(b.title||b.contentType)+' · 编辑</summary><label>内容组／对话名称<input data-field="title" value="'+h(b.title||'')+'"></label><div class="two">'+['topics','roles','tags'].map((field,i)=>'<label>'+['主题标签','用途标签','词汇标签'][i]+'<input data-field="'+field+'" value="'+h(tags(b[field]))+'"></label>').join('')+'</div><div class="ce-toolbar"><label>移到分类<select data-ce-move="'+h(b.id)+'">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select></label><button type="button" data-ce="block-up" data-block="'+h(b.id)+'">前移</button><button type="button" data-ce="block-down" data-block="'+h(b.id)+'">后移</button></div>'+
+    (b.contentType==='word-ref'?'<p>词汇正文与私人词典共用，请从词条详情修改。此处只调整分组标签，不改私人词典标签。</p>':['dialogue','sentence','reading'].includes(b.contentType)?b.content.items.map((r,i)=>'<fieldset data-ce-item="'+h(r.itemId)+'"><legend>第 '+(i+1)+' 句</legend>'+(b.contentType==='dialogue'?'<label>说话人<input data-field="speaker" value="'+h(r.speaker||'')+'"></label>':'')+'<label>老挝语<textarea data-field="textLao" required rows="2">'+h(r.textLao)+'</textarea></label><label>中文翻译<textarea data-field="translationZh" rows="2">'+h(r.translationZh||'')+'</textarea></label><label>备注<textarea data-field="note" rows="2">'+h(r.note||'')+'</textarea></label></fieldset>').join(''):'<p>此类正文请从原有详情或导入功能编辑。</p>')+'</details>').join('')+'<p>修改老挝语后，原录音不会删除，但会标记为待核对；中文翻译和标签修改不会影响发音。</p><button class="primary" type="submit">保存全部修改</button><button type="button" data-learn="close">取消</button></form>');
+  $('#courseEditor').oninput=()=>learningDraft.dirty=true;
+  $('#ceSelect').onchange=e=>{collect();selected=e.target.value;draw();};
+  $('#courseEditor').onclick=e=>{
+   const b=e.target.closest('[data-ce]');if(!b)return;collect();const a=b.dataset.ce;
+   if(a==='new'){const s={id:'section-'+crypto.randomUUID(),title:'新分类',topics:[],roles:[],blocks:[]};d.sections.push(s);selected=s.id;}
+   else{const list=a.startsWith('section')?d.sections:d.sections.find(s=>s.id===selected).blocks,id=a.startsWith('section')?selected:b.dataset.block,i=list.findIndex(x=>x.id===id),j=i+(a.endsWith('up')?-1:1);if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];}
+   learningDraft.dirty=true;draw();
+  };
+  $('#courseEditor').onchange=e=>{if(!e.target.matches('[data-ce-move]'))return;collect();const from=d.sections.find(s=>s.id===selected),to=d.sections.find(s=>s.id===e.target.value),i=from.blocks.findIndex(b=>b.id===e.target.dataset.ceMove);if(to&&to!==from&&i>=0){to.blocks.push(from.blocks.splice(i,1)[0]);learningDraft.dirty=true;draw();}};
+  $('#courseEditor').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;collect();learningBusy=true;try{const rows=courseEditPlan(d,snap,course);await learningWrite({learningMaterials:rows},snap);learningDraft=null;learningDialog.close();await renderLearning();$('#learningStatus').textContent='分类与内容已保存；原有音频已保留。';}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{learningBusy=false;}};
+ }
+ draw();
+}
 </script>
 </body>
 </html>

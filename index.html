@@ -686,7 +686,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function syncKeys(item) { return [...new Set([item.syncId,...(Array.isArray(item.syncAliases)?item.syncAliases:[])].filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim()))]; }
     function sameWord(a,b) { return a.word.normalize('NFC').trim()===b.word.normalize('NFC').trim(); }
     function syncIdentityKey(item) { return JSON.stringify([item.word,item.ipa||'',item.meaning||''].map(x=>x.normalize('NFC').trim())); }
-    function planSync(current,incoming,resolveConflict) {
+    function planSync(current,incoming,resolveConflict,reviewChoice) {
       const rows=current.map(x=>({...x})),writes=new Set();let added=0,updated=0,unchanged=0,skipped=0,linked=0;
       for(const item of incoming) {
         const keys=syncKeys(item);
@@ -697,9 +697,9 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         if(!candidates.length)candidates=rows.filter(x=>sameWord(x,item));
         if(candidates.length>1){skipped++;continue;}
         const existing=candidates[0];
-        if(!existing){rows.push({...item});writes.add(rows.length-1);added++;continue;}
+        if(!existing){if(reviewChoice&&reviewChoice(null,item,true,'incoming')==='skip'){skipped++;continue;}rows.push({...item});writes.add(rows.length-1);added++;continue;}
         let choice;
-        if(trusted)choice=Number(item.updatedAt)>Number(existing.updatedAt)?'incoming':'local';
+        if(trusted){choice=Number(item.updatedAt)>Number(existing.updatedAt)?'incoming':'local';if(reviewChoice)choice=reviewChoice(existing,item,true,choice);}
         else {
           choice=resolveConflict(existing,item);
           if(choice==='cancel')return null;
@@ -722,6 +722,41 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
       const answer=prompt(`发现疑似同一词条“${incoming.word}”，但同步编号不同。\n\n本机：\n${describe(local)}\n\n备份：\n${describe(incoming)}\n\n输入 1：关联并使用备份内容（包含录音，会替换本机版本）\n输入 2：关联并保留本机内容\n输入 3：确实是不同词条，另外新增\n输入其他内容：跳过此词条\n取消：取消本次导入，词条不变。`,'2');
       return answer===null?'cancel':({'1':'incoming','2':'local','3':'separate'}[answer.trim()]||'skip');
     }
+/* A read-only preview collects decisions before the existing import transaction. */
+function backupReviewDiff(local,incoming){
+ const ignored=new Set(['id','updatedAt','syncId','syncAliases']);
+ return [...new Set([...Object.keys(local||{}),...Object.keys(incoming||{})])].filter(k=>!ignored.has(k)&&JSON.stringify(local?.[k])!==JSON.stringify(incoming?.[k]));
+}
+function backupReviewValue(key,value){
+ if(value===undefined)return '（无）';
+ if(/audio|blob|image/i.test(key))return value?(Array.isArray(value)?value.length+' 项音频／图片资料':'有音频／图片资料'):'无';
+ const text=typeof value==='string'?value:JSON.stringify(value,null,2);
+ return text.length>16000?text.slice(0,16000)+'\n（内容较长，预览已截断）':text;
+}
+function backupReviewCollector(){
+ const rows=[],keys=new Map();
+ const add=(key,kind,local,incoming,defaultChoice='incoming',uncertain=false)=>{
+  const fields=backupReviewDiff(local,incoming);
+  if(local&&!fields.length&&!uncertain)return 'local';
+  if(!keys.has(key)){keys.set(key,rows.length);rows.push({key,kind,local,incoming,fields,choice:defaultChoice,uncertain});}
+  return rows[keys.get(key)].choice;
+ };
+ return {rows,add};
+}
+function backupReviewDialog(rows,summary){return new Promise(resolve=>{
+ const dialog=document.createElement('dialog');dialog.style.cssText='width:min(1050px,94vw);max-height:88vh;overflow:auto';
+ const h=escapeHtml;
+ dialog.innerHTML='<h2>确认导入变更</h2><p>'+h(summary)+'</p><p>勾选＝使用备份；取消勾选＝保留本机（新内容则跳过）。确认之前不会保存。默认遵循词条更新时间，课程冲突默认保留本机。请注意录音替换和删除标记。</p><p><button data-all>全选：使用全部备份变更</button> <button data-none>全部保留本机</button></p><p data-count role="status"></p><div data-list style="max-height:52vh;overflow:auto"></div><p><button data-apply>确认所选并导入</button> <button data-cancel>取消导入</button></p>';
+ const list=dialog.querySelector('[data-list]');
+ list.innerHTML=rows.map((r,i)=>'<section style="border-top:1px solid #d5e3df;padding:10px 0"><label><input type="checkbox" data-choice="'+i+'" '+(r.choice==='incoming'?'checked':'')+'> '+h(r.kind)+' · '+h(r.incoming.word||r.incoming.textLao||r.incoming.name||r.key)+' '+(!r.local?'（新增）':r.uncertain?'（同名但编号不同）':'（修改）')+'</label>'+(r.uncertain?'<select data-identity="'+i+'"><option value="link">确认是同一词条，关联编号</option><option value="separate">是不同词条，另行新增</option><option value="skip" selected>暂不处理</option></select>':'')+'<details><summary>查看 '+r.fields.length+' 个字段的差异</summary>'+r.fields.map(k=>'<div style="margin:10px 0"><strong>'+h(({category:'标签',meaning:'中文',translationZh:'中文',note:'备注',v2Data:'章节／句子结构',courseDefinition:'课程结构',deleted:'移出课程',audioDataUrl:'个人录音',audioSources:'音频关联'})[k]||k)+'</strong><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><pre style="white-space:pre-wrap;overflow-wrap:anywhere">本机：'+h(backupReviewValue(k,r.local?.[k]))+'</pre><pre style="white-space:pre-wrap;overflow-wrap:anywhere">备份：'+h(backupReviewValue(k,r.incoming[k]))+'</pre></div></div>').join('')+'</details></section>').join('')||'<p>没有文字或课程变更；仍会恢复备份中的默认音频和合并学习进度。</p>';
+ const count=()=>dialog.querySelector('[data-count]').textContent='共 '+rows.length+' 项变更，已选 '+rows.filter(r=>r.choice==='incoming').length+' 项使用备份。';
+ list.onchange=e=>{if(e.target.dataset.choice!==undefined){const r=rows[Number(e.target.dataset.choice)];r.choice=e.target.checked?'incoming':'local';if(r.uncertain){r.identity=e.target.checked?'link':'skip';dialog.querySelector('[data-identity="'+e.target.dataset.choice+'"]').value=r.identity;}}if(e.target.dataset.identity!==undefined)rows[Number(e.target.dataset.identity)].identity=e.target.value;count();};
+ dialog.querySelector('[data-all]').onclick=()=>{rows.forEach(r=>{r.choice='incoming';if(r.uncertain)r.identity='link';});dialog.querySelectorAll('[data-choice]').forEach(c=>c.checked=true);dialog.querySelectorAll('[data-identity]').forEach(c=>c.value='link');count();};
+ dialog.querySelector('[data-none]').onclick=()=>{rows.forEach(r=>{r.choice='local';if(r.uncertain)r.identity='skip';});dialog.querySelectorAll('[data-choice]').forEach(c=>c.checked=false);dialog.querySelectorAll('[data-identity]').forEach(c=>c.value='skip');count();};
+ const finish=value=>{dialog.close();dialog.remove();resolve(value);};
+ dialog.querySelector('[data-apply]').onclick=()=>finish(true);dialog.querySelector('[data-cancel]').onclick=()=>finish(false);dialog.addEventListener('cancel',e=>{e.preventDefault();finish(false);});
+ document.body.append(dialog);count();dialog.showModal();
+});}
     let backupBusy=false;
     async function importBackup(file) {
       if(!file||backupBusy)return;
@@ -732,24 +767,33 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         const backup=JSON.parse(await file.text());
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
         const codaIncoming=validateCodaProgress(backup.codaProgress);
-        const learningBefore=await learningSnapshot(),learningIncoming=await learningPrepareBackup(backup.learning);
-        if(backup.version===3&&!learningIncoming)throw new Error('新版备份缺少学习材料。');
+        const learningBefore=await learningSnapshot(),review=backupReviewCollector();
+        const learningChoice=(kind,old,row)=>review.add(kind+':'+row.id,kind==='learningPlacements'?'课程归属':'学习材料',old,row,old?'local':'incoming')==='incoming'?'2':'1';
+        await learningPrepareBackup(backup.learning,learningChoice,learningBefore);
+        if(backup.version===3&&!backup.learning)throw new Error('新版备份缺少学习材料。');
         const alphabetBefore=await readAlphabetOverrides(),alphabetIncoming=validateAlphabetOverrides(backup.alphabetCells===undefined?{}:backup.alphabetCells),alphabetAfter={...alphabetBefore};
         for(const [key,value] of Object.entries(alphabetIncoming)){
-          if(Object.hasOwn(alphabetBefore,key)&&alphabetBefore[key]!==value){
-            const choice=prompt('字母表格子 '+key+' 与备份不同。\n本机：'+JSON.stringify(alphabetBefore[key])+'\n备份：'+JSON.stringify(value)+'\n输入 1 保留本机，输入 2 使用备份；取消停止导入。','1');
-            if(choice===null||!['1','2'].includes(choice.trim()))return;
-            if(choice.trim()==='1')continue;
-          }
-          alphabetAfter[key]=value;
+          if(alphabetBefore[key]!==value)review.add('alphabet:'+key,'字母表',Object.hasOwn(alphabetBefore,key)?{value:alphabetBefore[key]}:null,{value},Object.hasOwn(alphabetBefore,key)?'local':'incoming');
         }
-        if(!confirm(`将同步 ${backup.entries.length} 个词条及默认音频。已关联词条按最后保存时间更新；疑似相同的旧词条会请你确认，不会直接重复新增。是否继续？`))return;
         const preparedAudio=prepareDefaultAudio(backup),incoming=[];
         for(const raw of backup.entries){
           const audio=await audioPayload(raw.audio?dataURLToBlob(raw.audio):null);
           incoming.push({...codaEntryFields(raw),learningState:['yellow','green','red'].includes(raw.learningState)?raw.learningState:undefined,noteImages:validateNoteImages(raw.noteImages),word:raw.word.trim(),ipa:typeof raw.ipa==='string'?raw.ipa:'',meaning:raw.meaning.trim(),category:typeof raw.category==='string'?raw.category:'',note:typeof raw.note==='string'?raw.note:'',syncId:typeof raw.syncId==='string'&&raw.syncId.trim()?raw.syncId.trim():newSyncId(),syncAliases:syncKeys(raw),...audio,updatedAt:Number(raw.updatedAt)||0,mistakes:Math.max(0,Number(raw.mistakes)||0),reviews:Math.max(0,Number(raw.reviews)||0),correct:Math.max(0,Number(raw.correct)||0),needsExtraPractice:Boolean(raw.needsExtraPractice),lastReviewed:Math.max(0,Number(raw.lastReviewed)||0),reviewStats:raw.reviewStats&&typeof raw.reviewStats==='object'?raw.reviewStats:{}});
         }
-        const current=await allEntries(),plan=planSync(current,incoming,askSyncConflict);
+        const current=await allEntries();
+        if(preparedAudio.length)review.add('defaultAudio','默认音频恢复',null,{name:'恢复备份中的默认音频（可能替换相同缓存键）',count:preparedAudio.length},'incoming');
+        review.add('codaProgress','学习进度',null,{name:'合并备份中的学习进度'},'incoming');
+        const entryKey=item=>'entry:'+item.syncId;
+        const entryChoice=(old,item,trusted,recommended)=>review.add(entryKey(item),'词条',old,item,recommended,!trusted);
+        const previewPlan=planSync(current,incoming,(old,item)=>{entryChoice(old,item,false,'local');return 'local';},entryChoice);
+        if(!await backupReviewDialog(review.rows,'备份含 '+incoming.length+' 个词条、'+preparedAudio.length+' 段默认音频。默认音频将恢复，学习进度将合并。'+(previewPlan.skipped?'另有 '+previewPlan.skipped+' 项存在多个同名候选，会跳过，不自动合并。':'')))return;
+        const decisions=new Map(review.rows.map(r=>[r.key,r]));
+        let learningIncoming;
+        try{learningIncoming=await learningPrepareBackup(backup.learning,(kind,old,row)=>decisions.get(kind+':'+row.id)?.choice==='incoming'?'2':'1',learningBefore);}catch(error){throw Error('所选课程变更无法完整导入：'+error.message+'。请重新导入，并一起勾选相关课程、小节和句子；本次尚未保存。');}
+        for(const [key,value] of Object.entries(alphabetIncoming))if(decisions.get('alphabet:'+key)?.choice==='incoming')alphabetAfter[key]=value;
+        const trustedChoice=(old,item,trusted,recommended)=>{const r=decisions.get(entryKey(item));return r?(r.choice==='incoming'?'incoming':old?'local':'skip'):recommended;};
+        for(const item of incoming)if(decisions.get(entryKey(item))?.choice==='incoming')item.updatedAt=Math.max(Date.now(),Number(item.updatedAt)||0,...current.filter(x=>syncKeys(x).some(k=>syncKeys(item).includes(k))).map(x=>Number(x.updatedAt)||0))+1;
+        const plan=planSync(current,incoming,(old,item)=>{const r=decisions.get(entryKey(item));return !r||!r.identity||r.identity==='skip'?'skip':r.identity==='separate'?'separate':r.choice;},trustedChoice);
         if(!plan){$('#backupStatus').textContent='已取消导入，词条未修改。';return;}
         const database=await openDB(),tx=database.transaction([storeName,'cloud_meta',...learningStores],'readwrite'),done=transactionDone(tx),store=tx.objectStore(storeName);
         const chart=tx.objectStore('cloud_meta').get('alphabetCells');
@@ -759,9 +803,10 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         check.onsuccess=()=>{
           const before=JSON.stringify(current.slice().sort((a,b)=>a.id-b.id)),now=JSON.stringify(check.result.slice().sort((a,b)=>a.id-b.id));
           if(before!==now||!cloudSame(chart.result||{},alphabetBefore)||learningChecks.some(([s,r])=>!cloudSame(r.result,learningBefore[s]))){tx.abort();return;}
-          try{learningRestoreTransaction(tx,learningIncoming);for(const item of plan.writes)store.put(item);tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');tx.objectStore('cloud_meta').put(mergeCodaProgress(codaBefore.result||{},codaIncoming),'codaProgress');}catch(_){tx.abort();}
+          try{learningRestoreTransaction(tx,learningIncoming);for(const item of plan.writes)store.put(item);tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');if(decisions.get('codaProgress')?.choice==='incoming')tx.objectStore('cloud_meta').put(mergeCodaProgress(codaBefore.result||{},codaIncoming),'codaProgress');}catch(_){tx.abort();}
         };
         await done;committed=true;
+        if(decisions.get('defaultAudio')?.choice!=='incoming')preparedAudio.length=0;
         await restoreDefaultAudio(preparedAudio);await requestPersistentStorage();
         $('#backupStatus').textContent=`同步完成：新增 ${plan.added} 个，更新 ${plan.updated} 个，保留本机 ${plan.unchanged} 个，建立关联 ${plan.linked} 个；恢复 ${preparedAudio.length} 段默认音频。${plan.skipped?'另有 '+plan.skipped+' 个未处理（包括多条同名候选），请保留备份并核对；没有自动删除或合并这些词条。':''}`;
         await render();choosePractice();if(activeView==='alphabet')await renderAlphabet();if(activeView==='learning')await renderLearning();
@@ -2293,10 +2338,10 @@ function learningValidateRecord(kind,row){
  if(kind==='learningAudio'&&(!(row.blob instanceof Blob)||!row.blob.size||row.blob.size>20971520||!row.blob.type.startsWith('audio/')))throw new Error('教材或跟读音频无效／超过 20 MiB。');
  return row;
 }
-async function learningPrepareBackup(value){
- if(value===undefined)return null;const snap=await learningSnapshot(),out={};
+async function learningPrepareBackup(value,resolveConflict,before){
+ if(value===undefined)return null;const snap=before||await learningSnapshot(),out={};
  for(const kind of learningStores){if(!Array.isArray(value[kind])||value[kind].length>50000)throw new Error('学习材料备份不完整。');const incoming=value[kind].map(raw=>{const row={...raw};if(kind==='learningAudio'){row.blob=dataURLToBlob(row.audio);delete row.audio;}return learningValidateRecord(kind,row);});const map=new Map(snap[kind].map(x=>[x.id,x]));
-  for(const row of incoming){const old=map.get(row.id);if(old){const oldText=kind==='learningAudio'?{...old,blob:await blobToDataURL(old.blob)}:old,newText=kind==='learningAudio'?{...row,blob:await blobToDataURL(row.blob)}:row;if(!cloudSame(oldText,newText)){const answer=prompt('学习材料“'+(row.textLao||row.name||row.id)+'”与本机不同。输入 1 保留本机，2 使用备份；取消停止导入。','1');if(answer===null||!['1','2'].includes(answer.trim()))throw new Error('已取消学习材料导入。');if(answer.trim()==='1')continue;}}map.set(row.id,row);}out[kind]=[...map.values()];}
+  for(const row of incoming){const old=map.get(row.id);if(old){const oldText=kind==='learningAudio'?{...old,blob:await blobToDataURL(old.blob)}:old,newText=kind==='learningAudio'?{...row,blob:await blobToDataURL(row.blob)}:row;if(!cloudSame(oldText,newText)){const answer=resolveConflict?resolveConflict(kind,oldText,newText):prompt('学习材料“'+(row.textLao||row.name||row.id)+'”与本机不同。输入 1 保留本机，2 使用备份；取消停止导入。','1');if(answer===null||!['1','2'].includes(answer.trim()))throw new Error('已取消学习材料导入。');if(answer.trim()==='1')continue;}}else if(resolveConflict&&resolveConflict(kind,null,row)==='1')continue;map.set(row.id,row);}out[kind]=[...map.values()];}
  learningValidateLinks(out);return out;
 }
 function learningValidateLinks(snap){if(typeof lessonV2ValidateLinks==='function')lessonV2ValidateLinks(snap);const assets=new Set(snap.learningAudio.map(x=>x.id)),materials=new Set(snap.learningMaterials.map(x=>x.id));for(const m of snap.learningMaterials)for(const a of m.audioSources)if(a.source!=='gemini'&&!assets.has(a.assetId))throw new Error('学习材料缺少对应音频，请保留完整备份。');for(const p of snap.learningPlacements)if(p.materialId!=='knowledge:lesson1'&&!materials.has(p.materialId))throw new Error('课程引用的材料缺失。');}

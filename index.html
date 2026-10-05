@@ -421,7 +421,7 @@ async function importCodaClassroom(){
       requestAnimationFrame(()=>{if(activeView===origin.view)window.scrollTo({top:origin.scroll,behavior:'instant'});});
     }
     function showView(view) {
-      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel',coda:'codaPanel',learning:'learningPanel'};
+      const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel',coda:'codaPanel',learning:'learningPanel',pronunciation:'pronunciationPanel'};
       if(!panels[view])return;
       if(activeView==='add'&&view!=='add'&&recorder){alert('请先停止录音，等试听按钮可用后再切换页面。');return;}
       if(view==='add'&&typeof rememberEntryOrigin==='function')rememberEntryOrigin();
@@ -430,6 +430,7 @@ async function importCodaClassroom(){
       activeView=view;
       if(view==='alphabet')viewReady=renderAlphabet();
       if(view==='learning')viewReady=renderLearning().catch(learningError);
+      if(view==='pronunciation')viewReady=renderPronunciation();
       Object.entries(panels).forEach(([name,id])=>$('#'+id).classList.toggle('hidden',name!==view&&!(view==='add'&&name==='dictionary')));
       $('.grid').classList.toggle('add-view',view==='add');
       if(view!=='practice')stopPracticeAudio();
@@ -3215,6 +3216,88 @@ async function batchOpenContent(mode){
  draw();
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-batch-mode]');if(!b||batchAudioBusy)return;try{if(b.dataset.batchMode==='words')await openBatchAudio();else await batchOpenContent(b.dataset.batchMode);}catch(error){batchNotice(error.message);}});
+</script>
+<style data-pronunciation-bundle="styles">
+#pronunciationPanel{grid-column:1/-1}#pronunciationPanel h2{margin:12px 0 22px}#pronunciationPanel h3{font-size:17px;margin:26px 0 12px}.pron-intro,.pron-footnote,.pron-notes{color:var(--muted,#637a76);font-size:14px;line-height:1.7}.pron-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.pron-entry{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:28px!important;text-align:left;background:#edf7f3!important;border:1px solid #d8e8e3!important}.pron-entry strong{font-size:24px}.pron-entry span{font-size:15px;color:#657b76}.pron-entry small{align-self:flex-end;color:#087f6e}.pron-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#637a76;font-size:14px;margin-bottom:16px}#pronunciationPanel .pron-section-heading button,#pronunciationPanel .pron-back{font-size:14px;padding:6px 10px;min-height:34px}.pron-matrix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pron-matrix.pron-three{grid-template-columns:repeat(3,minmax(0,1fr))}.pron-column{font-size:14px;color:#637a76;padding:8px}.pron-card{position:relative;border:1px solid #dce9e5;border-radius:14px;background:#fff;overflow:hidden}.pron-card:hover{border-color:#58a798;background:#f4faf7}#pronunciationPanel .pron-card-main{display:flex;flex-direction:column;gap:15px;align-items:flex-start;text-align:left;border:0;background:transparent;width:100%;padding:19px 18px;min-height:140px}.pron-card-main span{font-size:13px;color:#637a76;padding-right:26px}.pron-card-main strong{font-size:28px;color:#087f6e}.pron-card-main small{font-size:12px;align-self:flex-end;color:#637a76}#pronunciationPanel .pron-play{position:absolute;right:10px;top:10px;padding:5px 9px;min-height:32px;font-size:14px;border:0;background:#edf7f3}.pron-notes{margin-top:20px}.pron-footnote{margin-top:26px;font-size:12px}.pron-combination{color:#637a76}.pron-rule{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-size:14px;background:#edf7f3;padding:16px;border-radius:12px}.pron-rule dt{color:#637a76;font-size:12px}.pron-rule dd{margin:8px 0 0}.pron-example{display:flex;align-items:center;gap:10px;border-bottom:1px solid #e4eeea;padding:12px 0}.pron-example>span{flex:1}.pron-example small{display:block;font-size:12px;color:#637a76;margin-bottom:5px}.pron-example b{font-size:23px;font-weight:500}#pronunciationPanel .pron-example button{padding:5px 10px;font-size:13px;min-height:32px}#pronunciationStatus{font-size:14px;color:#087f6e;line-height:1.6}#pronunciationPanel button:focus-visible{outline:3px solid #087f6e;outline-offset:2px}@media(max-width:600px){.pron-entries{grid-template-columns:1fr}.pron-entry{padding:22px!important}.pron-matrix{gap:7px}.pron-card-main span{font-size:11px;padding-right:0;padding-top:26px}#pronunciationPanel .pron-card-main{padding:12px 9px;min-height:160px}.pron-card-main strong{font-size:23px}.pron-column{font-size:12px;padding:5px}.pron-rule{grid-template-columns:repeat(2,1fr)}.pron-section-heading{align-items:flex-start}.pron-example{flex-wrap:wrap}.pron-example .pron-manage{font-size:12px!important}}
+</style>
+<script data-pronunciation-bundle="script">
+/* Rules follow the user's supplied textbook, not a dialect-independent tone numbering. */
+const pronunciationClasses={middle:'中辅音',low:'低辅音',high:'高辅音'};
+const pronunciationInitials={middle:'ກ',low:'ຄ',high:'ຂ'};
+const pronunciationMarks={none:'无声调符号','່':'第一声调符号 ່','້':'第二声调符号 ້'};
+let pronunciationRoute='home',pronunciationSelection=null;
+const pronunciationPanel=document.createElement('section');
+pronunciationPanel.id='pronunciationPanel';pronunciationPanel.className='panel hidden';
+document.querySelector('.grid').append(pronunciationPanel);
+const pronunciationNav=document.createElement('button');pronunciationNav.type='button';pronunciationNav.dataset.view='pronunciation';pronunciationNav.textContent='老语发音';
+document.querySelector('#viewNav [data-view="alphabet"]').after(pronunciationNav);
+function pronunciationTone(kind,group,length,mark='none'){
+ if(kind==='dead')return CodaLesson.deadTones[group][length];
+ if(kind==='nocoda'&&length==='short')return '短调';
+ return CodaLesson.liveTones[group][mark];
+}
+function pronunciationExamples(kind,group,length,mark='none'){
+ if(kind==='dead')return CodaLesson.drillRows.find(r=>r.initialClass===group&&r.vowelLength===length).forms;
+ const initial=pronunciationInitials[group],sign=mark==='none'?'':mark;
+ if(kind==='live')return [length==='short'?initial+'ັ'+sign+'ງ':initial+sign+'າງ'];
+ return [initial+(length==='short'?'ະ':sign+'າ')];
+}
+function pronunciationButton(route,title,note){return `<button type="button" class="pron-entry" data-pron-route="${route}"><strong>${title}</strong><span>${note}</span><small>进入 ›</small></button>`;}
+function pronunciationCard(kind,group,length,mark='none'){
+ const key=[kind,group,length,mark].join('|'),tone=pronunciationTone(kind,group,length,mark),example=pronunciationExamples(kind,group,length,mark)[0];
+ return `<div class="pron-card"><button type="button" class="pron-card-main" data-pron-detail="${key}"><span>${pronunciationClasses[group]} · ${kind==='live'?'短 / 长元音':length==='short'?'短元音':'长元音'}</span><strong>${tone}</strong><small>详情 ›</small></button><button type="button" class="pron-play" data-pron-play="${example}" aria-label="试听 ${example}">▶</button></div>`;
+}
+function pronunciationMatrix(kind,marked=false){
+ const columns=marked?Object.keys(pronunciationMarks):['short','long'];
+ return `<div class="pron-matrix ${marked?'pron-three':''}">${columns.map(c=>`<div class="pron-column">${marked?pronunciationMarks[c]:c==='short'?'短元音'+(kind==='nocoda'?' · 死音节':''):'长元音'+(kind==='nocoda'?' · 开音节':'')}</div>`).join('')}${Object.keys(pronunciationClasses).map(group=>columns.map(c=>pronunciationCard(kind,group,marked?'long':c,marked?c:'none')).join('')).join('')}</div>`;
+}
+function pronunciationExampleRow(text,label=''){
+ return `<div class="pron-example"><span>${label?`<small>${label}</small>`:''}<b lang="lo">${text}</b></span><button type="button" data-pron-play="${text}" aria-label="试听 ${text}">▶</button><button type="button" class="pron-manage" data-pron-manage="${text}">录音 / 管理</button></div>`;
+}
+function renderPronunciation(){
+ let title='老语发音',html='';
+ if(pronunciationRoute==='home')html=`<p class="pron-intro">先看音节结构，再看组合的声调。</p><div class="pron-entries">${pronunciationButton('nocoda','辅音 + 元音','无尾辅音')}${pronunciationButton('closed','辅音 + 元音 + 辅音','有尾辅音')}</div>`;
+ if(pronunciationRoute==='closed'){title='辅音 + 元音 + 辅音';html=`<div class="pron-entries">${pronunciationButton('dead','死闭音节','尾辅音：ກ · ດ · ບ')}${pronunciationButton('live','活闭音节','活尾辅音：ງ · ນ · ມ · ຍ · ວ')}</div>`;}
+ if(pronunciationRoute==='nocoda'){title='辅音 + 元音';html=`<div class="pron-section-heading"><span>无尾辅音 · 无声调符号</span><button type="button" data-pron-route="openmarks">长元音：声调符号 ›</button></div>${pronunciationMatrix('nocoda')}<details class="pron-notes"><summary>开音节与死音节</summary><p>开音节：以长元音直接结尾，没有尾辅音。当前教材中可以出现声调符号，声调可以变化。</p><p>死音节：以短元音直接结尾，没有尾辅音。当前课程按教材规则学习；本阶段不加声调符号，少量感叹词、象声词例外另学。</p></details>`;}
+ if(pronunciationRoute==='dead'){title='死闭音节';html=`<p class="pron-intro">尾辅音：ກ · ດ · ບ</p>${pronunciationMatrix('dead')}`;}
+ if(pronunciationRoute==='live'){title='活闭音节';html=`<p class="pron-intro">短、长元音使用相同声调规则，只改变元音长度。</p>${pronunciationMatrix('live',true)}`;}
+ if(pronunciationRoute==='openmarks'){title='开音节 · 声调符号';html=`<p class="pron-intro">长元音结尾，无尾辅音。</p>${pronunciationMatrix('openmarks',true)}`;}
+ if(pronunciationRoute==='detail'){
+  const {kind,group,length,mark}=pronunciationSelection,tone=pronunciationTone(kind,group,length,mark),tail=kind==='dead'?'死尾辅音':kind==='live'?'活尾辅音':'无尾辅音';
+  title=tone;
+  const examples=pronunciationExamples(kind,group,length,mark);
+  html=`<p class="pron-combination">${pronunciationClasses[group]} + ${kind==='live'?'短 / 长元音':length==='short'?'短元音':'长元音'}${kind==='dead'||kind==='live'?' + '+tail:''}${mark!=='none'?' + '+pronunciationMarks[mark]:''}</p><h3>规则</h3><dl class="pron-rule"><div><dt>开头辅音</dt><dd>${pronunciationClasses[group]}</dd></div><div><dt>元音</dt><dd>${kind==='live'?'短 / 长（声调相同）':length==='short'?'短元音':'长元音'}</dd></div><div><dt>尾辅音</dt><dd>${tail}</dd></div><div><dt>声调符号</dt><dd>${pronunciationMarks[mark]}</dd></div></dl><h3>示范拼读</h3>${examples.map(t=>pronunciationExampleRow(t)).join('')}<h3>对比试听</h3>${kind==='openmarks'?'<p class="pron-intro">这里对比无声调符号的短、长元音。</p>':''}${['short','long'].map(l=>pronunciationExampleRow(pronunciationExamples(kind,group,l,kind==='openmarks'?'none':mark)[0],(l==='short'?'短元音':'长元音')+' · '+pronunciationTone(kind==='openmarks'?'nocoda':kind,group,l,kind==='openmarks'?'none':mark))).join('')}<p class="pron-intro">▶ 优先试听已有参考录音或已保存的默认发音。缺音频时可进入“录音 / 管理”；不会自动生成或计费。合成音仅供辅助，声调请以教材或老师示范为准。</p>`;
+ }
+ const parent=pronunciationRoute==='detail'?pronunciationSelection.kind:pronunciationRoute==='dead'||pronunciationRoute==='live'?'closed':pronunciationRoute==='openmarks'?'nocoda':'home';
+ pronunciationPanel.innerHTML=`${pronunciationRoute!=='home'?`<button type="button" class="pron-back" data-pron-route="${parent}">← 返回</button>`:''}<h2>${title}</h2>${html}<p id="pronunciationStatus" role="status" aria-live="polite"></p><footer class="pron-footnote">按所提供教材的声调命名与本阶段规则学习。</footer>`;
+}
+async function pronunciationPlay(text){
+ const snap=await learningSnapshot();
+ for(const m of snap.learningMaterials.filter(m=>!m.deleted&&m.textLao===text)){
+  const refs=(m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).slice().reverse();
+  for(const ref of refs){const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);if(asset?.blob){await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);return;}}
+ }
+ const word=(await allEntries()).find(w=>w.word===text&&hasAudio(w));
+ if(word){await learningPlayBlob(audioBlobFor(word));return;}
+ const cached=await learningCachedSpeech(text);if(cached){await learningPlayBlob(cached);return;}
+ throw Error('“'+text+'”尚无已保存音频。请打开详情中的“录音 / 管理”添加；本次未调用语音生成。');
+}
+async function pronunciationManage(text){
+ const snap=await learningSnapshot();let material=snap.learningMaterials.find(m=>!m.deleted&&m.textLao===text);
+ if(!material){const word=(await allEntries()).find(w=>w.word===text);if(word){await learningOpenDetail('word:'+word.syncId);return;}
+ material={...learningBlank('pronunciation:'+encodeURIComponent(text),'reading_drill',text),tags:['语音与拼读'],note:'老语发音页面的教材拼读示范；不自动加入私人词典。'};
+ await learningWrite({learningMaterials:[material]},snap);}
+ await learningOpenDetail(material.id);
+}
+pronunciationPanel.addEventListener('click',async event=>{
+ const b=event.target.closest('button');if(!b)return;
+ try{
+  if(b.dataset.pronRoute){stopPracticeAudio();pronunciationRoute=b.dataset.pronRoute;renderPronunciation();}
+  else if(b.dataset.pronDetail){stopPracticeAudio();const [kind,group,length,mark]=b.dataset.pronDetail.split('|');pronunciationSelection={kind,group,length,mark};pronunciationRoute='detail';renderPronunciation();}
+  else if(b.dataset.pronPlay){document.querySelector('#pronunciationStatus').textContent='正在读取已保存音频…';await pronunciationPlay(b.dataset.pronPlay);document.querySelector('#pronunciationStatus').textContent='正在试听：'+b.dataset.pronPlay;}
+  else if(b.dataset.pronManage)await pronunciationManage(b.dataset.pronManage);
+ }catch(error){document.querySelector('#pronunciationStatus').textContent=error.message;}
+});
 </script>
 </body>
 </html>

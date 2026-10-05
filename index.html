@@ -3230,7 +3230,12 @@ const pronunciationInitials={middle:'ກ',low:'ຄ',high:'ຂ'};
 const pronunciationMarks={none:'无声调符号','່':'第一声调符号 ່','້':'第二声调符号 ້'};
 let pronunciationRoute='home',pronunciationSelection=null;
 let pronunciationConcept='middle';
+let pronunciationDetailOrigin=null;
 const pronunciationConcepts={
+ noCoda:['辅音 + 元音','','无尾辅音。短元音直接结尾为本教材的死音节；长元音直接结尾为开音节。请在总览中直接双击声调查看组合详情。'],
+ deadSyllable:['死音节','','短元音直接结尾，没有尾辅音。本阶段通常不加声调符号，少量感叹词、象声词例外另学。'],
+ openSyllable:['开音节','','长元音直接结尾，没有尾辅音。可以加声调符号，声调按开头辅音类别与声调符号变化。'],
+ deadClosed:['死闭音节','ກ · ດ · ບ','以死尾辅音结尾。短元音对应短调；长元音时，中、高辅音对应中降调，低辅音对应四声。双击总览中的声调可直接查看组合详情。'],
  middle:['中辅音','ກ ຈ ດ ຕ ບ ປ ຢ ອ','教材按声调规则划分的辅音类别；不是按发音部位分类。'],
  low:['低辅音','ຄ ງ ຊ ຍ ທ ນ ມ ພ ຟ ລ ວ ຮ','本课基本字母。与元音、尾辅音及声调符号组合后，按低辅音规则判断声调。'],
  high:['高辅音','ຂ ສ ຖ ຜ ຝ ຫ','本课基本字母。复合辅音另按教材学习，不能只看第一个字符判断。'],
@@ -3268,7 +3273,22 @@ async function pronunciationOpenCourse(id){
  clearTimeout(pronunciationClickTimer);stopPracticeAudio();learningResetMulti();learningLesson=target;learningRoute='lesson';learningTab='knowledge';await showView('learning');
 }
 const pronunciationConfigId=key=>'pron-rule:'+key;
-function pronunciationOpenTone(key){clearTimeout(pronunciationClickTimer);stopPracticeAudio();const [kind,group,length,mark]=key.split('|');pronunciationSelection={kind,group,length,mark};pronunciationRoute='detail';renderPronunciation();}
+function pronunciationOpenTone(key){
+ clearTimeout(pronunciationClickTimer);stopPracticeAudio();
+ if(pronunciationRoute!=='detail')pronunciationDetailOrigin={route:pronunciationRoute,concept:pronunciationConcept,x:window.scrollX||0,y:window.scrollY||0,key};
+ const [kind,group,length,mark]=key.split('|');pronunciationSelection={kind,group,length,mark};pronunciationRoute='detail';renderPronunciation();
+ window.scrollTo({top:0,left:0,behavior:'instant'});
+}
+function pronunciationReturnFromDetail(){
+ clearTimeout(pronunciationClickTimer);stopPracticeAudio();
+ const origin=pronunciationDetailOrigin||{route:'home',x:0,y:0};
+ pronunciationRoute=['nocoda','dead'].includes(origin.route)?'home':origin.route;pronunciationConcept=origin.concept||'middle';renderPronunciation();
+ requestAnimationFrame(()=>{
+  if(pronunciationRoute!==(['nocoda','dead'].includes(origin.route)?'home':origin.route))return;
+  const target=[...pronunciationPanel.querySelectorAll('[data-pron-tone],[data-pron-detail]')].find(el=>(el.dataset.pronTone||el.dataset.pronDetail)===origin.key);
+  target?.focus({preventScroll:true});window.scrollTo({left:origin.x,top:origin.y,behavior:'instant'});
+ });
+}
 function pronunciationTemplate(key){return {format:'lao-pronunciation-v1',ruleKey:key,examples:[{id:'example-1',textLao:pronunciationExamples(...key.split('|'))[0],translationZh:'',combination:'请填写拼读组合说明',audioFile:'example-1.mp3'}],representativeId:'example-1'};}
 function pronunciationValidateImport(data,key){
  if(data?.format!=='lao-pronunciation-v1'||data.ruleKey!==key)throw Error('格式或 ruleKey 不匹配。请下载当前详情的模板，不要修改 ruleKey。');
@@ -3317,7 +3337,7 @@ function pronunciationMapTable(kind){
 }
 function pronunciationMindMap(){
  const rows=length=>Object.keys(pronunciationClasses).map(g=>`<div class="pron-map-rule">${pronunciationTag(g)}<span>＋</span>${pronunciationTag(length)}<span>→</span>${pronunciationMapTone('nocoda',g,length)}</div>`).join('');
- return `<div class="pron-map"><p class="pron-map-subtitle">先看音节结构，再看组合后的教材声调</p><p class="pron-map-hint">点标签查看知识 · 点声调试听已保存示范音</p><div class="pron-map-root">音节结构</div><div class="pron-map-branches"><button type="button" data-pron-route="nocoda">辅音 + 元音<small>无尾辅音</small></button><button type="button" data-pron-route="closed">辅音 + 元音 + 辅音<small>有尾辅音</small></button></div><div class="pron-map-leaves"><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="nocoda">死音节 ›</button><p>短元音直接结尾，无尾辅音<br>本阶段通常不加声调符号</p>${rows('short')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="nocoda">开音节 ›</button><p>长元音直接结尾，无尾辅音<br>可以加声调符号</p><h3>无声调符号</h3>${rows('long')}<button type="button" class="pron-map-section" data-pron-route="openmarks">开音节：声调符号 ›</button>${pronunciationMapTable('openmarks')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="dead">死闭音节 ›</button><p>${pronunciationTag('deadTail')}<br>ກ · ດ · ບ</p>${pronunciationMapTable('dead')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="live">活闭音节 ›</button><p>${pronunciationTag('liveTail')}<br>ງ · ນ · ມ · ຍ · ວ<br>短、长元音声调规则相同<br>只区别长短</p>${pronunciationMapTable('live')}</section></div><div class="pron-map-legend"><strong>重要概念</strong>${pronunciationTag('middle')}${pronunciationTag('low')}${pronunciationTag('high')}${pronunciationTag('short')}${pronunciationTag('long')}${pronunciationTag('deadTail')}${pronunciationTag('liveTail')}</div><p class="pron-map-hint">需添加或修改示范音：进入对应音节分支 → 组合详情 → 录音 / 管理。</p></div>`;
+ return `<div class="pron-map"><p class="pron-map-subtitle">先看音节结构，再看组合后的教材声调</p><p class="pron-map-hint">点标签查看知识 · 点声调试听已保存示范音</p><div class="pron-map-root">音节结构</div><div class="pron-map-branches"><button type="button" data-pron-concept="noCoda">辅音 + 元音<small>无尾辅音</small></button><button type="button" data-pron-route="closed">辅音 + 元音 + 辅音<small>有尾辅音</small></button></div><div class="pron-map-leaves"><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadSyllable">死音节 ›</button><p>短元音直接结尾，无尾辅音<br>本阶段通常不加声调符号</p>${rows('short')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="openSyllable">开音节 ›</button><p>长元音直接结尾，无尾辅音<br>可以加声调符号</p><h3>无声调符号</h3>${rows('long')}<button type="button" class="pron-map-section" data-pron-route="openmarks">开音节：声调符号 ›</button>${pronunciationMapTable('openmarks')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadClosed">死闭音节 ›</button><p>${pronunciationTag('deadTail')}<br>ກ · ດ · ບ</p>${pronunciationMapTable('dead')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="live">活闭音节 ›</button><p>${pronunciationTag('liveTail')}<br>ງ · ນ · ມ · ຍ · ວ<br>短、长元音声调规则相同<br>只区别长短</p>${pronunciationMapTable('live')}</section></div><div class="pron-map-legend"><strong>重要概念</strong>${pronunciationTag('middle')}${pronunciationTag('low')}${pronunciationTag('high')}${pronunciationTag('short')}${pronunciationTag('long')}${pronunciationTag('deadTail')}${pronunciationTag('liveTail')}</div><p class="pron-map-hint">需添加或修改示范音：进入对应音节分支 → 组合详情 → 录音 / 管理。</p></div>`;
 }
 const pronunciationPanel=document.createElement('section');
 pronunciationPanel.id='pronunciationPanel';pronunciationPanel.className='panel hidden';
@@ -3348,12 +3368,11 @@ function pronunciationExampleRow(text,label=''){
  return `<div class="pron-example"><span>${label?`<small>${label}</small>`:''}<b lang="lo">${text}</b></span><button type="button" data-pron-play="${text}" aria-label="试听 ${text}">▶</button><button type="button" class="pron-manage" data-pron-manage="${text}">录音 / 管理</button></div>`;
 }
 function renderPronunciation(){
+ if(['nocoda','dead'].includes(pronunciationRoute))pronunciationRoute='home';
  let title='老语发音',html='';
  if(pronunciationRoute==='home'){title='老挝语发音总览';html=pronunciationMindMap();}
  if(pronunciationRoute==='concept'){const [name,letters,description]=pronunciationConcepts[pronunciationConcept];title=name;html=`${['short','long'].includes(pronunciationConcept)?pronunciationVowelCards(pronunciationConcept):['middle','low','high'].includes(pronunciationConcept)?`<div class="pron-letter-cards">${letters.split(' ').map(letter=>`<div><b lang="lo">${letter}</b><button type="button" data-pron-play="${letter}">▶ 试听</button><button type="button" data-pron-manage="${letter}">录音 / 管理</button></div>`).join('')}</div>`:letters?`<p class="pron-concept-letters" lang="lo">${letters}</p>`:''}<p class="pron-intro">${description}</p><button type="button" data-pron-route="home">返回发音总览</button>`;}
  if(pronunciationRoute==='closed'){title='辅音 + 元音 + 辅音';html=`<div class="pron-entries">${pronunciationButton('dead','死闭音节','尾辅音：ກ · ດ · ບ')}${pronunciationButton('live','活闭音节','活尾辅音：ງ · ນ · ມ · ຍ · ວ')}</div>`;}
- if(pronunciationRoute==='nocoda'){title='辅音 + 元音';html=`<div class="pron-section-heading"><span>无尾辅音 · 无声调符号</span><button type="button" data-pron-route="openmarks">长元音：声调符号 ›</button></div>${pronunciationMatrix('nocoda')}<details class="pron-notes"><summary>开音节与死音节</summary><p>开音节：以长元音直接结尾，没有尾辅音。当前教材中可以出现声调符号，声调可以变化。</p><p>死音节：以短元音直接结尾，没有尾辅音。当前课程按教材规则学习；本阶段不加声调符号，少量感叹词、象声词例外另学。</p></details>`;}
- if(pronunciationRoute==='dead'){title='死闭音节';html=`<p class="pron-intro">尾辅音：ກ · ດ · ບ</p>${pronunciationMatrix('dead')}`;}
  if(pronunciationRoute==='live'){title='活闭音节';html=`<p class="pron-intro">短、长元音使用相同声调规则，只改变元音长度。</p>${pronunciationMatrix('live',true)}`;}
  if(pronunciationRoute==='openmarks'){title='开音节 · 声调符号';html=`<p class="pron-intro">长元音结尾，无尾辅音。</p>${pronunciationMatrix('openmarks',true)}`;}
  if(pronunciationRoute==='detail'){
@@ -3362,8 +3381,8 @@ function renderPronunciation(){
   const examples=pronunciationExamples(kind,group,length,mark);
   html=`<p class="pron-combination">${pronunciationClasses[group]} + ${kind==='live'?'短 / 长元音':length==='short'?'短元音':'长元音'}${kind==='dead'||kind==='live'?' + '+tail:''}${mark!=='none'?' + '+pronunciationMarks[mark]:''}</p><h3>规则</h3><dl class="pron-rule"><div><dt>开头辅音</dt><dd>${pronunciationClasses[group]}</dd></div><div><dt>元音</dt><dd>${kind==='live'?'短 / 长（声调相同）':length==='short'?'短元音':'长元音'}</dd></div><div><dt>尾辅音</dt><dd>${tail}</dd></div><div><dt>声调符号</dt><dd>${pronunciationMarks[mark]}</dd></div></dl><h3>示范拼读</h3>${examples.map(t=>pronunciationExampleRow(t)).join('')}<h3>对比试听</h3>${kind==='openmarks'?'<p class="pron-intro">这里对比无声调符号的短、长元音。</p>':''}${['short','long'].map(l=>pronunciationExampleRow(pronunciationExamples(kind,group,l,kind==='openmarks'?'none':mark)[0],(l==='short'?'短元音':'长元音')+' · '+pronunciationTone(kind==='openmarks'?'nocoda':kind,group,l,kind==='openmarks'?'none':mark))).join('')}<p class="pron-intro">▶ 优先试听已有参考录音或已保存的默认发音。缺音频时可进入“录音 / 管理”；不会自动生成或计费。合成音仅供辅助，声调请以教材或老师示范为准。</p>`;
  }
- const parent=pronunciationRoute==='detail'?pronunciationSelection.kind:pronunciationRoute==='dead'||pronunciationRoute==='live'?'closed':pronunciationRoute==='openmarks'?'nocoda':'home';
- pronunciationPanel.innerHTML=`${pronunciationRoute!=='home'?`<button type="button" class="pron-back" data-pron-route="${parent}">← 返回</button>`:''}<h2>${title}</h2>${html}<p id="pronunciationStatus" role="status" aria-live="polite"></p><footer class="pron-footnote">按所提供教材的声调命名与本阶段规则学习。</footer>`;
+ const parent=pronunciationRoute==='live'?'closed':'home';
+ pronunciationPanel.innerHTML=`${pronunciationRoute!=='home'?`<button type="button" class="pron-back" ${pronunciationRoute==='detail'?'data-pron-return':`data-pron-route="${parent}"`}>← 返回</button>`:''}<h2>${title}</h2>${html}<p id="pronunciationStatus" role="status" aria-live="polite"></p><footer class="pron-footnote">按所提供教材的声调命名与本阶段规则学习。</footer>`;
  if(pronunciationRoute==='detail')pronunciationRenderImported(pronunciationKey(pronunciationSelection));
 }
 async function pronunciationRenderImported(key){
@@ -3397,6 +3416,7 @@ pronunciationPanel.addEventListener('click',async event=>{
  try{
   if(b.dataset.pronTone){clearTimeout(pronunciationClickTimer);if(event.detail>1)return;pronunciationClickTimer=setTimeout(async()=>{if(!b.isConnected)return;try{await pronunciationPlayRule(b.dataset.pronTone,b.dataset.example);}catch(e){document.querySelector('#pronunciationStatus').textContent=e.message;}},350);return;}
   clearTimeout(pronunciationClickTimer);
+  if(b.hasAttribute('data-pron-return')){pronunciationReturnFromDetail();return;}
   if(b.hasAttribute('data-pron-save-courses')){await pronunciationSaveCourses(pronunciationKey(pronunciationSelection));return;}
   if(b.dataset.pronCourse){await pronunciationOpenCourse(b.dataset.pronCourse);return;}
   if(b.hasAttribute('data-pron-settings')){pronunciationSettings=!pronunciationSettings;renderPronunciation();return;}
@@ -3405,8 +3425,8 @@ pronunciationPanel.addEventListener('click',async event=>{
   if(b.dataset.pronCustomManage){await learningOpenDetail(b.dataset.pronCustomManage);return;}
   if(b.dataset.pronCustomPlay){const {m,snap}=await learningResolve(b.dataset.pronCustomPlay),ref=m.audioSources.filter(a=>learningIsReference(a)&&!a.needsReview).at(-1),asset=snap.learningAudio.find(a=>a.id===ref?.assetId);if(asset?.blob)await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);else await pronunciationPlay(m.textLao);return;}
   if(b.dataset.pronConcept){stopPracticeAudio();pronunciationConcept=b.dataset.pronConcept;pronunciationRoute='concept';renderPronunciation();}
-  else if(b.dataset.pronRoute){stopPracticeAudio();pronunciationRoute=b.dataset.pronRoute;renderPronunciation();}
-  else if(b.dataset.pronDetail){stopPracticeAudio();const [kind,group,length,mark]=b.dataset.pronDetail.split('|');pronunciationSelection={kind,group,length,mark};pronunciationRoute='detail';renderPronunciation();}
+  else if(b.dataset.pronRoute){stopPracticeAudio();if(['nocoda','dead'].includes(b.dataset.pronRoute)){pronunciationConcept=b.dataset.pronRoute==='dead'?'deadClosed':'noCoda';pronunciationRoute='concept';}else pronunciationRoute=b.dataset.pronRoute;renderPronunciation();}
+  else if(b.dataset.pronDetail){pronunciationOpenTone(b.dataset.pronDetail);}
   else if(b.dataset.pronPlay){document.querySelector('#pronunciationStatus').textContent='正在读取已保存音频…';await pronunciationPlay(b.dataset.pronPlay);document.querySelector('#pronunciationStatus').textContent='正在试听：'+b.dataset.pronPlay;}
   else if(b.dataset.pronManage)await pronunciationManage(b.dataset.pronManage);
  }catch(error){document.querySelector('#pronunciationStatus').textContent=error.message;}

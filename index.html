@@ -3581,7 +3581,7 @@ function liveCodaNotesHtml(){
  (ng?'<nav class="lcn-subtabs" aria-label="后鼻音辅助记音分组">'+Object.keys(liveCodaNgGroups).map(k=>'<button type="button" data-lcn-ng="'+k+'" aria-pressed="'+(k===liveCodaNgSelected)+'">'+k+' 组</button>').join('')+'</nav>':'<p class="lcn-spelling">'+h(r.spelling)+'</p>')+
  '<div class="lcn-words">'+(ng?liveCodaNgGroups[liveCodaNgSelected]:r.words).split('|').map(pair=>{const [word,meaning]=pair.split('=');return '<div>'+play(word)+'<span>'+h(meaning)+'</span></div>';}).join('')+'</div>'+
  (ng?'<p class="tag-hint">词义提醒：ທ້ອງ 是“肚子、腹部”，不是“提醒”；提醒可用 ເຕືອນ。ກ້ອງ 可表示“底下、下面”。</p>':r.letter==='ນ'?'<p class="tag-hint">ຜືນ 用于布、毯子、席子等片状物，不是通用量词“件”。</p>':r.letter==='ວ'?'<p class="tag-hint">ແກ້ວ 指玻璃、杯子或玻璃器皿，不只指玻璃瓶。</p>':'')+
- '<p class="lcn-status" role="status"></p><p class="tag-hint">点击词语试听已有音频；缺音频不会自动生成。按提供的学习笔记整理，释义需结合语境。</p>';
+ '<p class="lcn-status" role="status"></p><p class="tag-hint">单击试听已有音频；无音频时打开词卡，双击直接查看详情。词汇与拼读练习收录到“我的词典”，已有同文词不重复添加。按提供的学习笔记整理，释义需结合语境。</p>';
 }
 async function liveCodaNotesMount(){
  if(learningRoute!=='lesson'||learningLesson.library==='communication'||!/第(?:十一|11)课[：:、\\s]*活闭音节尾辅音及其声调/.test(learningLesson.title))return;
@@ -3610,9 +3610,50 @@ document.addEventListener('click',e=>{
  // Clear table mode before the existing delegated course handler starts rendering.
  if(b.dataset.learn||b.dataset.view)liveCodaTableCourse=null;
 },true);
-document.addEventListener('click',async e=>{const b=e.target.closest('[data-lcn-play]');if(!b)return;const status=b.closest('.live-coda-notes').querySelector('.lcn-status');try{await pronunciationPlay(b.dataset.lcnPlay);status.textContent='正在试听：'+b.dataset.lcnPlay;}catch(error){status.textContent=error.message;}});
 const liveCodaNotesRenderLearning=renderLearning;
 renderLearning=async function(...args){await liveCodaNotesRenderLearning(...args);await liveCodaNotesMount();};
+</script>
+<script data-live-coda-dictionary>
+/* One-time additive enrollment requested by the user. Never replace existing entries. */
+const liveCodaEnrollmentKey='live-coda-dictionary-enrollment-v1';
+function liveCodaDictionaryCandidates(snap){
+ const rows=new Map(),add=(text,meaning,drill=false)=>{text=learningNorm(text);if(!text)return;const old=rows.get(text);if(!old||old.drill&&!drill)rows.set(text,{text,meaning,drill});};
+ for(const r of liveCodaNotes){add(r.example,r.meaning);for(const pair of r.words.split('|')){const [text,meaning]=pair.split('=');add(text,meaning);}for(const line of r.spelling.split('\n'))if(line.includes('→'))add(line.split('→').at(-1),'拼读练习（不设词义）',true);}
+ for(const list of Object.values(liveCodaNgGroups))for(const pair of list.split('|')){const [text,meaning]=pair.split('=');add(text,meaning);}
+ for(const [key,cell] of liveVowelCells)if(Number(key.split(':')[1])>=3)add(cell.text,'拼读练习（不设词义）',true);
+ const courses=snap.learningMaterials.filter(m=>m.courseDefinition&&/第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(m.courseDefinition.title)).map(m=>m.courseDefinition.id);
+ const ids=new Set(snap.learningPlacements.filter(p=>courses.includes(p.lessonId)&&!p.deleted).map(p=>p.materialId));
+ for(const m of snap.learningMaterials)if(ids.has(m.id)&&m.contentType==='reading_drill'&&!m.deleted)add(m.textLao,m.translationZh||'拼读练习（不设词义）',!m.translationZh);
+ return [...rows.values()];
+}
+let liveCodaEnrollmentPending=null;
+function liveCodaEnroll(){if(liveCodaEnrollmentPending)return liveCodaEnrollmentPending;liveCodaEnrollmentPending=liveCodaEnrollOnce().finally(()=>{liveCodaEnrollmentPending=null;});return liveCodaEnrollmentPending;}
+async function liveCodaEnrollOnce(){
+ const db=await openDB(),tx=db.transaction(['entries','learningMaterials','learningPlacements','cloud_meta'],'readwrite'),done=transactionDone(tx),stores=Object.fromEntries(['entries','learningMaterials','learningPlacements','cloud_meta'].map(s=>[s,tx.objectStore(s)]));
+ const requests={entries:stores.entries.getAll(),learningMaterials:stores.learningMaterials.getAll(),learningPlacements:stores.learningPlacements.getAll(),marker:stores.cloud_meta.get(liveCodaEnrollmentKey)};let left=4,added=0,error;
+ for(const req of Object.values(requests))req.onsuccess=()=>{if(--left)return;try{if(requests.marker.result)return;const snap={learningMaterials:requests.learningMaterials.result,learningPlacements:requests.learningPlacements.result},words=requests.entries.result,now=Date.now();
+ for(const row of liveCodaDictionaryCandidates(snap)){
+  if(words.some(w=>learningNorm(w.word)===row.text))continue;
+  const syncId=learningUid(),entry={word:row.text,meaning:row.meaning,ipa:'',category:row.drill?'拼读练习,无实义,活闭音节,第十一课':'教材词汇,活闭音节,第十一课',note:row.drill?'发音训练用途，不将拼读组合当作已核实的实义词；如需词义可自行补充。':'按第十一课学习笔记收录；具体释义随语境变化。',syncId,updatedAt:now};stores.entries.add(entry);words.push(entry);added++;
+  const sources=snap.learningMaterials.filter(m=>!m.deleted&&learningNorm(m.textLao)===row.text).flatMap(m=>m.audioSources||[]).filter(learningIsReference),unique=[...new Map(sources.map(a=>[JSON.stringify(a),a])).values()];
+  if(unique.length)stores.learningMaterials.put({...learningWordMaterial(entry),audioSources:unique});
+ }
+ stores.cloud_meta.put({completedAt:now,added},liveCodaEnrollmentKey);
+ }catch(e){error=e;tx.abort();}};
+ try{await done;}catch(e){throw error||e;}return added;
+}
+async function liveCodaOpenWord(text){
+ await liveCodaEnroll();const words=(await allEntries()).filter(w=>learningNorm(w.word)===learningNorm(text));
+ if(words.length===1){const w=words[0];if(!w.syncId){w.syncId=learningUid();await withStore('readwrite',s=>s.put(w));}await learningOpenDetail('word:'+w.syncId);return;}
+ if(words.length>1){learningModal('选择词义',words.map(w=>'<p><button type="button" data-lcn-entry="'+w.id+'">'+learningEsc(w.word+' · '+(w.meaning||'未填写中文'))+'</button></p>').join(''));return;}
+ await pronunciationManage(text);
+}
+let liveCodaWordTimer;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-lcn-play]');if(!b)return;clearTimeout(liveCodaWordTimer);if(e.detail>1)return;liveCodaWordTimer=setTimeout(async()=>{if(!b.isConnected)return;try{await liveCodaEnroll();await pronunciationPlay(b.dataset.lcnPlay);}catch(_){try{await liveCodaOpenWord(b.dataset.lcnPlay);}catch(error){b.closest('.live-coda-notes').querySelector('.lcn-status').textContent=error.message;}}},300);});
+document.addEventListener('dblclick',e=>{const b=e.target.closest('[data-lcn-play]');if(!b)return;clearTimeout(liveCodaWordTimer);stopPracticeAudio();void liveCodaOpenWord(b.dataset.lcnPlay).catch(error=>{b.closest('.live-coda-notes').querySelector('.lcn-status').textContent=error.message;});});
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-lcn-entry]');if(!b)return;try{const w=(await allEntries()).find(w=>String(w.id)===b.dataset.lcnEntry);if(!w)throw Error('词条已不存在');if(!w.syncId){w.syncId=learningUid();await withStore('readwrite',s=>s.put(w));}await learningOpenDetail('word:'+w.syncId);}catch(error){$('#learningDialogStatus').textContent=error.message;}});
+const liveCodaDictionaryRenderLearning=renderLearning;
+renderLearning=async function(...args){if(learningRoute==='lesson'&&/第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(learningLesson.title)){const added=await liveCodaEnroll();if(added)await render();}return liveCodaDictionaryRenderLearning(...args);};
 </script>
 </body>
 </html>

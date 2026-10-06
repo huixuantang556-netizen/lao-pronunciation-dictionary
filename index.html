@@ -3498,5 +3498,61 @@ async function pronunciationListEdit(key,selection,kind){
  draw();search();
 }
 </script>
+<style data-live-vowel="live-vowel-table.css">
+.live-vowel-chart{margin-top:24px;padding-top:14px;border-top:1px solid #dce9e5}.live-vowel-scroll{overflow-x:auto}.live-vowel-table{width:100%;min-width:690px;border-collapse:collapse;text-align:center;background:#fff}.live-vowel-table th,.live-vowel-table td{border:1px solid #dce9e5;padding:8px 5px}.live-vowel-table thead th{background:#e8f5ef;font-size:16px}.live-vowel-table tbody th{background:#f1f9f5}.live-vowel-chart .live-vowel-table button{border:0;background:transparent;color:#087f6e;font-size:23px;padding:5px 7px;min-height:38px;white-space:nowrap}.live-vowel-table button:hover,.live-vowel-table button:focus-visible{background:#e2f4ed;outline:2px solid #80bdae}.live-vowel-status{color:#087f6e;font-size:14px}
+</style>
+<script data-live-vowel="live-vowel-table.js">
+/* User-supplied chart. Empty cells are intentionally not inferred. */
+const liveVowelRows=[
+['◌ະ','→','◌ັ','◌ັງ','◌ັນ','◌ັມ','ໄ◌ / ໃ◌','ເ◌ົາ'],
+['◌າ','','','◌າງ','◌ານ','◌າມ','◌າຍ','◌າວ'],
+['◌ິ','','','◌ິງ','◌ິນ','◌ິມ','','◌ິວ'],
+['◌ີ','','','◌ີງ','◌ີນ','◌ີມ','','◌ີວ'],
+['◌ຶ','','','◌ຶງ','◌ຶນ','◌ຶມ','◌ຶຍ',''],
+['◌ື','','','◌ືງ','◌ືນ','◌ືມ','◌ືຍ',''],
+['◌ຸ','','','◌ຸງ','◌ຸນ','◌ຸມ','◌ຸຍ',''],
+['◌ູ','','','◌ູງ','◌ູນ','◌ູມ','◌ູຍ',''],
+['ເ◌ະ','→','ເ◌ັ','ເ◌ັງ','ເ◌ັນ','ເ◌ັມ','','ເ◌ັວ'],
+['ເ◌','','','ເ◌ງ','ເ◌ນ','ເ◌ມ','','ເ◌ວ'],
+['ແ◌ະ','→','ແ◌ັ','ແ◌ັງ','ແ◌ັນ','ແ◌ັມ','','ແ◌ັວ'],
+['ແ◌','','','ແ◌ງ','ແ◌ນ','ແ◌ມ','','ແ◌ວ'],
+['ໂ◌ະ','→','◌ົ','◌ົງ','◌ົນ','◌ົມ','ໂ◌ຍ','ໂ◌ວ'],
+['ໂ◌','','','ໂ◌ງ','ໂ◌ນ','ໂ◌ມ','ໂ◌ຍ','ໂ◌ວ'],
+['ເ◌າະ','→','◌ັອ','◌ັອງ','◌ັອນ','◌ັອມ','◌ັອຍ',''],
+['◌ໍ','→','◌ອ','◌ອງ','◌ອນ','◌ອມ','◌ອຍ',''],
+['ເ◌ິ','','','ເ◌ິງ','ເ◌ິນ','ເ◌ິມ','ເ◌ິຍ',''],
+['ເ◌ີ','','','ເ◌ີງ','ເ◌ີນ','ເ◌ີມ','ເ◌ີຍ',''],
+['ເ◌ັຍ','→','◌ັຽ','◌ັຽງ','◌ັຽນ','◌ັຽມ','','◌ັຽວ'],
+['ເ◌ຍ','→','◌ຽ','◌ຽງ','◌ຽນ','◌ຽມ','','◌ຽວ'],
+['ເ◌ຶອ','','','ເ◌ຶອງ','ເ◌ຶອນ','ເ◌ຶອມ','ເ◌ຶອຍ',''],
+['ເ◌ືອ','','','ເ◌ືອງ','ເ◌ືອນ','ເ◌ືອມ','ເ◌ືອຍ',''],
+['◌ົວະ','→','◌ົວ','◌ົວງ','◌ົວນ','◌ົວມ','◌ົວຍ',''],
+['◌ົວ','→','◌ວ','◌ວງ','◌ວນ','◌ວມ','◌ວຍ','']
+];
+const liveVowelCells=new Map();
+liveVowelRows.forEach((row,r)=>row.forEach((value,c)=>{if(c===1||!value)return;value.split(' / ').forEach((form,v)=>liveVowelCells.set(r+':'+c+':'+v,{form,text:form.replaceAll('◌','ກ')}));}));
+const liveVowelId=key=>'live-vowel-cell:'+key;
+let liveVowelTimer;
+function liveVowelHtml(records){const h=learningEsc;return '<h3>活闭音节 · 元音与尾辅音点读表</h3><p class="tag-hint">单击试听，双击查看 / 修改；键盘 Shift+Enter 也可打开详情。◌ 是辅音位置，默认用 ກ 拼读，可在详情修改示范文字。空白格按原表保留，不代表补全规则。三处表格共用资料与录音。</p><div class="live-vowel-scroll"><table class="live-vowel-table"><thead><tr>'+['元音','','闭音节变形','ງ','ນ','ມ','ຍ','ວ'].map(x=>'<th scope="col">'+x+'</th>').join('')+'</tr></thead><tbody>'+liveVowelRows.map((row,r)=>'<tr>'+row.map((value,c)=>'<'+(c===0?'th scope="row"':'td')+'>'+(c===1?value:value?value.split(' / ').map((form,v)=>{const key=r+':'+c+':'+v,m=records.find(m=>m.id===liveVowelId(key));return '<button type="button" lang="lo" data-live-vowel="'+key+'" title="单击试听；双击详情">'+h(m?.liveVowelForm||form)+'</button>';}).join(' / '):'')+'</'+(c===0?'th':'td')+'>').join('')+'</tr>').join('')+'</tbody></table></div><p class="live-vowel-status" role="status"></p>';}
+async function liveVowelMount(parent){if(!parent)return;let host=parent.querySelector('.live-vowel-chart');if(!host){host=document.createElement('section');host.className='live-vowel-chart';parent.append(host);}const snap=await learningSnapshot();if(host.isConnected)host.innerHTML=liveVowelHtml(snap.learningMaterials);}
+async function liveVowelPlay(key){const original=liveVowelCells.get(key);if(!original)return;const snap=await learningSnapshot(),m=snap.learningMaterials.find(m=>m.id===liveVowelId(key));if(m){const ref=m.audioSources.filter(a=>learningIsReference(a)&&!a.needsReview).at(-1),asset=snap.learningAudio.find(a=>a.id===ref?.assetId);if(asset?.blob){await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);return;}}await pronunciationPlay(m?.textLao||original.text);}
+async function liveVowelDetail(key){
+ if(learningHasWork())throw Error('请先完成当前编辑或录音。');stopPracticeAudio();const original=liveVowelCells.get(key);if(!original)return;
+ const snap=await learningSnapshot(),id=liveVowelId(key),old=snap.learningMaterials.find(m=>m.id===id),m=old||learningBlank(id,'reading_drill',original.text),h=learningEsc;
+ learningDraft={kind:'live-vowel',dirty:false};learningModal('点读格详情 · '+(m.liveVowelForm||original.form),'<form id="liveVowelEdit"><label>表格显示形式<input id="lvForm" required value="'+h(m.liveVowelForm||original.form)+'"></label><label>实际拼读文字（不含 ◌）<input id="lvText" required value="'+h(m.textLao)+'"></label><label>中文说明<input id="lvMeaning" value="'+h(m.translationZh)+'"></label><label>备注<textarea id="lvNote">'+h(m.note)+'</textarea></label><p>修改三处同步；改拼读文字后，原录音保留并标为待核对。不会自动调用语音生成。</p><button type="submit">保存修改</button><button type="button" id="lvAudio">保存并打开录音 / 音频管理</button></form>');
+ $('#liveVowelEdit').oninput=()=>learningDraft.dirty=true;
+ async function save(audio){if(learningBusy)return;learningBusy=true;try{const form=$('#lvForm').value.trim(),text=$('#lvText').value.trim();if(!form||!text||text.includes('◌'))throw Error('请填写显示形式和不含 ◌ 的实际拼读文字。');const changed=m.textLao!==text,next={...m,textLao:text,liveVowelForm:form,translationZh:$('#lvMeaning').value,note:$('#lvNote').value,audioSources:m.audioSources.map(a=>changed?{...a,needsReview:true,recordedText:a.recordedText||m.textLao}:a),audioNeedsReview:changed?m.audioSources.length>0:m.audioNeedsReview||false,updatedAt:Date.now()};await learningWrite({learningMaterials:[next]},snap);learningDraft=null;learningDialog.close();await Promise.all([...document.querySelectorAll('.live-vowel-chart')].map(host=>liveVowelMount(host.parentElement)));if(audio)await learningOpenDetail(id);}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}}
+ $('#liveVowelEdit').onsubmit=e=>{e.preventDefault();void save(false);};$('#lvAudio').onclick=()=>save(true);
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-live-vowel]');if(!b)return;clearTimeout(liveVowelTimer);if(e.detail>1)return;const host=b.closest('.live-vowel-chart');liveVowelTimer=setTimeout(async()=>{if(!b.isConnected||b.closest('.hidden'))return;try{await liveVowelPlay(b.dataset.liveVowel);host.querySelector('.live-vowel-status').textContent='正在试听';}catch(error){host.querySelector('.live-vowel-status').textContent=error.message;}},350);});
+function liveVowelOpenFromEvent(e){const b=e.target.closest('[data-live-vowel]');if(!b)return;e.preventDefault();clearTimeout(liveVowelTimer);void liveVowelDetail(b.dataset.liveVowel).catch(error=>{b.closest('.live-vowel-chart').querySelector('.live-vowel-status').textContent=error.message;});}
+document.addEventListener('dblclick',liveVowelOpenFromEvent);document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey)liveVowelOpenFromEvent(e);});
+const liveVowelRenderLearning=renderLearning;
+renderLearning=async function(...args){await liveVowelRenderLearning(...args);if(learningRoute==='lesson'&&/第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(learningLesson.title))await liveVowelMount(document.querySelector('#learningContent'));};
+const liveVowelRenderCoda=renderCodaChapter;
+renderCodaChapter=async function(...args){await liveVowelRenderCoda(...args);if(codaTab==='live')await liveVowelMount(document.querySelector('#codaPanel'));else document.querySelector('#codaPanel .live-vowel-chart')?.remove();};
+const liveVowelRenderPronunciation=renderPronunciation;
+renderPronunciation=function(...args){const result=liveVowelRenderPronunciation(...args);if(pronunciationRoute==='live')void liveVowelMount(pronunciationPanel).catch(e=>{document.querySelector('#pronunciationStatus').textContent=e.message;});return result;};
+</script>
 </body>
 </html>

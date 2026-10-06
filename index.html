@@ -2729,7 +2729,7 @@ function lessonV2Parse(value){
  return d;
 }
 function lessonV2Rows(d){return d.sections.flatMap(s=>s.blocks.flatMap(b=>(!lessonV2Displays[b.contentType]||b.contentType==='knowledge'?[]:b.contentType==='table'?b.content.rows:b.content.items||[]).map(r=>({s,b,r}))));}
-function lessonV2Words(d){const map=new Map();for(const {b,r} of lessonV2Rows(d)){if(b.contentType!=='word-ref'&&!(b.contentType==='reading'&&r.includeInDictionary))continue;const key=learningNorm(r.textLao);if(!map.has(key))map.set(key,{textLao:r.textLao,translationZh:r.translationZh,note:r.note,tags:b.tags});}return [...map.values()];}
+function lessonV2Words(d){const map=new Map();for(const {b,r} of lessonV2Rows(d)){if(b.contentType!=='word-ref'&&!(b.contentType==='reading'&&r.includeInDictionary))continue;const key=learningNorm(r.textLao);if(!map.has(key))map.set(key,{textLao:r.textLao,translationZh:r.translationZh,ipa:r.ipa||'',note:r.note,tags:[...new Set([...b.tags,...(r.tags||[])])]});}return [...map.values()];}
 function lessonV2Record(kind,id,text,data){return {...learningBlank(id,'knowledge',text||'教材内容'),schemaVersion:2,v2Kind:kind,v2Data:data};}
 function lessonV2Incoming(d){const key=lessonPackageKey(d),out=[];for(const s of d.sections){out.push({kind:'section',id:lessonV2Id(key,'section',s.id),data:{...s,blocks:s.blocks.map(b=>b.id)}});for(const b of s.blocks){out.push({kind:'block',id:lessonV2Id(key,'block',b.id),data:{...b,content:lessonV2Displays[b.contentType]&&b.contentType!=='knowledge'?{...b.content,...(b.contentType==='table'?{rows:b.content.rows.map(r=>r.itemId)}:{items:b.content.items.map(r=>r.itemId)})}:b.content,sectionId:s.id}});for(const {r} of lessonV2Rows({sections:[{...s,blocks:[b]}]}))out.push({kind:'item',id:lessonV2Id(key,'item',r.itemId),data:{...r,blockId:b.id,itemType:b.contentType,unitType:b.content.unitType}});}}return out;}
 function lessonV2Changes(d,snap){return lessonV2Incoming(d).flatMap(x=>{const old=snap.learningMaterials.find(m=>m.id===x.id);return old&&!cloudSame(old.v2Data,x.data)?[{...x,old:old.v2Data}]:[];});}
@@ -2758,7 +2758,7 @@ async function lessonV2Save(d,preview,options={}){
  // Rejected edits must not create new dictionary words or change the item's owner.
  for(const {r} of lessonV2Rows(d)){const old=preview.snap.learningMaterials.find(m=>m.id===lessonV2Id(packageKey,'item',r.itemId));if(old&&!approved.has(old.id)){const keep=lessonV2Clone(old.v2Data);for(const k of Object.keys(r))delete r[k];Object.assign(r,keep);}}
  const key=lessonPackageKey(d),courseId='v2:'+key,now=Date.now(),all=preview.snap.learningMaterials,words=preview.entries.map(w=>({...w})),wordWrites=[],materialWrites=[],placeWrites=[];
- const wordMap=new Map();for(const row of lessonV2Words(d)){const matches=words.filter(w=>learningNorm(w.word)===learningNorm(row.textLao)),choice=options.words?.[learningNorm(row.textLao)];let w;if(matches.length){w=matches.find(w=>String(w.id)===String(choice))||(matches.length===1?matches[0]:null);if(!w)throw Error('请选择同名词：'+row.textLao);}else{if(!row.translationZh.trim())throw Error('新增词条缺少中文：'+row.textLao);w={word:row.textLao,meaning:row.translationZh,ipa:'',note:row.note,category:row.tags.join(','),syncId:learningUid(),updatedAt:now};words.push(w);wordWrites.push(w);}if(!w.syncId){w.syncId=learningUid();wordWrites.push(w);}wordMap.set(learningNorm(row.textLao),w);}
+ const wordMap=new Map();for(const row of lessonV2Words(d)){const matches=words.filter(w=>learningNorm(w.word)===learningNorm(row.textLao)),choice=options.words?.[learningNorm(row.textLao)];let w;if(matches.length){w=matches.find(w=>String(w.id)===String(choice))||(matches.length===1?matches[0]:null);if(!w)throw Error('请选择同名词：'+row.textLao);}else{if(!row.translationZh.trim())throw Error('新增词条缺少中文：'+row.textLao);w={word:row.textLao,meaning:row.translationZh,ipa:row.ipa||'',note:row.note,category:row.tags.join(','),syncId:learningUid(),updatedAt:now};words.push(w);wordWrites.push(w);}if(!w.syncId){w.syncId=learningUid();wordWrites.push(w);}wordMap.set(learningNorm(row.textLao),w);}
  const oldCourse=all.find(m=>m.id==='course:'+courseId),oldDef=oldCourse?.courseDefinition;
  for(const s of d.sections)for(const b of s.blocks){const old=all.find(m=>m.id===lessonV2Id(key,'block',b.id));if(old&&old.v2Data.contentType!==b.contentType)throw Error('已有内容块不能直接变更类型，请为新类型使用新 block ID：'+b.id);}
  const chosen=new Set(options.changes||[]),incomingSections=d.sections.map(s=>s.id);
@@ -2824,7 +2824,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
  else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
- return '<section class="learn-knowledge"><h3>'+h(b.title||b.contentType)+'</h3><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
+ return '<section class="learn-knowledge"><h3>'+h(b.title||b.contentType)+'</h3><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings&&Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">＋ 添加 / 勾选移除卡片</button>':'')+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
@@ -3379,11 +3379,11 @@ function renderPronunciation(){
   const {kind,group,length,mark}=pronunciationSelection,tone=pronunciationTone(kind,group,length,mark),tail=kind==='dead'?'死尾辅音':kind==='live'?'活尾辅音':'无尾辅音';
   title=tone;
   const examples=pronunciationExamples(kind,group,length,mark);
-  html=`<p class="pron-combination">${pronunciationClasses[group]} + ${kind==='live'?'短 / 长元音':length==='short'?'短元音':'长元音'}${kind==='dead'||kind==='live'?' + '+tail:''}${mark!=='none'?' + '+pronunciationMarks[mark]:''}</p><h3>规则</h3><dl class="pron-rule"><div><dt>开头辅音</dt><dd>${pronunciationClasses[group]}</dd></div><div><dt>元音</dt><dd>${kind==='live'?'短 / 长（声调相同）':length==='short'?'短元音':'长元音'}</dd></div><div><dt>尾辅音</dt><dd>${tail}</dd></div><div><dt>声调符号</dt><dd>${pronunciationMarks[mark]}</dd></div></dl><h3>示范拼读</h3>${examples.map(t=>pronunciationExampleRow(t)).join('')}<h3>对比试听</h3>${kind==='openmarks'?'<p class="pron-intro">这里对比无声调符号的短、长元音。</p>':''}${['short','long'].map(l=>pronunciationExampleRow(pronunciationExamples(kind,group,l,kind==='openmarks'?'none':mark)[0],(l==='short'?'短元音':'长元音')+' · '+pronunciationTone(kind==='openmarks'?'nocoda':kind,group,l,kind==='openmarks'?'none':mark))).join('')}<p class="pron-intro">▶ 优先试听已有参考录音或已保存的默认发音。缺音频时可进入“录音 / 管理”；不会自动生成或计费。合成音仅供辅助，声调请以教材或老师示范为准。</p>`;
+  html=`<p class="pron-combination">${pronunciationClasses[group]} + ${kind==='live'?'短 / 长元音':length==='short'?'短元音':'长元音'}${kind==='dead'||kind==='live'?' + '+tail:''}${mark!=='none'?' + '+pronunciationMarks[mark]:''}</p><h3>规则</h3><dl class="pron-rule"><div><dt>开头辅音</dt><dd>${pronunciationClasses[group]}</dd></div><div><dt>元音</dt><dd>${kind==='live'?'短 / 长（声调相同）':length==='short'?'短元音':'长元音'}</dd></div><div><dt>尾辅音</dt><dd>${tail}</dd></div><div><dt>声调符号</dt><dd>${pronunciationMarks[mark]}</dd></div></dl><div id="pronLists"></div><p class="pron-intro">▶ 优先试听已有参考录音或已保存的默认发音。缺音频时可进入“录音 / 管理”；不会自动生成或计费。合成音仅供辅助，声调请以教材或老师示范为准。</p>`;
  }
  const parent=pronunciationRoute==='live'?'closed':'home';
  pronunciationPanel.innerHTML=`${pronunciationRoute!=='home'?`<button type="button" class="pron-back" ${pronunciationRoute==='detail'?'data-pron-return':`data-pron-route="${parent}"`}>← 返回</button>`:''}<h2>${title}</h2>${html}<p id="pronunciationStatus" role="status" aria-live="polite"></p><footer class="pron-footnote">按所提供教材的声调命名与本阶段规则学习。</footer>`;
- if(pronunciationRoute==='detail')pronunciationRenderImported(pronunciationKey(pronunciationSelection));
+ if(pronunciationRoute==='detail'){pronunciationRenderImported(pronunciationKey(pronunciationSelection));if(typeof pronunciationListsRender==='function')pronunciationListsRender().catch(e=>{document.querySelector('#pronunciationStatus').textContent=e.message;});}
 }
 async function pronunciationRenderImported(key){
  const container=document.createElement('div');container.className='pron-imported';pronunciationPanel.querySelector('#pronunciationStatus').before(container);
@@ -3433,6 +3433,70 @@ pronunciationPanel.addEventListener('click',async event=>{
 });
 pronunciationPanel.addEventListener('dblclick',event=>{const b=event.target.closest('[data-pron-tone]');if(!b)return;event.preventDefault();pronunciationOpenTone(b.dataset.pronTone);});
 pronunciationPanel.addEventListener('keydown',event=>{const b=event.target.closest('[data-pron-tone]');if(b&&event.key==='Enter'&&event.shiftKey){event.preventDefault();pronunciationOpenTone(b.dataset.pronTone);}});
+</script>
+<script data-list-editor="list-editor.js">
+/* Local list membership editors; shared words and recordings are never deleted. */
+function listEditorParse(text){
+ const lines=text.trim().split(/\r?\n/).filter(x=>x.trim());if(lines[0]?.replace(/\s/g,'')==='老挝语|IPA|中文|标签|备注')lines.shift();
+ if(!lines.length)throw Error('请填写至少一行。');
+ return lines.map((line,i)=>{const parts=line.split('|').map(s=>s.trim());if(parts.length!==5||!parts[0])throw Error('第 '+(i+1)+' 行须为五列，老挝语不能为空。');return {textLao:parts[0],ipa:parts[1],translationZh:parts[2],tags:learningTags(parts[3]),note:parts[4].replaceAll('<br>','\n')};});
+}
+async function listEditorOpen(blockId){
+ if(!learningSettings||learningHasWork())throw Error('请进入设置模式，并先完成当前编辑。');
+ const course={...learningLesson},snap=await learningSnapshot(),words=await allEntries(),d=lessonV2Export(snap,course),section=d.sections.find(s=>s.blocks.some(b=>b.id===blockId)),block=section?.blocks.find(b=>b.id===blockId);if(!block?.content.items)throw Error('此列表暂不支持文本卡片编辑。');
+ const h=learningEsc;let pending=null;
+ learningDraft={kind:'list-editor',dirty:false};
+ learningModal('编辑当前列表：'+(block.title||''),'<p>勾选移除只影响本列表，不删除共用词条和录音。</p><div id="listExisting">'+block.content.items.map((r,i)=>'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-list-remove="'+i+'" style="width:auto">'+h(r.textLao+' · '+(r.translationZh||''))+'</label>').join('')+'</div><button type="button" id="listRemove">移除勾选卡片</button><h3>批量添加</h3><p>每行五列：老挝语 | IPA | 中文 | 标签 | 备注。词汇列表新增词须填中文；同名词会让你选择词义。</p><textarea id="listText" rows="6" placeholder="老挝语 | IPA | 中文 | 标签 | 备注"></textarea><button type="button" id="listPreview">检查并预览</button><div id="listPreviewRows"></div><button type="button" id="listAdd" disabled>确认添加到此列表</button>');
+ $('#listText').oninput=()=>{pending=null;$('#listAdd').disabled=true;learningDraft.dirty=true;};
+ $('#listPreview').onclick=()=>{try{pending=listEditorParse($('#listText').value);$('#listPreviewRows').innerHTML=pending.map((r,i)=>{const matches=words.filter(w=>learningNorm(w.word)===learningNorm(r.textLao));return '<p>'+h(r.textLao+' · '+r.translationZh)+(block.contentType==='word-ref'?'<select data-list-word="'+i+'">'+(matches.length>1?'<option value="">请选择词义</option>':'')+(matches.length?matches.map(w=>'<option value="'+w.id+'">'+h(w.meaning||'无中文')+'</option>').join(''):'<option value="new">新增词条</option>')+'</select>':'')+'</p>';}).join('');$('#listAdd').disabled=false;$('#learningDialogStatus').textContent='';}catch(e){$('#learningDialogStatus').textContent=e.message;}};
+ $('#listRemove').onclick=async()=>{if(learningBusy)return;learningBusy=true;try{const indices=[...learningDialog.querySelectorAll('[data-list-remove]:checked')].map(el=>Number(el.dataset.listRemove));if(!indices.length)throw Error('请先勾选要移除的卡片。');if(!confirm('从此列表移除 '+indices.length+' 张卡片？共用词条与录音保留。'))return;
+ const record=snap.learningMaterials.find(m=>m.id===lessonV2Id(course.packageKey,'block',blockId)),ids=new Set(indices.map(i=>block.content.items[i].itemId)),next=structuredClone(record);next.v2Data.content.items=next.v2Data.content.items.filter(id=>!ids.has(id));next.updatedAt=Date.now();if(block.contentType==='dialogue'){next.textLao=block.content.items.filter(r=>!ids.has(r.itemId)).map(r=>r.textLao).join('\n')||block.title||'对话';next.audioNeedsReview=true;next.audioSources=next.audioSources.map(a=>({...a,needsReview:true}));}await learningWrite({learningMaterials:[next]},snap);learningDraft=null;learningDialog.close();await renderLearning();
+ }catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
+ $('#listAdd').onclick=async()=>{if(learningBusy||!pending)return;learningBusy=true;try{
+ const choices={},rows=pending.map((r,i)=>{if(block.contentType==='word-ref'){const choice=learningDialog.querySelector('[data-list-word="'+i+'"]').value;if(!choice)throw Error('请选择 '+r.textLao+' 的词义。');if(choices[learningNorm(r.textLao)]&&choices[learningNorm(r.textLao)]!==choice)throw Error('同一批中的同名词请选择同一词义，或分批添加。');choices[learningNorm(r.textLao)]=choice;}return {...r,itemId:'local-'+learningUid(),linkedWordText:r.textLao,linkedWords:[],speaker:'',includeInDictionary:false};});
+ for(const row of rows)if(block.contentType==='sentence')row.purpose=block.content.items[0]?.purpose||'实用句';
+ const batch=lessonV2Parse({...d,sections:[{...section,blocks:[{...block,content:{...block.content,items:rows}}]}],uncertain:[]});await lessonV2Save(batch,{snap,entries:words,chart:await readAlphabetOverrides()},{words:choices,changes:[]});learningDraft=null;learningDialog.close();await renderLearning();
+ }catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-list-edit]');if(b)listEditorOpen(b.dataset.listEdit).catch(error=>{$('#learningStatus').textContent=error.message;});});
+</script>
+<script data-list-editor="pronunciation-lists.js">
+function pronunciationDefaultList(selection,kind){
+ const {kind:rule,group,length,mark}=selection;
+ if(kind==='demo')return pronunciationExamples(rule,group,length,mark).map(text=>({id:learningUid(),text,label:'',type:'text',ref:''}));
+ return ['short','long'].map(l=>({id:learningUid(),text:pronunciationExamples(rule,group,l,rule==='openmarks'?'none':mark)[0],label:(l==='short'?'短元音':'长元音')+' · '+pronunciationTone(rule==='openmarks'?'nocoda':rule,group,l,rule==='openmarks'?'none':mark),type:'text',ref:''}));
+}
+async function pronunciationListsRender(){
+ const selection={...pronunciationSelection},key=pronunciationKey(selection),host=pronunciationPanel.querySelector('#pronLists');if(!host)return;
+ const snap=await learningSnapshot();if(!host.isConnected)return;
+ const config=snap.learningMaterials.find(m=>m.id===pronunciationConfigId(key)),lists=config?.pronunciationLists||{};
+ host.innerHTML=['demo','compare'].map(kind=>{const rows=lists[kind]??pronunciationDefaultList(selection,kind),h=learningEsc;return '<section data-pron-list="'+kind+'"><h3>'+ (kind==='demo'?'示范拼读':'对比试听')+'</h3>'+(pronunciationSettings?'<button type="button" data-pl-edit="'+kind+'">搜索添加 / 编辑此列表</button>':'')+rows.map((r,i)=>'<div class="pron-example"><span><small>'+h(r.label)+'</small><b lang="lo">'+h(r.text)+'</b></span><button type="button" data-pl-play="'+kind+':'+i+'">▶</button><button type="button" data-pl-manage="'+kind+':'+i+'">录音 / 管理</button></div>').join('')+(!rows.length?'<p class="pron-intro">暂无卡片，可在设置模式添加。</p>':'')+'</section>';}).join('');
+ const resolved={demo:lists.demo??pronunciationDefaultList(selection,'demo'),compare:lists.compare??pronunciationDefaultList(selection,'compare')};
+ host.onclick=async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.dataset.plEdit){await pronunciationListEdit(key,selection,b.dataset.plEdit);return;}const value=b.dataset.plPlay||b.dataset.plManage;if(!value)return;const [kind,index]=value.split(':'),row=resolved[kind][Number(index)];if(b.dataset.plManage){if(row.type==='material')await learningOpenDetail(row.ref);else if(row.type==='word')await learningOpenDetail('word:'+row.ref);else await pronunciationManage(row.text);return;}await pronunciationListPlay(row);}catch(error){document.querySelector('#pronunciationStatus').textContent=error.message;}};
+}
+async function pronunciationListPlay(row){
+ if(row.type==='text'){await pronunciationPlay(row.text);return;}
+ const {m,w,snap}=await learningResolve(row.type==='word'?'word:'+row.ref:row.ref);if(!m)throw Error('原卡片已删除或暂不可用。');
+ const ref=(m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).at(-1),asset=snap.learningAudio.find(a=>a.id===ref?.assetId);
+ if(asset?.blob){await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);return;}
+ if(w&&hasAudio(w)){await learningPlayBlob(audioBlobFor(w));return;}
+ const text=w?.word||m.textLao,cache=await learningCachedSpeech(text);if(cache){await learningPlayBlob(cache);return;}throw Error('此卡片暂无已保存音频，可通过“录音 / 管理”补充。未调用生成服务。');
+}
+async function pronunciationListEdit(key,selection,kind){
+ if(!pronunciationSettings||learningHasWork())throw Error('请先开启设置模式并完成当前编辑。');
+ const snap=await learningSnapshot(),words=await allEntries(),config=snap.learningMaterials.find(m=>m.id===pronunciationConfigId(key));let rows=structuredClone(config?.pronunciationLists?.[kind]??pronunciationDefaultList(selection,kind));
+ const candidates=[...words.filter(w=>w.syncId).map(w=>({type:'word',ref:w.syncId,text:w.word,meaning:w.meaning||''})),...snap.learningMaterials.filter(m=>!m.deleted&&['word','sentence','reading_drill'].includes(m.contentType)&&m.textLao).map(m=>({type:'material',ref:m.id,text:m.textLao,meaning:m.translationZh||''}))],h=learningEsc;
+ learningDraft={kind:'pronunciation-list',dirty:false};
+ learningModal(kind==='demo'?'编辑示范拼读':'编辑对比试听','<p>复用已有词卡和录音，不限制固定条数。移除只影响本列表。</p><label>搜索已有单词 / 句子<input id="plSearch" placeholder="老挝语或中文"></label><div id="plResults"></div><h3>当前列表（小标题可修改）</h3><div id="plRows"></div><button type="button" id="plRemove">移除勾选</button><button type="button" id="plSave">保存列表与小标题</button>');
+ function collect(){learningDialog.querySelectorAll('[data-pl-label]').forEach(el=>{rows[Number(el.dataset.plLabel)].label=el.value;});}
+ function draw(){ $('#plRows').innerHTML=rows.map((r,i)=>'<div class="pron-custom-example"><label><input style="width:auto" type="checkbox" data-pl-remove="'+i+'"> '+h(r.text)+'</label><input aria-label="小标题" data-pl-label="'+i+'" value="'+h(r.label)+'" placeholder="填写小标题"></div>').join('');}
+ function search(){const q=learningNorm($('#plSearch').value).toLowerCase(),results=candidates.map((r,i)=>({r,i})).filter(({r})=>(r.text+' '+r.meaning).toLowerCase().includes(q));$('#plResults').innerHTML=results.slice(0,60).map(({r,i})=>'<button type="button" data-pl-add="'+i+'">＋ '+h(r.text+' · '+r.meaning)+(r.type==='word'?' [词典]':' [教材]')+'</button>').join('')+(results.length>60?'<p>显示前60个匹配，请继续输入缩小范围；不限制添加总数。</p>':'');}
+ $('#plSearch').oninput=search;$('#plRows').oninput=()=>{learningDraft.dirty=true;};
+ $('#plResults').onclick=e=>{const b=e.target.closest('[data-pl-add]');if(!b)return;collect();const r=candidates[Number(b.dataset.plAdd)];if(rows.some(x=>x.type===r.type&&x.ref===r.ref)){$('#learningDialogStatus').textContent='该卡片已在本列表中。';return;}rows.push({...r,id:learningUid(),label:r.meaning});learningDraft.dirty=true;draw();};
+ $('#plRemove').onclick=()=>{collect();const removed=new Set([...learningDialog.querySelectorAll('[data-pl-remove]:checked')].map(el=>Number(el.dataset.plRemove)));rows=rows.filter((_,i)=>!removed.has(i));learningDraft.dirty=true;draw();};
+ $('#plSave').onclick=async()=>{if(learningBusy)return;learningBusy=true;try{collect();const id=pronunciationConfigId(key);await learningWrite({learningMaterials:[{...learningBlank(id,'knowledge','发音规则示例：'+key),...config,pronunciationLists:{...(config?.pronunciationLists||{}),[kind]:rows},updatedAt:Date.now()}]},snap);learningDraft=null;learningDialog.close();await pronunciationListsRender();}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
+ draw();search();
+}
 </script>
 </body>
 </html>

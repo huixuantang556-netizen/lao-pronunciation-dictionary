@@ -3547,8 +3547,6 @@ async function liveVowelDetail(key){
 document.addEventListener('click',e=>{const b=e.target.closest('[data-live-vowel]');if(!b)return;clearTimeout(liveVowelTimer);if(e.detail>1)return;const host=b.closest('.live-vowel-chart');liveVowelTimer=setTimeout(async()=>{if(!b.isConnected||b.closest('.hidden'))return;try{await liveVowelPlay(b.dataset.liveVowel);host.querySelector('.live-vowel-status').textContent='正在试听';}catch(error){host.querySelector('.live-vowel-status').textContent=error.message;}},350);});
 function liveVowelOpenFromEvent(e){const b=e.target.closest('[data-live-vowel]');if(!b)return;e.preventDefault();clearTimeout(liveVowelTimer);void liveVowelDetail(b.dataset.liveVowel).catch(error=>{b.closest('.live-vowel-chart').querySelector('.live-vowel-status').textContent=error.message;});}
 document.addEventListener('dblclick',liveVowelOpenFromEvent);document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey)liveVowelOpenFromEvent(e);});
-const liveVowelRenderLearning=renderLearning;
-renderLearning=async function(...args){await liveVowelRenderLearning(...args);if(learningRoute==='lesson'&&/第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(learningLesson.title))await liveVowelMount(document.querySelector('#learningContent'));};
 const liveVowelRenderCoda=renderCodaChapter;
 renderCodaChapter=async function(...args){await liveVowelRenderCoda(...args);if(codaTab==='live')await liveVowelMount(document.querySelector('#codaPanel'));else document.querySelector('#codaPanel .live-vowel-chart')?.remove();};
 const liveVowelRenderPronunciation=renderPronunciation;
@@ -3556,6 +3554,7 @@ renderPronunciation=function(...args){const result=liveVowelRenderPronunciation(
 </script>
 <style data-live-coda-notes="live-coda-notes.css">
 .live-coda-notes{margin-top:22px;padding:20px;border:1px solid #deebe5;border-radius:16px;background:#fff}.lcn-core{background:#edf7f2;border-radius:12px;padding:16px;line-height:1.8}.lcn-core p{margin:8px 0;font-size:15px}.lcn-table{width:100%;border-collapse:collapse;margin-top:18px;min-width:620px}.lcn-table th,.lcn-table td{text-align:left;padding:12px;border-bottom:1px solid #e1ece6;font-size:14px}.lcn-table th[lang=lo]{font-size:28px;color:#087f6e}.lcn-table td:last-child span{display:block;font-size:13px;color:#647b72}.live-coda-notes button{border:0;background:transparent;color:#087f6e;padding:3px 0;font-size:23px;min-height:32px}.live-coda-notes button:hover{text-decoration:underline}.lcn-practice,.lcn-corrections{margin-top:18px;font-size:14px;line-height:1.8}.lcn-practice details{padding:12px 0;border-bottom:1px solid #e1ece6}.lcn-spelling{white-space:pre-line;font-size:19px}.lcn-words{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:8px 18px}.lcn-words>div{display:flex;flex-direction:column;border-bottom:1px solid #eef4f0;padding:5px}.lcn-words button{align-self:flex-start}.lcn-words span{font-size:13px;color:#647b72}.lcn-status{font-size:14px;color:#087f6e}
+.lcn-tabs,.lcn-subtabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.live-coda-notes .lcn-tabs button{font-size:17px;padding:7px 14px;background:#edf5f1;border-radius:9px}.live-coda-notes .lcn-subtabs button{font-size:13px;padding:5px 12px;background:#f1f6f3;border-radius:8px}.live-coda-notes nav button[aria-pressed=true]{background:#087f6e;color:#fff}.live-coda-notes nav button:hover{text-decoration:none;box-shadow:0 0 0 1px #78ad9c}
 </style>
 <script data-live-coda-notes="live-coda-notes.js">
 /* Lesson supplement organized from the user's supplied notes; no dictionary writes. */
@@ -3566,14 +3565,50 @@ const liveCodaNotes=[
  {letter:'ມ',ipa:'/m/',memory:'双唇闭合的鼻音 m。',example:'ງາມ',meaning:'漂亮',spelling:'ງ + ◌າ + ມ → ງາມ\nຖ + ◌າ + ມ → ຖາມ\nສ + ◌າ + ມ → ສາມ',words:'ກຽມ=准备|ກົ້ມ=低头|ດື່ມ=喝|ຢືມ=借|ປຶ້ມ=书|ດົມ=闻|ຈົ່ມ=抱怨；唠叨|ເພີ່ມ=增加|ແຕ້ມ=画|ອົມ=含着|ອີ່ມ=饱|ອຸ້ມ=抱|ຕົ້ມ=煮|ຕາມ=跟随|ຢາມ=拜访|ເຄັມ=咸|ຄົມ=锋利|ຊາມ=盆；碗|ຊົມ=观看；欣赏|ຊິມ=尝|ຍິ້ມ=微笑|ລົມ=风；聊天|ພິມ=打印|ເຂັມ=针|ຂ້າມ=跨越|ສາມ=三|ຖິ້ມ=扔掉；抛弃|ຖາມ=问|ຜົມ=头发|ແຫຼມ=尖|ໜາມ=刺|ຫອມ=香|ຂົມ=苦|ສົ້ມ=酸|ຫ້າມ=禁止'},
  {letter:'ງ',ipa:'/ŋ/',memory:'后鼻音，类似 ang / eng / ing / ong 共同的 ng；不是四种尾辅音读音。',example:'ຍັງ',meaning:'还；仍然',spelling:'不同元音 + ງ → 不同韵母，尾音仍为 /ŋ/。',words:'ກາງ=中间|ທາງ=路；道路|ຄາງ=下巴|ບາງ=薄的|ຢາງ=橡胶；塑料|ດັງ=响；鼻子|ຫຼັງ=后面；背后|ຊ້າງ=大象|ຍ່າງ=走|ຕ່າງ=不同|ຟັງ=听|ຕຽງ=床|ເບື້ອງ=一侧；方面|ຈ້າງ=雇佣|ຕັ່ງ=凳子|ຫາງ=尾巴|ຄັ້ງ=次|ຂຽງ=菜板|ສາງ=仓库|ສຽງ=声音|ເຫຼືອງ=黄色|ຍັງ=还；仍然'}
 ];
-function liveCodaNotesHtml(){const h=learningEsc,play=(word,label)=>'<button type="button" data-lcn-play="'+h(word)+'" title="试听已保存的例词 '+h(word)+'">'+h(label||word)+'</button>';return '<h3>活闭音节 · 核心知识</h3><div class="lcn-core"><strong>起始辅音 + 元音 + 活尾辅音</strong><p>音节末尾带有 ນ、ຍ、ວ、ມ、ງ 之一。拼读时，在辅音＋元音之后接上对应尾音，不另加一个完整音节。</p><p>活闭音节可以带声调符号，仍须按声调规则拼读。本教材中，短、长元音的活闭音节使用相同的声调规则，只区别时长；具体声调看起始辅音类别与声调符号。</p></div><div class="live-vowel-scroll"><table class="lcn-table"><thead><tr><th>尾辅音</th><th>尾音</th><th>中文辅助记忆</th><th>例词 · 点击试听</th></tr></thead><tbody>'+liveCodaNotes.map(r=>'<tr><th lang="lo">'+r.letter+'</th><td>'+r.ipa+'</td><td>'+h(r.memory)+'</td><td>'+play(r.example)+'<span>'+h(r.meaning)+'</span></td></tr>').join('')+'</tbody></table></div><p class="tag-hint">音标描述尾音；en / i / u / ang… 只是教材的近似记忆提示。试听播放完整例词，不是孤立尾音；缺音频不会自动生成。</p><details class="lcn-practice"><summary>分组拼读与练习词</summary>'+liveCodaNotes.map(r=>'<details><summary><span lang="lo">'+r.letter+'</span> '+r.ipa+' · '+r.words.split('|').length+' 个练习词</summary><p class="lcn-spelling">'+h(r.spelling)+'</p><div class="lcn-words">'+r.words.split('|').map(pair=>{const [word,meaning]=pair.split('=');return '<div>'+play(word)+'<span>'+h(meaning)+'</span></div>';}).join('')+'</div></details>').join('')+'</details><details class="lcn-corrections"><summary>容易混淆的记音与词义</summary><ul><li>ນ 的尾音是 /n/，不是固定发 en；ງ 的尾音是 /ŋ/，前面的元音不同不等于 ງ 有四个读音。</li><li>ຜືນ 是用于布、毯子、席子等的量词，不是通用的“件”。</li><li>ຍ້າຍ：移动、搬迁；ແກ້ວ：玻璃、杯子或玻璃器皿，需结合语境。</li><li>按你提供的校正：ທ້ອງ 应记为“肚子、腹部”，不要记为“提醒”；“提醒”为 ເຕືອນ。本次不把这组争议识别项自动收录词典。</li></ul></details><p class="lcn-status" role="status"></p><p class="tag-hint">按本次提供的学习笔记整理；释义随语境变化。以下接元音＋活尾辅音点读表。</p>';}
-async function liveCodaNotesMount(){
- if(learningRoute!=='lesson'||learningLesson.library==='communication'||!/第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(learningLesson.title))return;
- const courseId=learningLesson.id,snap=await learningSnapshot();if(learningLesson.id!==courseId||learningRoute!=='lesson')return;
- let knowledge=learningTab==='knowledge';if(learningLesson.schemaVersion===2){const d=lessonV2Export(snap,learningLesson),section=d.sections.find(s=>s.id===lessonV2Sections.get(courseId))||d.sections[0];knowledge=lessonV2Mode==='order'?Boolean(section?.blocks.some(b=>b.contentType==='knowledge')):['all','knowledge'].includes(lessonV2Filter);}
- if(!knowledge)return;const parent=document.querySelector('#learningContent');if(!parent||parent.querySelector('.live-coda-notes'))return;
- const notes=document.createElement('section');notes.className='live-coda-notes';notes.innerHTML=liveCodaNotesHtml();const chart=parent.querySelector('.live-vowel-chart');if(chart)chart.before(notes);else parent.append(notes);
+
+let liveCodaSelected='ນ',liveCodaNgSelected='ang',liveCodaTableCourse=null;
+const liveCodaNgGroups={
+ ang:'ກາງ=中间|ທາງ=路|ຄາງ=下巴|ບາງ=薄的|ຢາງ=塑料；橡胶|ດັງ=响亮；鼻子|ຫຼັງ=栋；后面|ຊ້າງ=大象|ຍ່າງ=走|ຕ່າງ=不同|ຟັງ=听|ຕຽງ=床|ເບື້ອງ=侧；方面|ຈ້າງ=雇佣|ຕັ່ງ=凳子|ຫາງ=尾巴|ຄັ້ງ=次|ຂຽງ=菜板|ສາງ=仓库|ສຽງ=声音|ເຫຼືອງ=黄色',
+ eng:'ແດງ=红色|ແກງ=汤|ແພງ=贵|ເພງ=歌|ແສງ=光|ເທິງ=上面|ແຈ້ງ=亮；清楚|ເບິ່ງ=看|ເຄິ່ງ=半|ໜຶ່ງ=一|ເກັ່ງ=厉害；擅长|ເຜິ້ງ=蜜蜂',
+ ing:'ຍິງ=女性；女人|ລີງ=猴子|ສິງ=狮子|ຂີງ=姜',
+ ong:'ກຸ້ງ=虾|ໂຮງແຮມ=酒店|ໂຮງຮຽນ=学校|ໂຮງໝໍ=医院|ໂສ້ງ=裤子|ກອງ=鼓|ສອງ=二|ຂອງ=的；东西|ຈອງ=预定|ຕ້ອງ=必须|ທ້ອງ=肚子；腹部|ຫ້ອງ=房间|ໜອງ=水池；池塘；湖|ກ້ອງ=底下；下面|ທຸງ=旗|ຖົງ=袋子'
+};
+function liveCodaNotesHtml(){
+ const h=learningEsc,r=liveCodaNotes.find(r=>r.letter===liveCodaSelected)||liveCodaNotes[0],ng=r.letter==='ງ';
+ const play=word=>'<button type="button" data-lcn-play="'+h(word)+'">'+h(word)+'</button>';
+ return '<h3>活闭音节 · 核心知识</h3><p class="tag-hint">起始辅音 + 元音 + 活尾辅音。本教材中，活闭音节的短、长元音声调规则相同，只区别时长；声调看起始辅音类别与声调符号。</p><nav class="lcn-tabs" aria-label="尾辅音分组">'+liveCodaNotes.map(x=>'<button type="button" data-lcn-group="'+x.letter+'" aria-pressed="'+(x.letter===r.letter)+'">'+x.letter+' '+x.ipa+'</button>').join('')+'</nav><div class="lcn-core"><strong>活尾辅音 '+r.letter+' → '+r.ipa+'</strong><p>'+h(r.memory)+'</p><p>例词：'+play(r.example)+' · '+h(r.meaning)+'</p>'+(ng?'<p>前面的元音不同，会形成不同韵母。以下按你提供的教材笔记近似分为 ang / eng / ing / ong 四组，并非 ງ 有四个读音，也不是严格的国际音标分类。复合词如 ໂຮງແຮມ 观察含 ງ 的音节。</p>':'')+'</div>'+
+ (ng?'<nav class="lcn-subtabs" aria-label="后鼻音辅助记音分组">'+Object.keys(liveCodaNgGroups).map(k=>'<button type="button" data-lcn-ng="'+k+'" aria-pressed="'+(k===liveCodaNgSelected)+'">'+k+' 组</button>').join(''):'<p class="lcn-spelling">'+h(r.spelling)+'</p>')+
+ '<div class="lcn-words">'+(ng?liveCodaNgGroups[liveCodaNgSelected]:r.words).split('|').map(pair=>{const [word,meaning]=pair.split('=');return '<div>'+play(word)+'<span>'+h(meaning)+'</span></div>';}).join('')+'</div>'+
+ (ng?'<p class="tag-hint">词义提醒：ທ້ອງ 是“肚子、腹部”，不是“提醒”；提醒可用 ເຕືອນ。ກ້ອງ 可表示“底下、下面”。</p>':r.letter==='ນ'?'<p class="tag-hint">ຜືນ 用于布、毯子、席子等片状物，不是通用量词“件”。</p>':r.letter==='ວ'?'<p class="tag-hint">ແກ້ວ 指玻璃、杯子或玻璃器皿，不只指玻璃瓶。</p>':'')+
+ '<p class="lcn-status" role="status"></p><p class="tag-hint">点击词语试听已有音频；缺音频不会自动生成。按提供的学习笔记整理，释义需结合语境。</p>';
 }
+async function liveCodaNotesMount(){
+ if(learningRoute!=='lesson'||learningLesson.library==='communication'||!/第(?:十一|11)课[：:、\\s]*活闭音节尾辅音及其声调/.test(learningLesson.title))return;
+ const courseId=learningLesson.id,snap=await learningSnapshot();if(learningLesson.id!==courseId||learningRoute!=='lesson')return;
+ const parent=document.querySelector('#learningContent');if(!parent)return;
+ const nav=parent.querySelector('.v2-section-tabs')||parent.querySelector('.learn-tabs');
+ if(nav&&!nav.querySelector('[data-lcn-table]')){
+  const button=document.createElement('button');button.type='button';button.dataset.lcnTable='true';button.textContent='活尾辅音点读表';
+  const knowledgeButton=[...nav.querySelectorAll('button')].find(b=>/本课知识点/.test(b.textContent))||nav.querySelector('button');
+  if(knowledgeButton)knowledgeButton.after(button);else nav.append(button);
+ }
+ if(liveCodaTableCourse===courseId){
+  nav?.querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',b.hasAttribute('data-lcn-table')?'page':'false'));
+  parent.querySelectorAll('.v2-section,.live-coda-notes').forEach(el=>el.remove());
+  await liveVowelMount(parent);const heading=parent.querySelector('.live-vowel-chart h3');if(heading)heading.textContent='活尾辅音点读表';return;
+ }
+ parent.querySelectorAll('.live-vowel-chart').forEach(el=>el.remove());
+ let knowledge=learningTab==='knowledge';if(learningLesson.schemaVersion===2){const d=lessonV2Export(snap,learningLesson),section=d.sections.find(s=>s.id===lessonV2Sections.get(courseId))||d.sections[0];knowledge=lessonV2Mode==='order'?Boolean(section?.blocks.some(b=>b.contentType==='knowledge')):['all','knowledge'].includes(lessonV2Filter);}
+ if(!knowledge||parent.querySelector('.live-coda-notes'))return;
+ const notes=document.createElement('section');notes.className='live-coda-notes';notes.innerHTML=liveCodaNotesHtml();parent.append(notes);
+}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.hasAttribute('data-lcn-table')){liveCodaTableCourse=learningLesson.id;stopPracticeAudio();void renderLearning().catch(learningError);return;}
+ if(b.dataset.lcnGroup||b.dataset.lcnNg){stopPracticeAudio();if(b.dataset.lcnGroup)liveCodaSelected=b.dataset.lcnGroup;if(b.dataset.lcnNg)liveCodaNgSelected=b.dataset.lcnNg;const host=b.closest('.live-coda-notes');if(host)host.innerHTML=liveCodaNotesHtml();return;}
+ // Clear table mode before the existing delegated course handler starts rendering.
+ if(b.dataset.learn||b.dataset.view)liveCodaTableCourse=null;
+},true);
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-lcn-play]');if(!b)return;const status=b.closest('.live-coda-notes').querySelector('.lcn-status');try{await pronunciationPlay(b.dataset.lcnPlay);status.textContent='正在试听：'+b.dataset.lcnPlay;}catch(error){status.textContent=error.message;}});
 const liveCodaNotesRenderLearning=renderLearning;
 renderLearning=async function(...args){await liveCodaNotesRenderLearning(...args);await liveCodaNotesMount();};

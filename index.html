@@ -3102,6 +3102,7 @@ async function lessonPagePrepare(page,fromBatch=false){
    if(localStorage.getItem(batchDraftKey)&&!confirm('开始这一批会替换上一次切分草稿（不会删除原音和已保存切片）。继续？'))return;
    let blob=await learningCachedSpeech(text);
    if(!blob&&page.dialogueId&&from===1&&to===words.length)blob=await learningCachedSpeech(chosen.map(w=>w.word).join('\n'));
+   if(!blob&&fromBatch)await batchAssertMissing(chosen);
    if(!blob){if(!confirm('将合成 '+chosen.length+' 项整段音频，发起一次请求，可能计费。继续？'))return;batchNotice('正在等待生成结果，最长约 3 分钟，请勿重复提交或关闭…');blob=await defaultSpeech(text,{batchPause:true});}
    const key=JSON.stringify([ttsSettings.endpoint||'',text]);await ttsCache('readwrite',key,blob);
    if(page.dialogueId&&from===1&&to===words.length){
@@ -3228,28 +3229,97 @@ function batchCourseContent(snap){
  return {sentences,dialogues};
 }
 function batchModeButtons(){return '<nav class="batch-modes"><button data-batch-mode="words">词汇</button><button data-batch-mode="sentences">句子</button><button data-batch-mode="dialogues">完整对话</button></nav>';}
+function batchContentInventory(snap,cacheRows){
+ const content=batchCourseContent(snap),cache=new Map(cacheRows.filter(r=>r.blob?.size).flatMap(r=>{try{return [[JSON.parse(r.key)[1],r]];}catch(_){return [];}}));
+ const materials=new Map(snap.learningMaterials.map(m=>[m.id,m])),byText=new Map(),covered=new Set(),states=new Map();
+ for(const w of content.sentences){const m=materials.get(w.id),refs=(m?.audioSources||[]).filter(learningIsReference);if(cache.has(w.word)||refs.length)byText.set(w.word,true);}
+ const runs=[];
+ for(const [text,row] of cache){if(typeof text!=='string'||!text.endsWith('.'))continue;const texts=text.slice(0,-1).split('.\n\n');if(lessonPageText(texts.map(word=>({word})))===text)runs.push({...row,texts});}
+ for(const run of runs)for(const text of run.texts)if(content.sentences.some(w=>w.word===text))covered.add(text);
+ for(const d of content.dialogues){
+  const fullText=d.words.map(w=>w.word).join('\n'),exact=cache.get(lessonPageText(d.words))||cache.get(fullText);
+  let full=exact?{...exact,words:d.words.map(w=>({...w,dialogueId:d.id}))}:null;
+  const m=materials.get(d.id),refs=(m?.audioSources||[]).filter(learningIsReference);
+  if(!full&&!m?.audioNeedsReview&&m?.textLao===fullText){
+   const ref=refs.filter(a=>!a.needsReview).at(-1),asset=snap.learningAudio.find(a=>a.id===ref?.assetId),cached=ref?.source==='gemini'?cache.get(ref.text):null;
+   if(cached)full={...cached,words:d.words.map(w=>({...w,dialogueId:d.id}))};
+   else if(asset?.blob?.size)full={blob:asset.blob,start:ref.start||0,end:ref.end??null,words:d.words.map(w=>({...w,dialogueId:d.id}))};
+  }
+  if(!full)for(const run of runs){const at=run.texts.findIndex((_,i)=>d.words.every((w,j)=>run.texts[i+j]===w.word));if(at<0)continue;
+   const words=run.texts.map((text,i)=>i>=at&&i<at+d.words.length?{...d.words[i-at],dialogueId:d.id}:content.sentences.find(w=>w.word===text));
+   full={...run,words:words.every(Boolean)?words:null};break;
+  }
+  if(full||refs.length)d.words.forEach(w=>covered.add(w.word));
+  let savedBatch=null;
+  if(!full){const run=runs.find(r=>r.texts.some(text=>d.words.some(w=>w.word===text)));if(run){const words=run.texts.map(text=>content.sentences.find(w=>w.word===text));savedBatch={...run,words:words.every(Boolean)?words:null};}}
+  states.set(d.id,{full,savedBatch,blocked:!full&&refs.length>0});
+ }
+ for(const d of content.dialogues){const state=states.get(d.id);state.missing=d.words.filter(w=>!covered.has(w.word)&&!byText.has(w.word));state.selectable=!state.full&&!state.blocked&&state.missing.length===d.words.length;}
+ return {content,states,missing:w=>!covered.has(w.word)&&!byText.has(w.word)};
+}
+async function batchFreshInventory(){return batchContentInventory(await learningSnapshot(),await cloudCacheRows());}
+async function batchAssertMissing(words){
+ const inventory=await batchFreshInventory(),current=new Map(inventory.content.sentences.map(w=>[w.id,w]));
+ if(words.some(w=>current.get(w.id)?.word!==w.word))throw Error('课程文字或归属已变化，请返回列表重新选择。');
+ if(words.some(w=>!inventory.missing(w)))throw Error('所选内容已有音频或待切分原音，已阻止重复生成。请返回列表使用“打开／切分”或“仅补缺句”。');
+}
+async function batchOpenSavedDialogue(id){
+ if(batchAudioBusy||recorder||learningHasWork())return;
+ const inventory=await batchFreshInventory(),d=inventory.content.dialogues.find(d=>d.id===id),state=inventory.states.get(id),full=state?.full||state?.savedBatch;
+ if(!d||!full)throw Error('未找到可用原音，请刷新列表或先同步音频；不会改为付费生成。');
+ if(!full.words)throw Error('原音属于较大的批次，其中部分句子已不在课程中。请用“恢复切分草稿”打开；不会重复生成。');
+ batchAudioBusy=true;
+ try{
+  let draft=null;try{draft=JSON.parse(localStorage.getItem(batchDraftKey)||'null');}catch(_){}
+  if(draft&&draft.key!==full.key&&!confirm('打开已有原音会替换当前切分草稿，但不会删除原音和已保存切片。继续？'))return;
+  stopPracticeAudio();let blob=full.blob,buffer=await batchDecode(blob);
+  if(full.start||full.end!=null){const end=full.end??buffer.duration;if(full.start<0||end>buffer.duration+.05||end<=full.start)throw Error('原音片段范围无效，请在详情中核对。');blob=batchWav(buffer,full.start,Math.min(end,buffer.duration));buffer=await batchDecode(blob);}
+  const sameDraft=draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
+  const words=sameDraft?draft.words:full.words,current=await lessonPageResolve(words);if(current.some((w,i)=>w.word!==words[i].word))throw Error('原音对应文字已变化，请先核对。');
+  const key=full.key||JSON.stringify([ttsSettings.endpoint||'',lessonPageText(words)]);
+  await ttsCache('readwrite',key,blob);
+  const resume=draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
+  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,dialogueGroups:resume?draft.dialogueGroups||[]:state.full?[{id,itemIds:d.words.map(w=>w.id)}]:[],ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
+  batchRemember();batchEditor();
+ }finally{batchAudioBusy=false;}
+}
 async function batchOpenContent(mode){
  if(batchAudioBusy||recorder||learningHasWork())return;
- stopPracticeAudio();const snap=await learningSnapshot(),content=batchCourseContent(snap),cache=new Map();
- for(const r of await cloudCacheRows()){try{cache.set(JSON.parse(r.key)[1],r.blob);}catch(_){}}
- const seen=new Set(),fullCovered=new Set();
- for(const d of content.dialogues){if(cache.has(d.words.map(w=>w.word).join('\n'))||cache.has(lessonPageText(d.words)))d.words.forEach(w=>fullCovered.add(w.word));}
+ stopPracticeAudio();const inventory=await batchFreshInventory(),content=inventory.content;
+ const seen=new Set();
  const all=mode==='dialogues'?content.dialogues:content.sentences;
  const unique=all.filter(r=>{const key=mode==='dialogues'?JSON.stringify(r.words.map(w=>w.word)):r.word;if(seen.has(key))return false;seen.add(key);return true;});
- const rows=mode==='dialogues'?unique:unique.filter(w=>{const m=snap.learningMaterials.find(m=>m.id===w.id);return !fullCovered.has(w.word)&&!cache.has(w.word)&&!m?.audioSources.some(a=>learningIsReference(a)&&!a.needsReview);});
+ const rows=mode==='dialogues'?unique:unique.filter(inventory.missing),selectable=r=>mode!=='dialogues'||inventory.states.get(r.id).selectable;
  let page=0,visible=[];const selected=new Set(),h=learningEsc;
- batchDialog.innerHTML='<h2>批量生成 · 音频切分</h2>'+batchModeButtons()+'<p>'+(mode==='dialogues'?'每页 30 组，可全选本页并跨页、跨章节勾选多组对话（每批最多 5,000 字符），按列表顺序朗读和切分。不会因为某句已有音频而跳过该句；保存切片时不覆盖旧音频。整段原音保留，已有整段可直接打开切分。':'每页 30 句，可跨页、跨课程多选，不限 30 句（每批最多 5,000 字符）。隐藏已有可用录音／缓存的句子，已跳过 '+(all.length-rows.length)+' 项。')+' 完全相同的朗读内容只列一次；有整段音频但尚未保存单句的内容不会重复生成，请在完整对话中打开已有音频切分。'+'</p><input id="batchContentSearch" type="search" placeholder="搜索课程、对话、老挝语或中文"><div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+'<p><button id="batchContentSelect">全选本页</button><button id="batchContentUnselect">取消本页</button><button id="batchContentClear">清空已选</button><button id="batchContentGo">准备合成与切分</button></p>'+'<p><button data-batch-mode="words">返回词汇／恢复切分草稿</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ batchDialog.innerHTML='<h2>批量生成 · 音频切分</h2>'+batchModeButtons()+'<p>'+(mode==='dialogues'?'只勾选完全缺音频的对话。已有整段使用“打开／切分”，不发起生成请求；部分单句已有音频时，只补齐缺句。每页 30 组，每批最多 5,000 字符。':'每页 30 句，可跨页、跨课程多选，不限 30 句（每批最多 5,000 字符）。隐藏已有音频／缓存或待核对、待同步的句子，已跳过 '+(all.length-rows.length)+' 项。')+' 完全相同的朗读内容只列一次；有整段音频但尚未保存单句的内容不会重复生成，请在完整对话中打开已有音频切分。'+'</p><input id="batchContentSearch" type="search" placeholder="搜索课程、对话、老挝语或中文"><div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+'<p><button id="batchContentSelect">全选本页</button><button id="batchContentUnselect">取消本页</button><button id="batchContentClear">清空已选</button><button id="batchContentGo">准备合成与切分</button></p>'+'<p><button data-batch-mode="words">返回词汇／恢复切分草稿</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
  const draw=()=>{const q=$('#batchContentSearch').value.toLowerCase(),filtered=rows.filter(r=>[r.title,r.word,r.meaning,r.category,...(r.words||[]).flatMap(w=>[w.word,w.meaning])].join(' ').toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/30));page=Math.min(page,pages-1);visible=filtered.slice(page*30,page*30+30);
- $('#batchContentList').innerHTML=visible.map(r=>mode==='dialogues'?'<label style="display:block;margin:10px 0"><input type="checkbox" data-batch-sentence="'+h(r.id)+'" '+(selected.has(r.id)?'checked':'')+'>'+h(r.title)+' · '+r.words.length+' 句</label>':'<label style="display:block;margin:10px 0"><input type="checkbox" data-batch-sentence="'+h(r.id)+'" '+(selected.has(r.id)?'checked':'')+'>'+h(r.word)+' · '+h(r.meaning)+'<small style="display:block">'+h(r.category)+'</small></label>').join('')||'<p>没有匹配内容</p>';
+ $('#batchContentList').innerHTML=visible.map(r=>{
+  const state=mode==='dialogues'?inventory.states.get(r.id):null,label=h(r.title||r.word)+(state?' · '+r.words.length+' 句':' · '+h(r.meaning));
+  if(!state||state.selectable)return '<label style="display:block;margin:10px 0"><input type="checkbox" style="width:auto" data-batch-sentence="'+h(r.id)+'" '+(selected.has(r.id)?'checked':'')+'>'+label+(state?' · 待生成':'<small style="display:block">'+h(r.category)+'</small>')+'</label>';
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><span>'+label+'</span><small>'+(state.full?'已有整段原音':state.savedBatch?'已有批次原音待切分':state.blocked?'原音待核对／同步':state.missing.length?'部分单句已有音频':'单句音频已齐全')+'</small>'+(state.full||state.savedBatch?'<button style="padding:5px 10px;font-size:13px" data-batch-saved="'+h(r.id)+'">打开／切分</button>':'<button style="padding:5px 10px;font-size:13px" data-batch-detail="'+h(r.id)+'">查看详情</button>')+(!state.full&&!state.blocked&&state.missing.length?'<button style="padding:5px 10px;font-size:13px" data-batch-missing="'+h(r.id)+'">仅补缺句（'+state.missing.length+'）</button>':'')+'</div>';
+ }).join('')||'<p>没有匹配内容</p>';
  $('#batchContentCount').textContent='第 '+(page+1)+' / '+pages+' 页 · 共 '+filtered.length+' 项 · 已选 '+selected.size;
- $('#batchContentPrev').disabled=page===0;$('#batchContentNext').disabled=page>=pages-1;};
+ $('#batchContentPrev').disabled=page===0;$('#batchContentNext').disabled=page>=pages-1;$('#batchContentSelect').disabled=!visible.some(selectable);$('#batchContentGo').disabled=!selected.size;};
  $('#batchContentSearch').oninput=()=>{page=0;draw();};$('#batchContentPrev').onclick=()=>{page--;draw();};$('#batchContentNext').onclick=()=>{page++;draw();};
- $('#batchContentList').onchange=e=>{const id=e.target.dataset.batchSentence;if(!id)return;if(e.target.checked)selected.add(id);else selected.delete(id);draw();};
- $('#batchContentSelect').onclick=()=>{visible.forEach(r=>selected.add(r.id));draw();};
+ $('#batchContentList').onchange=e=>{const id=e.target.dataset.batchSentence;if(!id||!rows.some(r=>r.id===id&&selectable(r)))return;if(e.target.checked)selected.add(id);else selected.delete(id);draw();};
+ $('#batchContentSelect').onclick=()=>{visible.filter(selectable).forEach(r=>selected.add(r.id));draw();};
  $('#batchContentUnselect').onclick=()=>{visible.forEach(r=>selected.delete(r.id));draw();};
  $('#batchContentClear').onclick=()=>{selected.clear();draw();};
- $('#batchContentGo').onclick=async()=>{if(!selected.size){batchNotice('请先勾选需要生成的内容');return;}try{const chosen=rows.filter(r=>selected.has(r.id));await lessonPagePrepare(mode==='dialogues'?{title:'批量完整对话 · '+chosen.length+' 组',dialogueId:chosen.length===1?chosen[0].id:null,words:chosen.flatMap(r=>r.words.map(w=>({...w,dialogueId:r.id}))),dialogueGroups:chosen.map(r=>({id:r.id,words:r.words}))}:{title:'批量句子',words:chosen},true);}catch(error){batchNotice(error.message);}};
+ $('#batchContentGo').onclick=async()=>{if(!selected.size){batchNotice('请先勾选需要生成的内容');return;}try{const chosen=rows.filter(r=>selected.has(r.id));await batchAssertMissing(mode==='dialogues'?chosen.flatMap(r=>r.words):chosen);await lessonPagePrepare(mode==='dialogues'?{title:'批量完整对话 · '+chosen.length+' 组',dialogueId:chosen.length===1?chosen[0].id:null,words:chosen.flatMap(r=>r.words.map(w=>({...w,dialogueId:r.id}))),dialogueGroups:chosen.map(r=>({id:r.id,words:r.words}))}:{title:'批量句子',words:chosen},true);}catch(error){batchNotice(error.message);}};
+ $('#batchContentList').onclick=async e=>{
+  const b=e.target.closest('button');if(!b||batchAudioBusy)return;
+  try{
+   if(b.dataset.batchSaved)await batchOpenSavedDialogue(b.dataset.batchSaved);
+   else if(b.dataset.batchDetail)await learningOpenDetail(b.dataset.batchDetail);
+   else if(b.dataset.batchMissing){
+    const fresh=await batchFreshInventory(),state=fresh.states.get(b.dataset.batchMissing);
+    if(!state||state.full||state.blocked||!state.missing.length)throw Error('音频状态已变化，请重新打开列表；不会重复生成。');
+    const seen=new Set(),words=state.missing.filter(w=>{if(seen.has(w.word))return false;seen.add(w.word);return true;});
+    await batchAssertMissing(words);await lessonPagePrepare({title:'仅补缺少的句子',words},true);
+   }
+  }catch(error){batchNotice(error.message);}
+ };
  draw();
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-batch-mode]');if(!b||batchAudioBusy)return;try{if(b.dataset.batchMode==='words')await openBatchAudio();else await batchOpenContent(b.dataset.batchMode);}catch(error){batchNotice(error.message);}});

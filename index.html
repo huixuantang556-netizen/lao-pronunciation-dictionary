@@ -259,7 +259,7 @@
         <div class="practice-layout">
           <div id="practiceCard" class="practice-card">
             <p id="questionPrompt">看 IPA 音标，默写对应的老挝语字母或词条。</p>
-            <div class="question-row"><div id="questionIPA" class="question-ipa">—</div><button type="button" id="practicePlay" disabled>本题暂无录音</button></div>
+            <div class="question-row" style="flex-wrap:wrap"><div id="questionIPA" class="question-ipa">—</div><button type="button" id="practicePlay" disabled>本题暂无录音</button><button type="button" id="practiceDetail" disabled style="font-size:14px;padding:8px 12px" title="打开当前词条详情，可查看答案并录制参考发音">详情 / 参考发音</button></div>
             <input id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
             <div class="practice-submit"><button type="button" class="primary" id="checkAnswer">检查答案</button><div class="practice-links"><button type="button" id="showAnswer">显示答案</button><button type="button" id="practiceNotes" hidden>查看完整备注</button></div></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
@@ -407,7 +407,7 @@ async function importCodaClassroom(){
     let activeView = 'dictionary';
     let practiceAudio=null, practiceAudioUrl=null, practiceAudioBlob=null;
     function stopPracticeAudio() { if(typeof lessonPageStop==='function')lessonPageStop();playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
-    function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':practiceAudioBlob?'播放我的录音':'播放默认发音'; }
+    function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practiceDetail').disabled=!item;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':'优先播放手录参考发音，其次已有录音或默认发音'; }
     let entryReturnOrigin=null;
     function rememberEntryOrigin(){
       if(activeView==='add')return;
@@ -1023,7 +1023,20 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     $('#exportButton').onclick=async()=>{ try { await exportBackup(); } catch(error) { $('#backupStatus').textContent=`导出失败：${error.message||'请重试'}`; } };
     $('#importButton').onclick=()=>$('#importFile').click();
     $('#importFile').onchange=e=>importBackup(e.target.files[0]);
-    $('#practicePlay').onclick=async()=>{const id=practiceId;try{const item=await getEntry(id);if(item&&practiceId===id&&activeView==='practice')await playEntrySpeech(item);}catch(error){alert(error.message);}};
+    async function practiceWordAction(detail=false){
+      if(!practiceId||activeView!=='practice')return;
+      const id=practiceId,request=practiceRequest;
+      try{
+        const item=await getEntry(id);
+        if(!item||id!==practiceId||request!==practiceRequest||activeView!=='practice')return;
+        if(!item.syncId){item.syncId=crypto.randomUUID();await putEntry(item);}
+        if(id!==practiceId||request!==practiceRequest||activeView!=='practice')return;
+        if(detail){persistPractice();stopPracticeAudio();await learningOpenDetail('word:'+item.syncId);}
+        else await learningPlay('word:'+item.syncId);
+      }catch(error){alert(error.message);}
+    }
+    $('#practicePlay').onclick=()=>practiceWordAction(false);
+    $('#practiceDetail').onclick=()=>practiceWordAction(true);
     $('#checkAnswer').onclick=checkPracticeAnswer; $('#showAnswer').onclick=revealPracticeAnswer; $('#nextQuestion').onclick=()=>choosePractice({restart:Boolean(practiceRound?.completed)});
     $('#practiceAnswer').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();checkPracticeAnswer();}};
     $('#practiceKind').onchange=async()=>{practiceRestored=true;selectedPracticeTags.clear();$('#practiceTagSearch').value='';await render();await choosePractice({restart:true});};

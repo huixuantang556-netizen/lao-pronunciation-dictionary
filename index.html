@@ -276,17 +276,23 @@
       <section class="panel hidden" id="codaPanel" aria-labelledby="codaTitle"><div class="coda-header"><div><button type="button" id="codaReturn">← 老挝语学习</button><h2 id="codaTitle">尾辅音·元音形变</h2><p>理解死闭规则，听自己的示范，再练元音形变。</p></div></div><nav id="codaNav" class="coda-nav" aria-label="尾辅音学习章节"></nav><p id="codaStatus" class="coda-status" role="status"></p><div id="codaContent"></div></section>
       <section class="panel hidden" id="alphabetPanel" aria-labelledby="alphabetTitle">
         <div class="alphabet-heading"><h2 id="alphabetTitle">老语字母 · 点读表</h2><button type="button" id="alphabetCodaLink">尾辅音·元音形变 →</button></div>
-        <div id="alphabetHelpTop"><div id="alphabetHelp" class="tag-hint">
-          <p>单击字母播放“我的录音”，双击查看备注。读取当前词典的对应词条，不调用在线发音。元音中的 x 表示辅音位置；手机可横向滑动表格。</p>
+        <div id="alphabetHelpTop"><details id="alphabetHelp" class="tag-hint"><summary>点读说明</summary>
+          <p>单击字母播放“我的录音”，双击查看备注。元音中的 x 表示辅音位置。手机按小卡片分组排列，不显示空白占位；电脑保留对照表。</p>
           <p>开启编辑后，单击任意格子修改字母（包括空格）。保存后点击“云端同步”上传；其他设备也需更新页面并同步。只修改表格，不改动原词条或录音。</p>
           <p id="alphabetSummary"></p>
           <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="alphabetHelpRead" style="width:auto;margin:0" />已读，将说明放到页面底部</label>
-        </div></div>
-        <div class="alphabet-toolbar" role="group" aria-label="字母表工具">
+        </details></div>
+        <div class="alphabet-listen-bar" id="alphabetListenBar" role="region" aria-label="字母表连续听读">
+          <label class="alphabet-scope">查看 / 朗读范围<select id="alphabetListenScope"><option value="all">全部字母 · 整表</option><option value="consonants">全部辅音</option><option value="middle">中辅音</option><option value="low">低辅音</option><option value="high">高辅音</option><option value="basic">基本辅音</option><option value="compound">复合辅音</option><option value="vowels">全部元音</option><option value="short">短元音</option><option value="long">长元音</option><option value="special">特殊韵母</option></select></label>
+          <div class="alphabet-listen-controls"><button id="alphabetListenPlay" type="button">▶ 连续听</button><button id="alphabetListenPause" type="button" hidden>暂停</button><button id="alphabetListenStop" type="button" hidden>停止</button><label><input id="alphabetListenLoop" type="checkbox">循环</label></div>
+          <p id="alphabetListenStatus" role="status" aria-live="polite">选择范围后连续听；只播放已保存音频，不自动生成。</p>
+          <details class="alphabet-listen-options"><summary>听读选项 / 缺音</summary><div><label>每项重复<select id="alphabetListenRepeat"><option value="1">1 遍</option><option value="2">2 遍</option><option value="3">3 遍</option><option value="5">5 遍</option></select></label><label>语速<select id="alphabetListenSpeed"><option value="0.75">0.75×</option><option value="1" selected>正常</option><option value="1.25">1.25×</option></select></label></div><p id="alphabetListenMissing">优先我的录音，其次已保存的默认音频。缺音项跳过；需要时可双击字母补录。</p><p>耳机 / 锁屏控制视浏览器支持而定；如被系统暂停，返回页面点“继续”。手机编辑模式会显示空白位置，不改变原表数据。</p></details>
+        </div>
+        <details class="alphabet-tools"><summary>编辑 / 颜色标记</summary><div class="alphabet-toolbar" role="group" aria-label="字母表工具">
         <button type="button" id="alphabetEditMode" aria-pressed="false">编辑字母表</button>
         <button type="button" id="alphabetColorMode" aria-pressed="false">标记颜色</button>
         <div id="alphabetColorOptions" hidden><label>格子颜色 <select id="alphabetColor"><option value="yellow">黄色 · 需加强</option><option value="red">红色 · 重点</option><option value="green">绿色 · 已熟悉</option><option value="default">默认 · 清除标记</option></select></label>
-        <p class="tag-hint">开启“标记颜色”后，单击格子应用所选颜色；关闭后恢复点读。颜色自动保存在本机，可随备份及手动云端同步保留。</p></div></div>
+        <p class="tag-hint">开启“标记颜色”后，单击格子应用所选颜色；关闭后恢复点读。颜色自动保存在本机，可随备份及手动云端同步保留。</p></div></div></details>
         <p id="alphabetStatus" role="status" aria-live="polite" class="tag-hint"></p>
         <div id="alphabetTables"></div>
         <div id="alphabetHelpBottom"></div>
@@ -409,7 +415,7 @@ async function importCodaClassroom(){
     const selectedDictionaryFields = loadDictionaryFields();
     let activeView = 'dictionary';
     let practiceAudio=null, practiceAudioUrl=null, practiceAudioBlob=null;
-    function stopPracticeAudio() { if(typeof lessonPageStop==='function')lessonPageStop();playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
+    function stopPracticeAudio() { if(typeof pronListenStop==='function')pronListenStop();if(typeof alphabetListenStop==='function')alphabetListenStop();if(typeof lessonPageStop==='function')lessonPageStop();playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
     function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practiceDetail').disabled=!item;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':'优先播放手录参考发音，其次已有录音或默认发音'; }
     let entryReturnOrigin=null;
     function rememberEntryOrigin(){
@@ -1545,17 +1551,17 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
         const items=await allEntries(),overrides=await readAlphabetOverrides();
         if(version!==alphabetRenderVersion||activeView!=='alphabet')return;
         alphabetCells.length=0;
-        function rowMarkup(row,index) {
+        function rowMarkup(row,index,visibleRows) {
           const [group,kind,letters]=row;
-          return '<tr>'+((index%2===0||!kind)?`<th scope="rowgroup" rowspan="${kind?2:1}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map((original,col)=>{
+          return `<tr data-alphabet-row="${escapeHtml(group+(kind?' · '+kind:''))}">`+((index===0||visibleRows[index-1][0]!==group)?`<th scope="rowgroup" rowspan="${visibleRows.filter(r=>r[0]===group).length}">${group}</th>`:'')+(kind?`<th scope="row">${kind}</th>`:'')+letters.map((original,col)=>{
             const key=alphabetRows.indexOf(row)+':'+col,raw=Object.hasOwn(overrides,key)?overrides[key]:original;
-            if(!raw&&!alphabetEditing)return '<td></td>';
+            if(!raw&&!alphabetEditing)return '<td class="alphabet-blank"></td>';
             const forms=raw.split('|').map(x=>x.trim()).filter(Boolean),cell={forms,word:forms[0]||'',group,kind,key,raw,original,override:overrides[key],color:overrides['color:'+key]},id=alphabetCells.push(cell)-1,matches=alphabetMatches(cell,items),recorded=matches.some(hasAudio),label=forms.join(' / ');
             const hint=alphabetEditing?'✎ 修改字母':matches.length>1?'选择词条':recorded?'':matches.length?'待补录音':'未添加';
             return `<td${!kind?' colspan="2"':''}><button type="button" class="alphabet-cell ${recorded?'has-audio':''}" data-color="${cell.color||'default'}" data-letter="${id}" aria-label="${escapeHtml(label||'空格')}：${alphabetColoring?'标记颜色':alphabetEditing?'修改字母':'单击播放，双击备注'}；${({yellow:'需加强',red:'重点',green:'已熟悉'})[cell.color]||'未标记'}"><span lang="lo">${forms.length?forms.map(escapeHtml).join('<br>'):'＋'}</span>${hint?`<small>${hint}</small>`:''}</button></td>`;
           }).join('')+'</tr>';
         }
-        $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}表，可横向滚动"><table class="alphabet-table" aria-label="${title}"><tbody>${rows.map(rowMarkup).join('')}</tbody></table></div>`).join('');
+        $('#alphabetTables').innerHTML=[['老挝语辅音',alphabetRows.slice(0,6)],['老挝语元音',alphabetRows.slice(6,10)],['特殊韵母',alphabetRows.slice(10)]].map(([title,rows])=>{const visibleRows=rows.filter(row=>typeof alphabetScopeIncludes!=='function'||alphabetScopeIncludes(row,$('#alphabetListenScope').value));return visibleRows.length?`<h3>${title}</h3><div class="alphabet-scroll" tabindex="0" role="region" aria-label="${title}点读表"><table class="alphabet-table" aria-label="${title}"><tbody>${visibleRows.map(rowMarkup).join('')}</tbody></table></div>`:'';}).join('');
         $('#alphabetSummary').textContent='已关联 '+alphabetCells.filter(cell=>alphabetMatches(cell,items).some(hasAudio)).length+' 个有录音的格子。缺少内容时，可在备注浮窗中添加或修改词条。';
         $('#alphabetStatus').textContent='';
       } catch(error) { $('#alphabetStatus').textContent='字母表读取失败：'+error.message; }
@@ -1563,6 +1569,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     let alphabetOpenRequest=0;
     async function openAlphabetCell(id,notes=false) {
       const cell=alphabetCells[id];if(!cell||activeView!=='alphabet')return;
+      if(typeof alphabetListenStop==='function')alphabetListenStop();
       const request=++alphabetOpenRequest;
       try {
         const matches=alphabetMatches(cell,await allEntries());
@@ -3451,7 +3458,7 @@ function pronunciationMapTable(kind){
 }
 function pronunciationMindMap(){
  const rows=length=>Object.keys(pronunciationClasses).map(g=>`<div class="pron-map-rule">${pronunciationTag(g)}<span>＋</span>${pronunciationTag(length)}<span>→</span>${pronunciationMapTone('nocoda',g,length)}</div>`).join('');
- return `<div class="pron-map"><p class="pron-map-subtitle">先看音节结构，再看组合后的教材声调</p><p class="pron-map-hint">点标签查看知识 · 点声调试听已保存示范音</p><div class="pron-map-root">音节结构</div><div class="pron-map-branches"><button type="button" data-pron-concept="noCoda">辅音 + 元音<small>无尾辅音</small></button><div class="pron-branch-label">辅音 + 元音 + 辅音<small>有尾辅音</small></div></div><div class="pron-map-leaves"><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadSyllable">死音节 ›</button><p>短元音直接结尾，无尾辅音<br>本阶段通常不加声调符号</p>${rows('short')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="openSyllable">开音节 ›</button><p>长元音直接结尾，无尾辅音<br>可以加声调符号</p><h3>无声调符号</h3>${rows('long')}<button type="button" class="pron-map-section" data-pron-route="openmarks">开音节：声调符号 ›</button>${pronunciationMapTable('openmarks')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadClosed">死闭音节 ›</button><p>${pronunciationTag('deadTail')}<br>ກ · ດ · ບ</p>${pronunciationMapTable('dead')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="live">活闭音节 ›</button><p>${pronunciationTag('liveTail')}<br>ງ · ນ · ມ · ຍ · ວ<br>短、长元音声调规则相同<br>只区别长短</p>${pronunciationMapTable('live')}</section></div><div class="pron-map-legend"><strong>重要概念</strong>${pronunciationTag('middle')}${pronunciationTag('low')}${pronunciationTag('high')}${pronunciationTag('short')}${pronunciationTag('long')}${pronunciationTag('deadTail')}${pronunciationTag('liveTail')}</div><p class="pron-map-hint">需添加或修改示范音：进入对应音节分支 → 组合详情 → 录音 / 管理。</p></div>`;
+ return `<div class="pron-map"><p class="pron-map-subtitle">先看音节结构，再看组合后的教材声调</p><p class="pron-map-hint">点标签查看知识 · 点声调试听已保存示范音</p><div class="pron-map-root">音节结构</div><div class="pron-map-branches"><button type="button" data-pron-concept="noCoda">辅音 + 元音<small>无尾辅音</small></button><div class="pron-branch-label">辅音 + 元音 + 辅音<small>有尾辅音</small></div></div><div class="pron-map-leaves"><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadSyllable">死音节 ›</button><p>短元音直接结尾，无尾辅音<br>本阶段通常不加声调符号</p>${rows('short')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="openSyllable">开音节 ›</button><p>长元音直接结尾，无尾辅音<br>可以加声调符号</p><button type="button" class="pron-map-section" data-pron-route="openmarks">开音节：声调符号 ›</button>${pronunciationMapTable('openmarks')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-concept="deadClosed">死闭音节 ›</button><p>${pronunciationTag('deadTail')}<br>ກ · ດ · ບ</p>${pronunciationMapTable('dead')}</section><section class="pron-map-leaf"><button type="button" class="pron-leaf-title" data-pron-route="live">活闭音节 ›</button><p>${pronunciationTag('liveTail')}<br>ງ · ນ · ມ · ຍ · ວ<br>短、长元音声调规则相同<br>只区别长短</p>${pronunciationMapTable('live')}</section></div><div class="pron-map-legend"><strong>重要概念</strong>${pronunciationTag('middle')}${pronunciationTag('low')}${pronunciationTag('high')}${pronunciationTag('short')}${pronunciationTag('long')}${pronunciationTag('deadTail')}${pronunciationTag('liveTail')}</div><p class="pron-map-hint">需添加或修改示范音：进入对应音节分支 → 组合详情 → 录音 / 管理。</p></div>`;
 }
 const pronunciationPanel=document.createElement('section');
 pronunciationPanel.id='pronunciationPanel';pronunciationPanel.className='panel hidden';
@@ -3487,7 +3494,7 @@ function renderPronunciation(){
  if(pronunciationRoute==='home'){title='老挝语发音总览';html=pronunciationMindMap();}
  if(pronunciationRoute==='concept'){const [name,letters,description]=pronunciationConcepts[pronunciationConcept];title=name;html=`${['short','long'].includes(pronunciationConcept)?pronunciationVowelCards(pronunciationConcept):['middle','low','high'].includes(pronunciationConcept)?`<div class="pron-letter-cards">${letters.split(' ').map(letter=>`<div><b lang="lo">${letter}</b><button type="button" data-pron-play="${letter}">▶ 试听</button><button type="button" data-pron-manage="${letter}">录音 / 管理</button></div>`).join('')}</div>`:letters?`<p class="pron-concept-letters" lang="lo">${letters}</p>`:''}<p class="pron-intro">${description}</p><button type="button" data-pron-route="home">返回发音总览</button>`;}
  if(pronunciationRoute==='live'){title='活闭音节';html='';}
- if(pronunciationRoute==='openmarks'){title='开音节 · 声调符号';html=`<p class="pron-intro">长元音结尾，无尾辅音。</p>${pronunciationMatrix('openmarks',true)}`;}
+ if(pronunciationRoute==='openmarks'){title='开音节 · 声调符号';html=`<p class="pron-intro">长元音结尾，无尾辅音。</p>${pronunciationMapTable('openmarks')}`;}
  if(pronunciationRoute==='detail'){
   const {kind,group,length,mark}=pronunciationSelection,tone=pronunciationTone(kind,group,length,mark),tail=kind==='dead'?'死尾辅音':kind==='live'?'活尾辅音':'无尾辅音';
   title=tone;
@@ -4000,6 +4007,224 @@ for(const id of ['reviewDate','reviewSearch','reviewRating','reviewKind','review
 $('#reviewHistoryPrev').onclick=()=>{reviewHistoryPage--;void reviewDrawHistory();};$('#reviewHistoryNext').onclick=()=>{reviewHistoryPage++;void reviewDrawHistory();};
 // Refresh the count without replacing an unanswered question or touching the microphone.
 setInterval(()=>{if(activeView==='practice'&&!learningHasWork())void reviewRefreshSummary().catch(()=>{});},30000);
+</script>
+<style data-alphabet-listen="style">
+.alphabet-listen-bar{position:sticky;top:0;z-index:12;display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:12px;background:var(--paper,#fff);border:1px solid var(--line);border-radius:12px;margin:12px 0;box-shadow:0 3px 12px #143c2910}
+.alphabet-listen-bar .alphabet-scope{flex:1 1 190px;margin:0;font-size:12px;color:var(--muted)}
+.alphabet-listen-bar select{margin:3px 0 0;font-size:16px;padding:8px;min-height:42px;width:100%}
+.alphabet-listen-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.alphabet-listen-controls button{min-height:44px;padding:8px 12px;font-size:14px}
+.alphabet-listen-controls #alphabetListenPlay{background:var(--brand);color:white;border-color:var(--brand)}
+.alphabet-listen-controls label{margin:0;display:flex;align-items:center;gap:5px;font-size:14px;min-height:44px;padding:0 4px}
+.alphabet-listen-controls input{width:18px;height:18px;margin:0}
+#alphabetListenStatus{flex-basis:100%;margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.alphabet-listen-options{flex-basis:100%;font-size:12px}
+.alphabet-listen-options summary,.alphabet-tools summary,#alphabetHelp summary{cursor:pointer;color:var(--brand)}
+.alphabet-listen-options>div{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+.alphabet-listen-options label{flex:1 1 120px;margin:0}
+.alphabet-listen-options p{margin:8px 0 0;color:var(--muted);overflow-wrap:anywhere}
+.alphabet-tools{font-size:13px;margin:12px 0}
+.alphabet-cell.is-listening{outline:2px solid var(--brand);outline-offset:-2px;box-shadow:inset 0 0 0 4px #fff9}
+#alphabetListenBar [hidden]{display:none!important}
+@media(max-width:960px){
+ #alphabetPanel{padding:14px;overflow-wrap:anywhere}
+ #alphabetPanel .alphabet-heading{gap:8px;margin-bottom:8px}
+ #alphabetPanel .alphabet-heading h2{font-size:20px}
+ #alphabetPanel .alphabet-heading button{font-size:12px;padding:7px 10px;min-height:38px}
+ #alphabetPanel .alphabet-scroll{overflow:visible;border:0;border-radius:0;margin:8px 0 18px}
+ #alphabetPanel .alphabet-table{display:block;min-width:0;width:100%;table-layout:auto}
+ #alphabetPanel .alphabet-table tbody{display:block}
+ #alphabetPanel .alphabet-table tr{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:5px;margin:0 0 14px}
+ #alphabetPanel .alphabet-table tr::before{content:attr(data-alphabet-row);grid-column:1/-1;font-size:13px;font-weight:600;text-align:left;color:var(--muted);padding:4px 0}
+ #alphabetPanel .alphabet-table th{display:none}
+ #alphabetPanel .alphabet-table td{display:block;min-width:0;padding:0;border:0;border-radius:8px;overflow:hidden;background:var(--soft,#eef5f1)}
+ #alphabetPanel .alphabet-table td.alphabet-blank{display:none}
+ #alphabetPanel .alphabet-cell{min-height:62px;height:100%;padding:4px 2px;border-radius:8px}
+ #alphabetPanel .alphabet-cell span{font-size:25px;line-height:1.5;overflow-wrap:anywhere}
+ #alphabetPanel .alphabet-cell small{font-size:10px;line-height:1.3}
+ #alphabetTables h3{font-size:15px;margin:16px 0 6px}
+ .alphabet-listen-bar{padding:10px;gap:6px;top:0}
+ .alphabet-listen-bar .alphabet-scope{flex-basis:100%}
+ .alphabet-listen-controls{width:100%}
+ .alphabet-listen-controls #alphabetListenPlay{flex:1}
+ .alphabet-listen-options[open]{max-height:42vh;overflow:auto}
+}
+</style>
+<script data-alphabet-listen="script">
+/* Saved-only alphabet player. One reusable audio element; no synthesis or data writes. */
+function alphabetScopeIncludes(row,scope){
+ const [group,kind]=row;
+ switch(scope){case 'consonants':return group.endsWith('辅音');case 'middle':return group==='中辅音';case 'low':return group==='低辅音';case 'high':return group==='高辅音';case 'basic':return kind==='基本辅音';case 'compound':return kind==='复合辅音';case 'vowels':return group.endsWith('元音');case 'short':return kind==='短元音';case 'long':return kind==='长元音';case 'special':return group==='特殊韵母';default:return true;}
+}
+function alphabetListenCells(overrides,scope){
+ return alphabetRows.flatMap((row,r)=>alphabetScopeIncludes(row,scope)?row[2].flatMap((original,c)=>{const key=r+':'+c,raw=Object.hasOwn(overrides,key)?overrides[key]:original,forms=raw.split('|').map(s=>s.trim()).filter(Boolean);return forms.length?[{key,forms,group:row[0],kind:row[1]}]:[];}):[]);
+}
+function alphabetListenQueue(cells,entries,cacheRows){
+ const cache=new Map();for(const r of cacheRows){try{const text=JSON.parse(r.key)[1];if(typeof text==='string'&&r.blob?.size)cache.set(text,r.blob);}catch(_){}}
+ const queue=[],missing=[];
+ for(const cell of cells){
+  const matches=alphabetMatches(cell,entries),own=matches.map(w=>({w,blob:audioBlobFor(w)})).find(x=>x.blob?.size);
+  // Preserve exact text identity; never substitute the sound of another vowel or syllable.
+  const cached=matches.map(w=>({w,blob:cache.get(w.word)})).find(x=>x.blob?.size)||cell.forms.map(word=>({w:{word},blob:cache.get(word)})).find(x=>x.blob?.size);
+  const source=own||cached;
+  if(source)queue.push({...cell,word:source.w.word,blob:source.blob});else missing.push(cell.forms.join(' / '));
+ }
+ return {queue,missing};
+}
+let alphabetListenToken=0,alphabetListenTrackVersion=0,alphabetListenAudio=null,alphabetListenURL=null,alphabetListenList=[],alphabetListenIndex=0,alphabetListenPass=0,alphabetListenMissingCount=0,alphabetListenOwnedMedia=false;
+function alphabetListenHighlight(key){
+ for(const b of $('#alphabetTables').querySelectorAll('[data-letter]')){const cell=alphabetCells[Number(b.dataset.letter)];b.classList.toggle('is-listening',!!key&&cell?.key===key);if(key&&cell?.key===key)b.setAttribute('aria-current','true');else b.removeAttribute('aria-current');}
+}
+function alphabetListenMedia(state,word){
+ if(!navigator.mediaSession)return;
+ try{navigator.mediaSession.playbackState=state;if(word&&typeof MediaMetadata!=='undefined')navigator.mediaSession.metadata=new MediaMetadata({title:word,artist:'老语字母 · 连续听',album:$('#alphabetListenScope').selectedOptions[0]?.textContent||'字母表'});}catch(_){}
+}
+function alphabetListenStop(message){
+ const wasActive=!!alphabetListenAudio||$('#alphabetListenPlay').disabled;
+ alphabetListenToken++;alphabetListenTrackVersion++;
+ if(alphabetListenAudio){alphabetListenAudio.onended=null;alphabetListenAudio.onerror=null;alphabetListenAudio.onpause=null;alphabetListenAudio.onplay=null;alphabetListenAudio.pause();alphabetListenAudio.removeAttribute('src');alphabetListenAudio.load();alphabetListenAudio=null;}
+ if(alphabetListenURL)URL.revokeObjectURL(alphabetListenURL);alphabetListenURL=null;alphabetListenList=[];
+ $('#alphabetListenPlay').disabled=false;$('#alphabetListenPause').hidden=true;$('#alphabetListenStop').hidden=true;alphabetListenHighlight(null);
+ if(wasActive)$('#alphabetListenStatus').textContent=message||'已停止连续听。';
+ if(alphabetListenOwnedMedia&&navigator.mediaSession){for(const action of ['play','pause','stop','nexttrack','previoustrack'])try{navigator.mediaSession.setActionHandler(action,null);}catch(_){}alphabetListenMedia('none');try{navigator.mediaSession.metadata=null;}catch(_){}alphabetListenOwnedMedia=false;}
+}
+function alphabetListenBindMedia(){
+ if(!navigator.mediaSession)return;alphabetListenOwnedMedia=true;
+ const actions={play:()=>void alphabetListenResume(),pause:()=>alphabetListenAudio?.pause(),stop:()=>alphabetListenStop(),nexttrack:()=>void alphabetListenTrack(alphabetListenIndex+1),previoustrack:()=>void alphabetListenTrack(Math.max(0,alphabetListenIndex-1))};
+ for(const [action,handler] of Object.entries(actions))try{navigator.mediaSession.setActionHandler(action,handler);}catch(_){}
+}
+async function alphabetListenResume(){
+ const a=alphabetListenAudio;if(!a)return;
+ try{await a.play();}catch(e){if(a===alphabetListenAudio){$('#alphabetListenPause').textContent='继续';$('#alphabetListenStatus').textContent='播放被暂停，请点“继续”重试。'+(e.message||'');}}
+}
+async function alphabetListenTrack(index,repeat=false){
+ const a=alphabetListenAudio;if(!a||!alphabetListenList.length)return;
+ const token=alphabetListenToken,version=++alphabetListenTrackVersion,current=()=>token===alphabetListenToken&&version===alphabetListenTrackVersion;
+ if(index>=alphabetListenList.length){if(!$('#alphabetListenLoop').checked){alphabetListenStop('本组播放完成。');return;}index=0;}
+ alphabetListenIndex=index;if(!repeat)alphabetListenPass=1;
+ const part=alphabetListenList[index];a.pause();if(alphabetListenURL)URL.revokeObjectURL(alphabetListenURL);
+ alphabetListenURL=URL.createObjectURL(part.blob);a.src=alphabetListenURL;a.playbackRate=Number($('#alphabetListenSpeed').value)||1;
+ alphabetListenHighlight(part.key);alphabetListenMedia('playing',part.word);
+ const label=(index+1)+' / '+alphabetListenList.length+' · '+part.word+' · 第 '+alphabetListenPass+' 遍'+(alphabetListenMissingCount?' · 已跳过缺音 '+alphabetListenMissingCount+' 格':'');
+ a.onplay=()=>{if(!current())return;$('#alphabetListenPause').textContent='暂停';$('#alphabetListenStatus').textContent='正在播放 '+label;alphabetListenMedia('playing');};
+ a.onpause=()=>{if(!current()||a.ended)return;$('#alphabetListenPause').textContent='继续';$('#alphabetListenStatus').textContent='已暂停 · '+label;alphabetListenMedia('paused');};
+ a.onended=()=>{if(!current())return;const limit=Number($('#alphabetListenRepeat').value)||1;if(alphabetListenPass<limit){alphabetListenPass++;void alphabetListenTrack(index,true);}else void alphabetListenTrack(index+1);};
+ a.onerror=()=>{if(current())alphabetListenStop('这段录音无法播放，请双击 '+part.word+' 检查或补录后重试。');};
+ try{await a.play();}catch(e){if(current()&&a===alphabetListenAudio){$('#alphabetListenPause').textContent='继续';$('#alphabetListenStatus').textContent='请点“继续”开始播放。浏览器未允许自动播放：'+(e.message||'');alphabetListenMedia('paused');}}
+}
+async function alphabetListenStart(){
+ if(alphabetEditing||alphabetColoring){$('#alphabetListenStatus').textContent='请先完成字母编辑或颜色标记，再开始连续听。';return;}
+ if(recorder||(typeof learningHasWork==='function'&&learningHasWork())){$('#alphabetListenStatus').textContent='请先完成正在进行的录音或编辑。';return;}
+ stopPracticeAudio();cancelAlphabetClick();const token=alphabetListenToken;
+ // Allocate once per session and reuse for every track, including looping.
+ alphabetListenAudio=new Audio();alphabetListenAudio.preload='auto';
+ $('#alphabetListenPlay').disabled=true;$('#alphabetListenStop').hidden=false;$('#alphabetListenStatus').textContent='正在读取已保存音频…';
+ try{
+  const [entries,overrides,cache]=await Promise.all([allEntries(),readAlphabetOverrides(),cloudCacheRows()]);
+  if(token!==alphabetListenToken||activeView!=='alphabet')return;
+  const cells=alphabetListenCells(overrides,$('#alphabetListenScope').value),result=alphabetListenQueue(cells,entries,cache);
+  $('#alphabetListenMissing').textContent=result.missing.length?'已跳过 '+result.missing.length+' 个缺音格：'+result.missing.join('、')+'。双击字母可补录；不会自动生成。':'本范围所有格子均有可用音频。';
+  if(!result.queue.length){alphabetListenStop('这个范围还没有已保存音频，请先双击字母补录，或在词条详情保存默认发音。');return;}
+  alphabetListenList=result.queue;alphabetListenMissingCount=result.missing.length;$('#alphabetListenPause').hidden=false;$('#alphabetListenPause').textContent='暂停';alphabetListenBindMedia();await alphabetListenTrack(0);
+ }catch(e){if(token===alphabetListenToken)alphabetListenStop('音频读取失败：'+e.message);}
+}
+$('#alphabetListenPlay').onclick=()=>void alphabetListenStart();
+$('#alphabetListenPause').onclick=()=>{if(alphabetListenAudio?.paused)void alphabetListenResume();else alphabetListenAudio?.pause();};
+$('#alphabetListenStop').onclick=()=>alphabetListenStop();
+$('#alphabetListenScope').onchange=()=>{alphabetListenStop();$('#alphabetListenMissing').textContent='优先我的录音，其次已保存的默认音频；缺音项跳过。';$('#alphabetListenStatus').textContent='范围已切换，点“连续听”开始。';void renderAlphabet();};
+$('#alphabetListenSpeed').onchange=()=>{if(alphabetListenAudio)alphabetListenAudio.playbackRate=Number($('#alphabetListenSpeed').value)||1;};
+document.addEventListener('click',e=>{if(e.target.closest('[data-view]'))alphabetListenStop();},true);
+window.addEventListener('pagehide',()=>alphabetListenStop());
+</script>
+<style data-pron-listen="style">
+.pron-listen-bar{border:1px solid var(--line);border-radius:12px;background:var(--paper,#fff);padding:10px 12px;margin:12px 0 18px;position:sticky;top:0;z-index:11}
+.pron-listen-controls{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.pron-listen-controls select{width:auto;min-width:100px;margin:0;font-size:16px;padding:8px}
+.pron-listen-controls button{font-size:13px;padding:8px 10px;min-height:42px}
+.pron-listen-controls label{display:flex;gap:5px;align-items:center;margin:0;font-size:13px;min-height:42px}
+.pron-listen-controls input{width:18px;height:18px;margin:0}
+#pronListenPlay,#pronListenHide[aria-pressed=true]{background:var(--brand);color:white}
+.pron-listen-bar p,.pron-listen-bar details{font-size:12px;color:var(--muted);margin:6px 0 0;overflow-wrap:anywhere}
+.pron-listen-bar details[open]{max-height:30vh;overflow:auto}
+#pronunciationPanel [hidden]{display:none!important}
+#pronunciationPanel .pron-listening{outline:2px solid var(--brand);outline-offset:-2px;background:#dff4eb!important}
+#pronunciationPanel.pron-filtered .pron-map-leaves{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));align-items:start}
+#pronunciationPanel.pron-filtered .pron-map-leaf:before{display:none}
+#pronunciationPanel>.pron-map-table{max-width:720px;margin:16px auto}
+@media(max-width:560px){#pronunciationPanel.pron-filtered .pron-map-leaves{grid-template-columns:1fr}.pron-listen-controls select{flex:1}.pron-listen-controls button{min-height:44px}.pron-listen-bar{padding:9px}.pron-listen-bar details[open]{max-height:25vh}}
+</style>
+<script data-pron-listen="script">
+/* Filtering and saved-only listening share the exact same rule keys. */
+let pronListenHide=false,pronListenScope='all',pronListenLoop=false;
+try{pronListenHide=localStorage.getItem(workspaceName('pron-hide-easy-v1'))==='1';}catch(_){}
+const pronListenNames={all:'整页',nocoda:'死音节',openmarks:'开音节',dead:'死闭音节',live:'活闭音节'};
+function pronListenAllowed(key,hide=pronListenHide){const tone=pronunciationTone(...key.split('|'));return !hide||!['短调','一声'].includes(tone);}
+function pronListenRules(scope=pronListenScope,hide=pronListenHide){
+ const rows=[];for(const kind of ['nocoda','openmarks','dead','live']){if(scope!=='all'&&scope!==kind)continue;for(const group of Object.keys(pronunciationClasses))for(const value of kind==='nocoda'?['short']:kind==='dead'?['short','long']:['none','່','້']){const key=[kind,group,kind==='nocoda'?'short':kind==='dead'?value:'long',['openmarks','live'].includes(kind)?value:'none'].join('|');if(pronListenAllowed(key,hide))rows.push({key,tone:pronunciationTone(...key.split('|')),text:pronunciationExamples(...key.split('|'))[0],kind,group});}}
+ return rows;
+}
+function pronListenAsset(row,snap,words,cache){
+ function resolve(text,material,word){
+  const materials=material?[material]:snap.learningMaterials.filter(m=>!m.deleted&&m.textLao===text);
+  for(const m of materials){if(m.deleted||m.audioNeedsReview)continue;for(const ref of (m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).slice().reverse()){const blob=ref.source==='gemini'?cache.get(ref.text):snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted)?.blob;if(blob?.size)return {blob,start:ref.start||0,end:ref.end??null,text};}}
+  const own=word||words.find(w=>w.word===text&&hasAudio(w)),blob=own&&audioBlobFor(own);if(blob?.size)return {blob,text};if(cache.get(text)?.size)return {blob:cache.get(text),text};return null;
+ }
+ const config=snap.learningMaterials.find(m=>m.id===pronunciationConfigId(row.key)&&!m.deleted),representative=config?.pronunciationExamples?.find(e=>e.id===config.pronunciationRepresentative);
+ if(representative){const m=snap.learningMaterials.find(m=>m.id===representative.materialId&&!m.deleted);return m?.audioNeedsReview?null:resolve(m?.textLao||representative.textLao,m);}
+ if(config?.pronunciationLists?.demo){for(const entry of config.pronunciationLists.demo){const w=entry.type==='word'?words.find(w=>[w.syncId,...(w.syncAliases||[])].includes(entry.ref)):null,m=entry.type==='material'?snap.learningMaterials.find(m=>m.id===entry.ref&&!m.deleted):null;if(entry.type==='word'&&!w||entry.type==='material'&&(!m||m.audioNeedsReview))continue;const linked=m?.contentType==='word'?words.find(w=>m.linkedWordSyncIds?.some(k=>[w.syncId,...(w.syncAliases||[])].includes(k))):null;const found=resolve(w?.word||linked?.word||m?.textLao||entry.text,m,w||linked);if(found)return found;}return null;}
+ return resolve(row.text);
+}
+function pronListenToolbar(){return `<div class="pron-listen-bar"><div class="pron-listen-controls"><select id="pronListenScope" aria-label="显示与朗读范围">${Object.entries(pronListenNames).map(([v,n])=>`<option value="${v}" ${v===pronListenScope?'selected':''}>${n}</option>`).join('')}</select><button id="pronListenHide" type="button" aria-pressed="${pronListenHide}">${pronListenHide?'显示全部声调':'隐藏短调 / 一声'}</button><button type="button" id="pronListenPlay">▶ 连续听</button><button type="button" id="pronListenPause" hidden>暂停</button><button type="button" id="pronListenEnd" hidden>停止</button><label><input type="checkbox" id="pronListenLoop" ${pronListenLoop?'checked':''}>循环</label></div><p id="pronListenStatus" role="status">按显示顺序播放每个组合的代表性示范音；隐藏的声调不会朗读。</p><details><summary>听读说明 / 缺音</summary><p id="pronListenMissing">优先自选代表音，其次示范拼读中的可用音频，最后教材示例；只用已保存音频，缺音跳过，不自动生成。整页按组合播放，同声调的不同组合仍分别保留。</p></details></div>`;}
+function pronListenApply(){
+ const keys=new Set(pronListenRules().map(r=>r.key));
+ for(const b of pronunciationPanel.querySelectorAll('[data-pron-tone]'))b.hidden=!keys.has(b.dataset.pronTone);
+ for(const table of pronunciationPanel.querySelectorAll('.pron-map-table')){const rows=[...table.rows];for(let i=1;i<(rows[0]?.cells.length||0);i++){const hidden=rows.slice(1).every(r=>r.cells[i]?.querySelector('[data-pron-tone]')?.hidden);for(const r of rows)if(r.cells[i])r.cells[i].hidden=hidden;}}
+ const kinds=['nocoda','openmarks','dead','live'];pronunciationPanel.querySelectorAll('.pron-map-leaf').forEach((leaf,i)=>{leaf.hidden=!pronListenRules().some(r=>r.kind===kinds[i]);});
+ pronunciationPanel.classList.toggle('pron-filtered',pronListenHide||pronListenScope!=='all');
+ const map=pronunciationPanel.querySelector('.pron-map');if(map){map.querySelectorAll('.pron-map-root,.pron-map-branches').forEach(e=>e.hidden=pronListenHide||pronListenScope!=='all');}
+ const status=document.querySelector('#pronListenStatus');if(status&&!pronListenRules().length)status.textContent='此章节只有已隐藏的声调。点击“显示全部声调”即可恢复。';
+}
+let pronListenToken=0,pronListenTrackId=0,pronListenAudio=null,pronListenURL=null,pronListenQueue=[],pronListenIndex=0,pronListenMissingCount=0;
+function pronListenStatus(text){const el=document.querySelector('#pronListenStatus');if(el)el.textContent=text;}
+function pronListenStop(message){
+ const active=!!pronListenAudio;pronListenToken++;pronListenTrackId++;
+ if(pronListenAudio){pronListenAudio.onended=null;pronListenAudio.ontimeupdate=null;pronListenAudio.onpause=null;pronListenAudio.onplay=null;pronListenAudio.onerror=null;pronListenAudio.pause();pronListenAudio.removeAttribute('src');pronListenAudio.load();pronListenAudio=null;}
+ if(pronListenURL)URL.revokeObjectURL(pronListenURL);pronListenURL=null;pronListenQueue=[];
+ const play=document.querySelector('#pronListenPlay');if(play)play.disabled=false;for(const id of ['pronListenPause','pronListenEnd']){const b=document.querySelector('#'+id);if(b)b.hidden=true;}
+ pronunciationPanel.querySelectorAll('.pron-listening').forEach(b=>b.classList.remove('pron-listening'));
+ if(active)pronListenStatus(message||'已停止连续听。');
+}
+async function pronListenTrack(index){
+ const a=pronListenAudio;if(!a||!pronListenQueue.length)return;const token=pronListenToken,track=++pronListenTrackId,current=()=>token===pronListenToken&&track===pronListenTrackId;
+ if(index>=pronListenQueue.length){if(!pronListenLoop){pronListenStop('本次播放完成。');return;}index=0;}
+ pronListenIndex=index;const part=pronListenQueue[index];a.pause();if(pronListenURL)URL.revokeObjectURL(pronListenURL);a.src=pronListenURL=URL.createObjectURL(part.blob);
+ const label=(index+1)+' / '+pronListenQueue.length+' · '+pronListenNames[part.kind]+' · '+pronunciationClasses[part.group]+' · '+part.tone+' · '+part.text+(pronListenMissingCount?'（跳过缺音 '+pronListenMissingCount+' 项）':'');
+ pronunciationPanel.querySelectorAll('[data-pron-tone]').forEach(b=>b.classList.toggle('pron-listening',b.dataset.pronTone===part.key));
+ a.onloadedmetadata=()=>{if(!current())return;if(part.start>=a.duration){pronListenStop('录音片段范围无效，请到组合详情检查。');return;}if(part.start)a.currentTime=part.start;};
+ let advanced=false;const next=()=>{if(advanced||!current())return;advanced=true;void pronListenTrack(index+1);};a.onended=next;a.ontimeupdate=()=>{if(part.end!=null&&a.currentTime>=part.end)next();};
+ a.onplay=()=>{if(current()){pronListenStatus('正在播放 '+label);document.querySelector('#pronListenPause').textContent='暂停';}};a.onpause=()=>{if(current()&&!a.ended){pronListenStatus('已暂停 · '+label);document.querySelector('#pronListenPause').textContent='继续';}};
+ a.onerror=()=>{if(current())pronListenStop('音频无法播放，请到对应组合详情检查或补录。');};
+ try{await a.play();}catch(e){if(current()){document.querySelector('#pronListenPause').textContent='继续';pronListenStatus('请点“继续”重试播放：'+e.message);}}
+}
+async function pronListenStart(){
+ if(recorder||learningHasWork()){pronListenStatus('请先完成正在进行的录音或编辑。');return;}
+ stopPracticeAudio();clearTimeout(pronunciationClickTimer);const token=pronListenToken,rules=pronListenRules();pronListenAudio=new Audio();document.querySelector('#pronListenPlay').disabled=true;document.querySelector('#pronListenEnd').hidden=false;pronListenStatus('正在读取已保存示范音…');
+ try{const [snap,words,cacheRows]=await Promise.all([learningSnapshot(),allEntries(),cloudCacheRows()]);if(token!==pronListenToken)return;const cache=new Map();for(const row of cacheRows)try{cache.set(JSON.parse(row.key)[1],row.blob);}catch(_){}
+ const missing=[];pronListenQueue=rules.flatMap(row=>{const asset=pronListenAsset(row,snap,words,cache);if(asset)return [{...row,...asset}];missing.push(pronListenNames[row.kind]+' / '+pronunciationClasses[row.group]+' / '+row.tone);return [];});pronListenMissingCount=missing.length;
+ document.querySelector('#pronListenMissing').textContent=missing.length?'缺音已跳过：'+missing.join('；')+'。可双击相应声调补录。':'所有显示的组合均有可用示范音。';
+ if(!pronListenQueue.length){pronListenStop(rules.length?'当前范围没有已保存的示范音，请先补录。':'当前筛选没有可播放组合，请恢复全部声调。');return;}
+ document.querySelector('#pronListenPause').hidden=false;await pronListenTrack(0);
+ }catch(e){if(token===pronListenToken)pronListenStop('读取失败：'+e.message);}
+}
+const pronListenRenderOriginal=renderPronunciation;
+renderPronunciation=function(){pronListenStop();pronListenRenderOriginal();if(!['home','openmarks'].includes(pronunciationRoute))return;if(pronunciationRoute==='openmarks')pronListenScope='openmarks';pronunciationPanel.querySelector('h2').insertAdjacentHTML('afterend',pronListenToolbar());pronListenApply();
+ document.querySelector('#pronListenHide').onclick=()=>{pronListenHide=!pronListenHide;try{localStorage.setItem(workspaceName('pron-hide-easy-v1'),pronListenHide?'1':'0');}catch(_){}renderPronunciation();};
+ document.querySelector('#pronListenScope').onchange=e=>{pronListenScope=e.target.value;if(pronunciationRoute==='openmarks'&&pronListenScope!=='openmarks')pronunciationRoute='home';renderPronunciation();};
+ document.querySelector('#pronListenLoop').onchange=e=>pronListenLoop=e.target.checked;
+ document.querySelector('#pronListenPlay').onclick=()=>void pronListenStart();document.querySelector('#pronListenEnd').onclick=()=>pronListenStop();document.querySelector('#pronListenPause').onclick=async()=>{const a=pronListenAudio;if(!a)return;if(a.paused){try{await a.play();}catch(e){pronListenStatus('请再次点击继续：'+e.message);}}else a.pause();};
+};
+pronunciationPanel.addEventListener('click',e=>{if(e.target.closest('[data-pron-tone],[data-pron-route],[data-pron-concept],[data-pron-detail]'))pronListenStop();},true);
+window.addEventListener('pagehide',()=>pronListenStop());
 </script>
 </body>
 </html>

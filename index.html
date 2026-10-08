@@ -709,7 +709,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
       if(!rows.length)return;
       await withDefaultAudioStore('readwrite',store=>{for(const row of rows)store.put(row.blob,row.key);});
     }
-    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:3,learning:await learningBackup(),exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress()}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=`老挝语私人发音词典备份-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); $('#backupStatus').textContent=`已导出 ${entries.length} 个词条，包含 ${defaultAudio.length} 段默认发音、自己的录音、字母表修改和学习材料及原音。请在下载或共享面板中保存到 iCloud Drive。`; }
+    async function exportBackup() { await migrateSyncIds(); const records=await allEntries(); const entries=await Promise.all(records.map(async item=>{const {id,audio,audioData,audioDataUrl,...record}=item,blob=audioBlobFor(item);return {...record,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};})); const defaultAudio=await exportDefaultAudio(); const backup={format:backupFormat,version:3,learning:await learningBackup(),exportedAt:new Date().toISOString(),entries,defaultAudio,defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress()}; const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}); return {blob,count:entries.length}; }
     function isValidBackup(value) { return value && value.format===backupFormat && [1,2,3].includes(value.version) && Array.isArray(value.entries) && value.entries.every(item=>item&&typeof item.word==='string' && typeof item.meaning==='string' && (item.audio===null || typeof item.audio==='string')); }
     function syncKeys(item) { return [...new Set([item.syncId,...(Array.isArray(item.syncAliases)?item.syncAliases:[])].filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim()))]; }
     function sameWord(a,b) { return a.word.normalize('NFC').trim()===b.word.normalize('NFC').trim(); }
@@ -4233,6 +4233,112 @@ renderPronunciation=function(){pronListenStop();pronListenRenderOriginal();if(![
 };
 pronunciationPanel.addEventListener('click',e=>{if(e.target.closest('[data-pron-tone],[data-pron-route],[data-pron-concept],[data-pron-detail]'))pronListenStop();},true);
 window.addEventListener('pagehide',()=>pronListenStop());
+</script>
+<script data-lesson11-vocabulary>
+/* User-supplied classroom vocabulary. One-time, additive, per-course migration. */
+const lesson11VocabularyText=`ອ້າຍເອື້ອຍ|哥哥姐姐|家庭,亲属|
+ດຳຂາວ|黑白|颜色|
+ດິນແດນ|领土；疆域|地理,国家|教材译“领土”
+ແຜນທີ່|地图|地理,出行|
+ຫົນທາງ|道路；公路|交通,出行|
+ບ້ານນອກ|乡下；农村|地点,乡村|
+ວຽງຈັນ|万象（老挝首都）|地名,城市,老挝|地名
+ວັງວຽງ|万荣（Vang Vieng）|地名,城市,老挝|地名
+ນ້ຳຫອມ|香水|日用品,个人护理|
+ຫ້ອງນ້ຳ|卫生间；厕所|家居,设施|
+ຖືກຕ້ອງ|正确；准确|评价,正确性|
+ຕື່ນນອນ|起床；睡醒|日常生活,作息|
+ຜ້າຫົ່ມ|被子；毯子|家居,床上用品|
+ເປັນຫຍັງ|怎么了；为什么|疑问表达,日常交流|依据语境可作询问原因或情况
+ຮ່ຳຮຽນ|学习；求学|学习,教育|
+ພວກເຮົາ|我们|人称代词,日常交流|
+ໂຮງຮຽນ|学校|学习,教育,地点|
+ກະດານ|板；黑板（课堂语境）|课堂,学习用品|教材译黑板；明确表示黑板常说 ກະດານດຳ
+ຂີ້ຝຸ່ນ|灰尘；尘土|环境,清洁|
+ນ້ຳດື່ມ|饮用水|饮食,饮品|
+ລົມກັນ|聊天；交谈|交流,社交|
+ຜິວເຫຼືອງ|黄色皮肤；黄皮肤|身体,外貌,颜色|教材译黄皮肤
+ເຕະບານ|踢足球|运动,足球|
+ຮົງກົງ|香港|地名,城市|保留教材拼写；另一写法 ຮ່ອງກົງ，不自动合并不同拼写
+ໂຕກຽວ|东京|地名,城市,日本|地名
+ປັກກິ່ງ|北京|地名,城市,中国|地名
+ຊຽງໄຮ|上海|地名,城市,中国|地名；保留教材拼写
+ເຄົາລົບນັບຖື|尊敬；敬重|人际关系,礼貌|
+ຕັ້ງອົກຕັ້ງໃຈ|专心；全神贯注|学习,专注|
+ຂຶ້ນພູລົງຫ້ວຍ|翻山越岭；上山下谷|出行,自然,固定表达|教材译上山下溪、翻山越岭
+ດິນດອນຕອນຫຍ້າ|土地；田地|地理,农业,固定表达|教材译土地与田园；固定表达
+ເຮືອນຊານບ້ານຊ່ອງ|房屋；家园|家居,乡村,固定表达|教材译房屋与村庄
+ສ້າງບ້ານແປງເມືອງ|建设家园；建设国家|社会,建设|教材译建设国家
+ທຳບຸນຕັກບາດ|做功德；向僧侣布施|宗教,佛教,习俗|教材译做功德布施
+ຍິງຊາຍໃຫຍ່ນ້ອຍ|男女老少|人物,群体,固定表达|
+ຍິ້ມແຍ້ມແຈ່ມໃສ|笑容满面；笑容可掬|情绪,表情|
+ເບີກບານມ່ວນຊື່ນ|欢欣愉快；兴高采烈|情绪,愉快|
+ກອງທັບປົດປ່ອຍ|解放军|社会,军事|
+ວັດທະນາຖາວອນ|繁荣昌盛|社会,发展|
+ສາທາລະນະລັດປະຊາທິປະໄຕປະຊາຊົນລາວ|老挝人民民主共和国|国名,老挝|国名；教材完整练习项目`;
+const lesson11Vocabulary=lesson11VocabularyText.split('\n').map((line,i)=>{const [text,meaning,tags,note]=line.split('|');return {id:'l11-supp-'+String(i+1).padStart(2,'0'),text,meaning,note,unit:i<27?'two':'multi',tags:['课堂例词','第十一课',i<27?'双音节练习':'多音节练习',...tags.split(',')]};});
+function lesson11VocabularyPlan(snap,entries,course){
+ const materials=structuredClone(snap.learningMaterials),placements=structuredClone(snap.learningPlacements),words=structuredClone(entries),wordWrites=[],now=Date.now(),norm=learningNorm;
+ const record=materials.find(m=>m.courseDefinition?.id===course.id);if(!record||record.courseDeleted||record.coursePurged||record.lesson11VocabularyV1)return null;
+ if(course.schemaVersion!==2)return null;
+ const key=course.packageKey,get=(kind,id)=>materials.find(m=>m.id===lessonV2Id(key,kind,id)),save=m=>{const i=materials.findIndex(x=>x.id===m.id);if(i<0)materials.push(m);else materials[i]=m;};
+ const stats={added:0,reused:0,removed:0};
+ for(const unit of ['two','multi']){
+  const title=unit==='two'?'双音节朗读练习':'多音节朗读练习',re=unit==='two'?/双音节/:/多音节/;
+  let section=record.courseDefinition.v2SectionIds.map(id=>get('section',id)).find(s=>s&&(re.test(s.v2Data.title)||s.v2Data.blocks.some(id=>get('block',id)?.v2Data.content?.unitType===unit)));
+  if(!section){const id='l11-supp-'+unit;section=lessonV2Record('section',lessonV2Id(key,'section',id),title,{id,title,topics:['活闭音节'],roles:['发音训练'],blocks:[]});save(section);record.courseDefinition.v2SectionIds.push(id);}
+  const blocks=section.v2Data.blocks.map(id=>get('block',id)).filter(b=>b&&b.v2Data.sectionId===section.v2Data.id&&['reading','word-ref'].includes(b.v2Data.contentType));
+  let block=blocks.find(b=>b.v2Data.contentType==='reading'&&b.v2Data.content.unitType===unit);
+  if(!block){const id='l11-supp-block-'+unit;block=lessonV2Record('block',lessonV2Id(key,'block',id),title,{id,sectionId:section.v2Data.id,contentType:'reading',displayType:'reading-grid',title,topics:['活闭音节'],roles:['发音训练'],tags:['课堂例词'],note:'按提供的教材清单补充，保留教材拼写，未补猜 IPA。',content:{unitType:unit,items:[]}});save(block);section.v2Data.blocks.push(id);blocks.push(block);}
+  for(const row of lesson11Vocabulary.filter(r=>r.unit===unit)){
+   const matches=words.filter(w=>norm(w.word)===norm(row.text));let word;
+   if(!matches.length){word={word:row.text,meaning:row.meaning,ipa:'',category:row.tags.join(','),note:row.note,syncId:learningUid(),updatedAt:now};words.push(word);wordWrites.push(word);stats.added++;}
+   else{stats.reused++;for(const w of matches){w.category=[...new Set([...(w.category||'').split(/[,，]/).map(t=>t.trim()).filter(Boolean),...row.tags])].join(',');if(!w.syncId)w.syncId=learningUid();w.updatedAt=now;wordWrites.push(w);}if(matches.length===1)word=matches[0];}
+   const found=blocks.flatMap(b=>(b.v2Data.content.items||[]).map(id=>({b,m:get('item',id)}))).filter(x=>x.m&&x.m.v2Data.blockId===x.b.v2Data.id&&norm(x.m.textLao)===norm(row.text)&&!placements.some(p=>p.lessonId===course.id&&p.materialId===x.m.id&&p.deleted));
+   // Keep the existing recorded item; duplicate display links are recoverably hidden only.
+   found.sort((a,b)=>(b.m.audioSources?.length||0)-(a.m.audioSources?.length||0));const keep=found[0];
+   if(keep){keep.m.tags=[...new Set([...(keep.m.tags||[]),...row.tags])];keep.m.v2Data.tags=[...new Set([...(keep.m.v2Data.tags||[]),...row.tags])];if(word&&!keep.m.linkedWordSyncIds.length)keep.m.linkedWordSyncIds=[word.syncId];keep.m.updatedAt=now;const removed=new Set();for(const x of found.slice(1)){if(x.m.id===keep.m.id||removed.has(x.m.id))continue;removed.add(x.m.id);let p=placements.find(p=>p.lessonId===course.id&&p.materialId===x.m.id);if(!p){p=learningPlacementFor(x.m.id,'reading_drill',placements.length,course);placements.push(p);}p.deleted=true;p.updatedAt=now;stats.removed++;}for(const b of blocks){b.v2Data.content.items=[...new Set(b.v2Data.content.items)];b.updatedAt=now;}}
+   else{const data={itemId:row.id,blockId:block.v2Data.id,itemType:'reading',unitType:unit,textLao:row.text,translationZh:row.meaning,ipa:'',tags:row.tags,note:row.note,includeInDictionary:true,linkedWords:[]},id=lessonV2Id(key,'item',row.id);if(get('item',row.id))continue;save({...lessonV2Record('item',id,row.text,data),contentType:'reading_drill',textLao:row.text,translationZh:row.meaning,note:row.note,tags:row.tags,linkedWordSyncIds:word?[word.syncId]:[],unitType:unit});block.v2Data.content.items.push(row.id);placements.push({...learningPlacementFor(id,'reading_drill',placements.length,course),schemaVersion:2});}
+  }
+  section.updatedAt=now;block.updatedAt=now;
+ }
+ record.lesson11VocabularyV1={at:now,...stats};record.updatedAt=now;
+ const next={...snap,learningMaterials:materials,learningPlacements:placements};learningValidateLinks(next);
+ return {words:wordWrites,materials,placements,course:record.courseDefinition,stats};
+}
+async function lesson11VocabularyApply(course){
+ const db=await openDB(),tx=db.transaction(['entries','learningMaterials','learningPlacements','learningAudio'],'readwrite'),done=transactionDone(tx),requests={};let left=4,issue,result;
+ for(const kind of ['entries','learningMaterials','learningPlacements','learningAudio']){const q=requests[kind]=tx.objectStore(kind).getAll();q.onsuccess=()=>{if(--left)return;try{const snap=Object.fromEntries(['learningMaterials','learningPlacements','learningAudio'].map(k=>[k,requests[k].result]));result=lesson11VocabularyPlan(snap,requests.entries.result,course);if(!result)return;for(const w of result.words){if(w.id===undefined)tx.objectStore('entries').add(w);else tx.objectStore('entries').put(w);}for(const m of result.materials){learningValidateRecord('learningMaterials',m);tx.objectStore('learningMaterials').put(m);}for(const p of result.placements)tx.objectStore('learningPlacements').put(p);}catch(e){issue=e;tx.abort();}};}
+ try{await done;}catch(e){throw issue||e;}return result;
+}
+const lesson11VocabularyOriginalRender=renderLearning;
+renderLearning=async function(...args){if(learningRoute==='lesson'&&learningLesson.library!=='communication'&&/^第(?:十一|11)课[：:、\s]*活闭音节尾辅音及其声调/.test(learningLesson.title)){const courseId=learningLesson.id,result=await lesson11VocabularyApply(learningLesson);if(result&&learningLesson.id===courseId)learningLesson=result.course;}return lesson11VocabularyOriginalRender(...args);};
+</script>
+<script data-export-ui>
+/* Keep export feedback visible and downloads available until explicitly closed. */
+function openBackupExport(){
+ const dialog=document.createElement('dialog');
+ dialog.innerHTML='<h2>导出词典</h2><p>完整备份包含录音，资料较多时需要等待。整理标签可以先导出不含音频的词表。</p><p><button data-full>完整备份（含音频）</button> <button data-words>标签整理用词表</button></p><p data-status role="status"></p><div data-result></div><p><button data-close>关闭</button></p>';
+ document.body.appendChild(dialog);dialog.showModal();let busy=false,url=null;
+ const status=dialog.querySelector('[data-status]'),result=dialog.querySelector('[data-result]');
+ dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+ dialog.addEventListener('close',()=>{if(url)URL.revokeObjectURL(url);dialog.remove();});
+ async function run(full){
+  if(busy)return;busy=true;dialog.querySelector('[data-full]').disabled=true;dialog.querySelector('[data-words]').disabled=true;
+  status.textContent=full?'正在整理词条、录音和学习材料，请稍候…':'正在整理词表（不包含录音）…';result.replaceChildren();if(url){URL.revokeObjectURL(url);url=null;}
+  try{
+   let blob,count;
+   if(full)({blob,count}=await exportBackup());
+   else{const rows=await allEntries(),entries=rows.map(w=>({syncId:w.syncId,word:w.word,ipa:w.ipa||'',meaning:w.meaning||'',category:w.category||'',note:w.note||''}));count=entries.length;blob=new Blob([JSON.stringify({format:'lao-tag-review',exportedAt:new Date().toISOString(),entries},null,2)],{type:'application/json'});}
+   if(!dialog.open)return;
+   url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=(full?'老挝语完整备份':'老挝语标签整理词表')+'-'+new Date().toISOString().slice(0,10)+'.json';link.textContent='点击保存 JSON 文件';result.appendChild(link);
+   status.textContent='已准备好 '+count+' 个词条（'+(blob.size/1024/1024).toFixed(2)+' MB）。请点击下方链接保存；保存前不要关闭此窗口。'+(full?'':' 此词表仅用于整理标签，不能代替完整备份。');
+  }catch(e){status.textContent='导出失败：'+(e.message||String(e))+'。可将这段提示发给我排查。';}
+  finally{busy=false;dialog.querySelector('[data-full]').disabled=false;dialog.querySelector('[data-words]').disabled=false;}
+ }
+ dialog.querySelector('[data-full]').onclick=()=>run(true);dialog.querySelector('[data-words]').onclick=()=>run(false);
+}
+$('#exportButton').onclick=openBackupExport;
 </script>
 </body>
 </html>

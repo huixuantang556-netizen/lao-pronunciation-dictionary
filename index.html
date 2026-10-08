@@ -256,6 +256,9 @@
       </section>
       <section class="panel practice hidden" id="practicePanel" aria-labelledby="practice-title">
         <h2 id="practice-title">多方向默写练习</h2>
+        <div class="review-toolbar"><button id="reviewToday" type="button" aria-pressed="false">今日复习 · 0</button><button id="reviewFree" type="button" hidden>自由练习</button><span id="reviewFeedback" role="status"></span></div>
+        <p id="reviewHint" class="tag-hint"></p>
+        <details id="reviewHistory"><summary>学习记录</summary><div class="review-history-filters"><label>日期<input id="reviewDate" type="date"></label><label>搜索<input id="reviewSearch" type="search" placeholder="单词、句子或中文"></label><select id="reviewRating" aria-label="熟悉程度"><option value="">全部掌握程度</option><option value="red">陌生</option><option value="yellow">模糊</option><option value="green">熟悉</option><option value="unrated">未评级</option></select><select id="reviewKind" aria-label="内容类别"><option value="">全部内容</option><option value="word">单词</option><option value="sentence">句子</option><option value="letter">字母</option></select><select id="reviewCourse" aria-label="历史章节"><option value="">全部章节／课程</option></select></div><div id="reviewHistoryRows"></div><div class="review-toolbar"><button id="reviewHistoryPrev">上一页</button><span id="reviewHistoryCount"></span><button id="reviewHistoryNext">下一页</button></div></details>
         <div class="practice-layout">
           <div id="practiceCard" class="practice-card">
             <p id="questionPrompt">看 IPA 音标，默写对应的老挝语字母或词条。</p>
@@ -931,7 +934,10 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
         if(id!==practiceId||version!==practiceRequest)return;
         practiceEvaluated=true;$('#practiceResult').className=`practice-result ${correct?'ok':'wrong'}`;
         $('#practiceResult').textContent=correct?'答对了！可以点击“换一题”继续。':`这次不对。答案是：${fullAnswer(item,direction)}。已加入重点复习。`;
-        persistPractice();await render();
+        const question=practiceRound?.history?.[practiceRound.cursor];if(question){question.checked=true;question.correct=correct;question.checkedAt=Date.now();}
+        persistPractice();
+        if(typeof reviewRecordCheck==='function'){try{await reviewRecordCheck(item,direction,correct);}catch(error){$('#practiceResult').textContent+=' 学习记录暂未保存：'+error.message+'；选择掌握程度时将重试。';persistPractice();}}
+        await render();
       }catch(error){if(id===practiceId&&version===practiceRequest)$('#practiceResult').textContent='检查未完成：'+error.message;}
       finally{practiceChecking=false;if(id===practiceId&&version===practiceRequest)$('#checkAnswer').disabled=practiceEvaluated;}
     }
@@ -1527,9 +1533,9 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       });
     }
     $('#practiceMarkControls').onclick=async e=>{
-      const button=e.target.closest('[data-practice-mark]');if(!button||!practiceId||alphabetSaving)return;
+      const button=e.target.closest('[data-practice-mark]');if(!button||!practiceId||alphabetSaving||practiceChecking)return;
       const id=practiceId,request=practiceRequest,color=button.dataset.practiceMark;alphabetSaving=true;
-      try{await markPracticeEntry(id,color);if(practiceId===id&&practiceRequest===request&&activeView==='practice')await choosePractice();}
+      try{if(typeof reviewRate==='function')await reviewRate(id,color);else await markPracticeEntry(id,color);if(practiceId===id&&practiceRequest===request&&activeView==='practice')await choosePractice();}
       catch(error){if(practiceId===id)$('#practiceMarkStatus').textContent='标记未保存：'+error.message;}
       finally{alphabetSaving=false;}
     };
@@ -3845,6 +3851,155 @@ async function practiceChangeSource(){
 $('#practiceLibrary').onchange=e=>{practiceSourceFilters={library:e.target.value,chapter:'',lesson:''};void practiceChangeSource();};
 $('#practiceChapter').onchange=e=>{practiceSourceFilters.chapter=e.target.value;practiceSourceFilters.lesson='';void practiceChangeSource();};
 $('#practiceLesson').onchange=e=>{practiceSourceFilters.lesson=e.target.value;void practiceChangeSource();};
+</script>
+<style data-review="style">
+.review-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:8px 0}
+.review-toolbar button{padding:7px 12px;font-size:13px;border-radius:9px}
+#reviewToday[aria-pressed="true"]{background:var(--brand);color:white}
+#reviewFeedback{font-size:13px;color:var(--brand)}
+#reviewHistory{margin:10px 0 18px;font-size:13px}
+#reviewHistory>summary,.review-word-history>summary{cursor:pointer;color:var(--brand)}
+.review-history-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:12px 0}
+.review-history-filters label{margin:0;flex:1 1 145px;font-size:12px}
+.review-history-filters input,.review-history-filters select{font-size:13px;padding:7px;min-height:36px;margin:3px 0;width:100%}
+.review-history-filters>select{width:auto;max-width:100%;flex:1 1 145px}
+.review-history-row{display:grid;grid-template-columns:145px minmax(100px,1fr) minmax(100px,1fr);gap:5px 12px;padding:10px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.review-history-row time,.review-history-row small{color:var(--muted);font-size:12px}
+.review-history-row small{grid-column:2 / -1}
+.review-word-history{margin-top:15px;font-size:13px}
+@media(max-width:600px){.review-history-row{grid-template-columns:1fr 1fr}.review-history-row time,.review-history-row small{grid-column:1 / -1}}
+</style>
+<script data-review="script">
+/* Appendable review events use existing learning backup/sync. Never infer old history. */
+const REVIEW_DAYS=[0,1,3,7,14,30,60,120],REVIEW_NEW_LIMIT=15;
+const reviewLabels={red:'陌生',yellow:'模糊',green:'熟悉'},reviewDirections={wordToMeaning:'认词 · 老语→中文',meaningToWord:'拼写 · 中文→老语',ipaToWord:'拼写 · 音标→老语',wordToIpa:'音标 · 老语→音标'};
+let reviewDaily=false,reviewNotice='',reviewHistoryPage=0,reviewSummaryVersion=0;
+try{reviewDaily=localStorage.getItem(workspaceName('lao-review-daily-v1'))==='1';}catch(_){}
+function reviewDay(at){const d=new Date(at);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
+function reviewAfterDays(at,n){const d=new Date(at);d.setDate(d.getDate()+n);return d.getTime();}
+function reviewTime(at){return Number.isFinite(at)?new Date(at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'未安排';}
+function reviewTarget(item){return item._practiceMaterialId?'material:'+item._practiceMaterialId:'word:'+item.syncId;}
+function reviewKeys(item){return item._practiceMaterialId?[reviewTarget(item)]:[item.syncId,...(item.syncAliases||[])].filter(Boolean).map(id=>'word:'+id);}
+function reviewValidEvent(e){return e&&e.version===1&&typeof e.id==='string'&&typeof e.target==='string'&&Object.hasOwn(reviewDirections,e.direction)&&Number.isFinite(e.at)&&typeof e.word==='string'&&(!e.rating||Object.hasOwn(reviewLabels,e.rating));}
+const reviewOriginalValidate=learningValidateRecord;
+learningValidateRecord=function(kind,row){
+ if(row?.reviewEvent!==undefined){const e=row.reviewEvent;if(kind!=='learningMaterials'||row.contentType!=='knowledge'||!reviewValidEvent(e)||e.id!==row.id||!e.id.startsWith('review-event:')||!e.target.match(/^(word|material):.+/)||e.at<0||typeof e.meaning!=='string'||!['word','letter','sentence'].includes(e.kind)||!Array.isArray(e.courses)||e.courses.some(c=>!c||typeof c.id!=='string'||typeof c.label!=='string')||(e.checked!==undefined&&typeof e.checked!=='boolean')||(e.correct!==undefined&&typeof e.correct!=='boolean'))throw Error('复习记录格式无效。');}
+ return reviewOriginalValidate(kind,row);
+};
+function reviewEvents(rows){return rows.map(m=>m.reviewEvent).filter(reviewValidEvent).sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id));}
+function reviewAdvance(previous,rating,at){
+ const p=previous||{stage:0,phase:'normal',nextReviewAt:0,reviewCount:0},s={...p,lastRating:rating,lastReviewedAt:at,reviewCount:p.reviewCount+1};
+ s.forgottenCount=(p.forgottenCount||0)+(rating==='red'?1:0);s.fuzzyCount=(p.fuzzyCount||0)+(rating==='yellow'?1:0);s.familiarCount=(p.familiarCount||0)+(rating==='green'?1:0);
+ if(rating==='red'){
+  s.lapseCount=(p.lapseCount||0)+(p.phase==='normal'?1:0);s.resumeStage=p.resumeStage??p.stage;
+  s.redDay=reviewDay(at);s.redCount=(p.redDay===s.redDay?p.redCount||0:0)+1;
+  s.phase=s.redCount>=3?'nextday':'relearn';s.nextReviewAt=s.redCount>=3?reviewAfterDays(at,1):at+(s.redCount===1?10:30)*60000;
+ }else if(p.phase==='relearn'){
+  s.phase='nextday';s.nextReviewAt=reviewAfterDays(at,1);
+ }else if(p.phase==='nextday'){
+  if(rating==='green'&&at>=p.nextReviewAt){s.stage=Math.max(1,(p.resumeStage||1)-1);s.phase='normal';delete s.resumeStage;s.nextReviewAt=reviewAfterDays(at,REVIEW_DAYS[s.stage]);}
+  else s.nextReviewAt=rating==='yellow'?reviewAfterDays(at,1):p.nextReviewAt;
+ }else if(rating==='yellow'){
+  s.nextReviewAt=reviewAfterDays(at,Math.max(1,Math.round(REVIEW_DAYS[p.stage]/2)));
+ }else{
+  // Early free practice must not advance several stages in a single day.
+  s.stage=p.stage&&at<p.nextReviewAt?p.stage:Math.min(7,p.stage+1);
+  s.nextReviewAt=p.stage&&at<p.nextReviewAt?p.nextReviewAt:reviewAfterDays(at,REVIEW_DAYS[s.stage]);
+ }
+ return s;
+}
+function reviewState(events,keys,direction){let state=null;for(const e of events)if(e.rating&&keys.includes(e.target)&&e.direction===direction)state=reviewAdvance(state,e.rating,e.at);return state;}
+function reviewPlan(items,events,now=Date.now()){
+ const first=new Map();for(const e of events)if(!first.has(e.target))first.set(e.target,e.at);
+ const today=new Set([...first].filter(([,at])=>reviewDay(at)===reviewDay(now)).map(([id])=>id));
+ const due=[],fresh=[];const selected=$('#practiceMode').value;
+ for(const item of practiceItems(items)){
+  const keys=reviewKeys(item);if(!keys.length)continue;
+  const dirs=availableModes(item).map(([key])=>key).filter(key=>selected==='mixed'||key===selected);
+  for(const direction of dirs){const state=reviewState(events,keys,direction),row={item,direction,state};if(state){if(state.nextReviewAt<=now)due.push(row);}else if(keys.some(k=>first.has(k))||today.size<REVIEW_NEW_LIMIT)fresh.push(row);}
+ }
+ due.sort((a,b)=>a.state.nextReviewAt-b.state.nextReviewAt||String(a.item.id).localeCompare(String(b.item.id)));
+ return {due,fresh,todayNew:today.size};
+}
+async function reviewRead(){return reviewEvents(await learningRows('learningMaterials'));}
+async function reviewWriteAttempt(item,direction,question,patch){
+ if(!question.reviewEventId){question.reviewEventId='review-event:'+crypto.randomUUID();persistPractice();}
+ if(!item._practiceMaterialId&&!item.syncId)throw Error('词条缺少同步编号，请刷新后重试。');
+ const snap=await learningSnapshot(),id=question.reviewEventId,old=snap.learningMaterials.find(m=>m.id===id),now=Date.now();
+ const courses=learningCourses(snap),refs=snap.learningPlacements.filter(p=>!p.deleted&&(item._practiceMaterialId?p.materialId===item._practiceMaterialId:snap.learningMaterials.some(m=>m.id===p.materialId&&m.contentType==='word'&&m.linkedWordSyncIds.some(k=>[item.syncId,...(item.syncAliases||[])].includes(k))))).map(p=>courses.find(c=>c.id===p.lessonId)).filter(Boolean);
+ const event={version:1,id,target:reviewTarget(item),direction,at:old?.reviewEvent?.at||now,word:item.word,meaning:item.meaning||'',kind:practiceIsSentence(item)?'sentence':$('#practiceKind').value==='letters'?'letter':'word',courses:[...new Map(refs.map(c=>[c.id,{id:c.id,label:[c.textbookName,c.chapterName,c.title].filter(Boolean).join(' · ')}])).values()],...old?.reviewEvent,...patch};
+ if(patch.rating)event.at=old?.reviewEvent?.rating?old.reviewEvent.at:now;
+ await learningWrite({learningMaterials:[{...(old||learningBlank(id,'knowledge','复习记录 · '+item.word)),reviewEvent:event,updatedAt:now}]},snap);
+ return {event,events:reviewEvents([...snap.learningMaterials.filter(m=>m.id!==id),{reviewEvent:event}])};
+}
+async function reviewRecordCheck(item,direction,correct){
+ const question=practiceRound?.history?.[practiceRound.cursor];if(!question||question.id!==item.id||question.direction!==direction)return;
+ await reviewWriteAttempt(item,direction,question,{checked:true,correct,checkedAt:Date.now()});
+ if($('#reviewHistory').open)await reviewDrawHistory();
+}
+async function reviewRate(id,color){
+ const question=practiceRound?.history?.[practiceRound.cursor],direction=practiceDirection,version=practiceRequest;
+ if(!question||question.id!==id||practiceChecking)return;
+ const item=await practiceGetItem(id);if(!item||version!==practiceRequest)return;
+ const {events}=await reviewWriteAttempt(item,direction,question,{...(question.checked?{checked:true,correct:question.correct,checkedAt:question.checkedAt}:{}),rating:color});
+ await markPracticeEntry(id,color);
+ const state=reviewState(events,reviewKeys(item),direction);question.rated=true;
+ reviewNotice='已记为'+reviewLabels[color]+' · 下次 '+reviewTime(state.nextReviewAt);
+ $('#reviewFeedback').textContent=reviewNotice;persistPractice();
+ if($('#reviewHistory').open)await reviewDrawHistory();
+ return true;
+}
+async function reviewRefreshSummary(){
+ const token=++reviewSummaryVersion,[items,events]=await Promise.all([practiceAllItems(),reviewRead()]);if(token!==reviewSummaryVersion)return;
+ const plan=reviewPlan(items,events);$('#reviewToday').textContent='今日复习 · '+plan.due.length;$('#reviewToday').setAttribute('aria-pressed',String(reviewDaily));$('#reviewFree').hidden=!reviewDaily;
+ $('#reviewHint').textContent=(reviewDaily?'今日复习中 · ':'')+'当前筛选到期 '+plan.due.length+' 项 · 新词每日最多 '+REVIEW_NEW_LIMIT+' 个；认词、拼写分别安排。';
+}
+function reviewShowQuestion(item,question){
+ const mode=reviewModes[question.direction];practiceId=item.id;practiceLastId=item.id;practiceDirection=question.direction;practiceEvaluated=!!question.evaluated;
+ setPracticeAudio(item);$('#questionPrompt').textContent=mode.prompt;$('#questionIPA').textContent=mode.question(item);$('#practiceAnswer').value=question.answer||'';$('#practiceAnswer').placeholder=mode.placeholder;$('#practiceAnswer').disabled=false;
+ $('#checkAnswer').disabled=practiceEvaluated;$('#showAnswer').disabled=false;$('#practiceNotes').hidden=false;$('#practiceMarkControls').hidden=false;
+ $('#practiceResult').className=question.resultClass||'practice-result';$('#practiceResult').textContent=question.result||'作答后选择掌握程度，安排下次复习。';
+ $('#practiceMarkStatus').textContent=question.rated?'本次已记录；返回修改评级不会新增一次记录。':'';$('#nextQuestion').textContent='换一题';$('#previousQuestion').disabled=practiceRound.cursor<=0;
+ $('#practiceProgress').textContent='今日复习 · 第 '+(practiceRound.cursor+1)+' 项（优先到期，再学新词）';if(activeView==='practice')$('#practiceAnswer').focus();persistPractice();
+}
+const reviewOriginalChoose=choosePractice;
+choosePractice=async function(options={}){
+ if(!reviewDaily){await reviewOriginalChoose(options);await reviewRefreshSummary();return;}
+ if(!practiceRestored){practiceRestored=true;restorePractice();}else persistPractice();
+ const version=++practiceRequest,[items,events]=await Promise.all([practiceAllItems(),reviewRead()]);if(version!==practiceRequest)return;
+ renderPracticeTags(categories(practiceKindItems(items)));updatePracticeSummary(items);
+ const key=JSON.stringify([reviewDay(Date.now()),practiceSourceKey(),$('#practiceKind').value,$('#practiceMode').value,$('#practiceScope').value,[...selectedPracticeTags].sort(),$('#practiceTagMode').value]);
+ if(!practiceRound?.daily||practiceRound.key!==key||options.restart)practiceRound={daily:true,key,history:[],queue:[],cursor:-1,completed:false};
+ if(options.back)practiceRound.cursor=Math.max(0,practiceRound.cursor-1);
+ let question=(options.back||options.resume)?practiceRound.history[practiceRound.cursor]:null;
+ const eligible=practiceItems(items);let item=question&&eligible.find(x=>x.id===question.id&&availableModes(x).some(([d])=>d===question.direction));
+ if(!item){const plan=reviewPlan(items,events),skipped=new Set(practiceRound.history.filter(q=>!q.rated).map(q=>JSON.stringify([q.id,q.direction]))),row=[...plan.due,...plan.fresh].find(r=>!skipped.has(JSON.stringify([r.item.id,r.direction])));
+  if(!row){practiceRound.completed=true;setPracticeEmpty('当前筛选暂无未跳过的到期项目，或已达到每日新词上限。可稍后再来，也可切换自由练习。');$('#practiceMarkControls').hidden=true;$('#practiceNotes').hidden=true;$('#practiceProgress').textContent='点击“今日复习”可重新查看跳过项；到期后点击“检查到期”继续。';$('#nextQuestion').textContent='检查到期';persistPractice();await reviewRefreshSummary();return;}
+  item=row.item;question={id:item.id,direction:row.direction};practiceRound.history.push(question);practiceRound.cursor=practiceRound.history.length-1;
+ }
+ practiceRound.completed=false;reviewShowQuestion(item,question);await reviewRefreshSummary();
+};
+function reviewHistoryHtml(events){
+ const h=learningEsc;return events.length?events.map(e=>'<div class="review-history-row"><time>'+h(new Date(e.at).toLocaleString('zh-CN'))+'</time><strong lang="lo">'+h(e.word)+'</strong><span>'+h(e.meaning)+'</span><small>'+h(reviewDirections[e.direction])+' · '+h(reviewLabels[e.rating]||'已作答，未评级')+(e.checked?' · '+(e.correct?'答对':'答错'):'')+'</small></div>').join(''):'<p class="tag-hint">暂无记录。历史从功能启用后开始保存，不补造过去记录。</p>';
+}
+async function reviewDrawHistory(){
+ const events=(await reviewRead()).reverse(),date=$('#reviewDate').value,q=$('#reviewSearch').value.trim().toLowerCase(),rating=$('#reviewRating').value,kind=$('#reviewKind').value,course=$('#reviewCourse').value;
+ const courses=new Map(events.flatMap(e=>(e.courses||[]).map(c=>[c.id,c.label])));$('#reviewCourse').innerHTML='<option value="">全部章节／课程</option>'+[...courses].map(([id,title])=>'<option value="'+learningEsc(id)+'">'+learningEsc(title)+'</option>').join('');$('#reviewCourse').value=course;
+ const rows=events.filter(e=>(!date||reviewDay(e.at)===date)&&(!q||(e.word+' '+e.meaning).toLowerCase().includes(q))&&(!rating||(rating==='unrated'?!e.rating:e.rating===rating))&&(!kind||e.kind===kind)&&(!course||e.courses?.some(c=>c.id===course)));
+ const pages=Math.max(1,Math.ceil(rows.length/30));reviewHistoryPage=Math.min(reviewHistoryPage,pages-1);$('#reviewHistoryRows').innerHTML=reviewHistoryHtml(rows.slice(reviewHistoryPage*30,(reviewHistoryPage+1)*30));$('#reviewHistoryCount').textContent='共 '+rows.length+' 次 · 第 '+(reviewHistoryPage+1)+' / '+pages+' 页';$('#reviewHistoryPrev').disabled=!reviewHistoryPage;$('#reviewHistoryNext').disabled=reviewHistoryPage>=pages-1;
+}
+const reviewOriginalDetail=learningOpenDetail;
+learningOpenDetail=async function(id){await reviewOriginalDetail(id);const {w}=await learningResolve(id),keys=w?reviewKeys(w):['material:'+id],events=(await reviewRead()).filter(e=>keys.includes(e.target));if(learningDetail!==id)return;
+ const states=Object.keys(reviewDirections).map(direction=>({direction,state:reviewState(events,keys,direction)})).filter(x=>x.state);
+ learningDialog.insertAdjacentHTML('beforeend','<details class="review-word-history"><summary>复习历史 · '+events.length+' 次</summary>'+states.map(x=>'<p class="tag-hint">'+learningEsc(reviewDirections[x.direction])+'：'+reviewLabels[x.state.lastRating]+' · 下次 '+reviewTime(x.state.nextReviewAt)+'</p>').join('')+reviewHistoryHtml(events.slice(-30).reverse())+(events.length>30?'<p>这里只显示最近30次，全部记录可在默写页“学习记录”查看。</p>':'')+'</details>');
+};
+$('#reviewToday').onclick=async()=>{reviewDaily=true;practiceRestored=true;localStorage.setItem(workspaceName('lao-review-daily-v1'),'1');await choosePractice({restart:true});};
+$('#reviewFree').onclick=async()=>{reviewDaily=false;practiceRestored=true;localStorage.setItem(workspaceName('lao-review-daily-v1'),'0');practiceRound=null;await choosePractice({restart:true});};
+$('#reviewHistory').ontoggle=()=>{if($('#reviewHistory').open)void reviewDrawHistory().catch(e=>{$('#reviewHistoryRows').textContent=e.message;});};
+for(const id of ['reviewDate','reviewSearch','reviewRating','reviewKind','reviewCourse'])$('#'+id).oninput=()=>{reviewHistoryPage=0;void reviewDrawHistory();};
+$('#reviewHistoryPrev').onclick=()=>{reviewHistoryPage--;void reviewDrawHistory();};$('#reviewHistoryNext').onclick=()=>{reviewHistoryPage++;void reviewDrawHistory();};
+// Refresh the count without replacing an unanswered question or touching the microphone.
+setInterval(()=>{if(activeView==='practice'&&!learningHasWork())void reviewRefreshSummary().catch(()=>{});},30000);
 </script>
 </body>
 </html>

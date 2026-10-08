@@ -4328,7 +4328,7 @@ function openBackupExport(){
   status.textContent=full?'正在整理词条、录音和学习材料，请稍候…':'正在整理词表（不包含录音）…';result.replaceChildren();if(url){URL.revokeObjectURL(url);url=null;}
   try{
    let blob,count;
-   if(full)({blob,count}=await exportBackup());
+   if(full)({blob,count}=await exportBackup(message=>{status.textContent=message;}));
    else{const rows=await allEntries(),entries=rows.map(w=>({syncId:w.syncId,word:w.word,ipa:w.ipa||'',meaning:w.meaning||'',category:w.category||'',note:w.note||''}));count=entries.length;blob=new Blob([JSON.stringify({format:'lao-tag-review',exportedAt:new Date().toISOString(),entries},null,2)],{type:'application/json'});}
    if(!dialog.open)return;
    url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=(full?'老挝语完整备份':'老挝语标签整理词表')+'-'+new Date().toISOString().slice(0,10)+'.json';link.textContent='点击保存 JSON 文件';result.appendChild(link);
@@ -4339,6 +4339,57 @@ function openBackupExport(){
  dialog.querySelector('[data-full]').onclick=()=>run(true);dialog.querySelector('[data-words]').onclick=()=>run(false);
 }
 $('#exportButton').onclick=openBackupExport;
+</script>
+<script data-tag-patch>
+function tagPatchPlan(patch,rows){
+ if(patch.format!=='lao-tags-patch-v1'||!Array.isArray(patch.changes)||patch.changes.length>10000)throw Error('标签更新文件无效');
+ const writes=[],seen=new Set();let unchanged=0,skipped=0;
+ for(const c of patch.changes){
+  if(!c||['syncId','word','meaning','before','after'].some(k=>typeof c[k]!=='string')||!c.syncId||c.after.length>5000||seen.has(c.syncId))throw Error('标签记录格式错误或编号重复');seen.add(c.syncId);
+  const found=rows.filter(w=>w.syncId===c.syncId||(w.syncAliases||[]).includes(c.syncId));
+  if(found.length!==1){skipped++;continue;}const w=found[0];
+  if(w.word!==c.word||(w.meaning||'')!==c.meaning){skipped++;continue;}
+  if((w.category||'')===c.after){unchanged++;continue;}
+  if((w.category||'')!==c.before){skipped++;continue;}
+  writes.push({...w,category:c.after,updatedAt:Date.now()});
+ }
+ return {writes,unchanged,skipped};
+}
+async function importTagPatch(patch){
+ const initial=tagPatchPlan(patch,await allEntries());
+ if(!confirm('仅更新 '+initial.writes.length+' 条词条的标签；'+initial.unchanged+' 条已一致，'+initial.skipped+' 条因内容变化或未找到而跳过。录音、备注和复习记录不变。继续？'))return;
+ const db=await openDB(),tx=db.transaction('entries','readwrite'),done=transactionDone(tx);let plan,error;
+ const q=tx.objectStore('entries').getAll();q.onsuccess=()=>{try{plan=tagPatchPlan(patch,q.result);if(plan.writes.length!==initial.writes.length||plan.writes.some(w=>!initial.writes.some(x=>x.id===w.id&&x.word===w.word&&x.meaning===w.meaning)))throw Error('确认期间数据发生变化，请重新导入');for(const w of plan.writes)tx.objectStore('entries').put(w);}catch(e){error=e;tx.abort();}};
+ try{await done;}catch(e){throw error||e;}await render();$('#backupStatus').textContent='标签整理完成：更新 '+plan.writes.length+' 条，已一致 '+plan.unchanged+' 条，跳过 '+plan.skipped+' 条。原有音频等资料未改动。';
+}
+$('#importFile').onchange=async e=>{
+ const file=e.target.files[0];if(!file)return;if(backupBusy)return;backupBusy=true;
+ try{const data=JSON.parse(await file.text());if(data.format==='lao-tags-patch-v1')await importTagPatch(data);else{backupBusy=false;await importBackup(file);}}
+ catch(error){$('#backupStatus').textContent='导入失败：'+(error.message||error);}
+ finally{backupBusy=false;e.target.value='';}
+};
+</script>
+<script data-large-backup>
+/* Serialize audio rows one at a time. Never stringify the complete audio library. */
+async function backupArrayBlob(rows,convert,onProgress){
+ const parts=['['];for(let i=0;i<rows.length;i++){
+  const row=await convert(rows[i]);if(i)parts.push(',');parts.push(new Blob([JSON.stringify(row)]));
+  if(onProgress)onProgress(i+1,rows.length);
+  if(i%8===0)await new Promise(resolve=>setTimeout(resolve,0));
+ }parts.push(']');return new Blob(parts,{type:'application/json'});
+}
+async function exportBackup(progress=()=>{}){
+ progress('正在读取词条和学习资料…');await migrateSyncIds();const records=await allEntries(),snap=await learningSnapshot();
+ const entries=await backupArrayBlob(records,async item=>{const {id,audio,audioData,audioDataUrl,...rest}=item;const blob=audioBlobFor(item);return {...rest,audio:audioDataUrl||(blob?await blobToDataURL(blob):null)};},(i,n)=>progress('正在打包词条及个人录音 '+i+' / '+n));
+ const learningAudio=await backupArrayBlob(snap.learningAudio,async a=>{const {blob,...rest}=a;if(!(blob instanceof Blob))throw Error('学习录音无效：'+a.id);return {...rest,audio:await blobToDataURL(blob)};},(i,n)=>progress('正在打包教材和参考录音 '+i+' / '+n));
+ const rows=await withDefaultAudioStore('readonly',store=>{const rows=[],q=store.openCursor();q.onsuccess=()=>{const c=q.result;if(c){rows.push({key:c.key,blob:c.value});c.continue();}};return rows;});
+ const defaultAudio=await backupArrayBlob(rows,async row=>{if(!(row.blob instanceof Blob)||!row.blob.size)throw Error('默认发音缓存包含无效音频，未生成备份。');return {key:row.key,audio:await blobToDataURL(row.blob)};},(i,n)=>progress('正在打包默认发音 '+i+' / '+n));
+ const {learningAudio:ignored,...metadata}=snap;
+ const learningParts=['{'];for(const [key,value] of Object.entries(metadata))learningParts.push(JSON.stringify(key)+':',new Blob([JSON.stringify(value)]),',');learningParts.push('"learningAudio":',learningAudio,'}');
+ const header={format:backupFormat,version:3,exportedAt:new Date().toISOString(),defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress()};
+ const blob=new Blob([JSON.stringify(header).slice(0,-1),',"entries":',entries,',"learning":',new Blob(learningParts),',"defaultAudio":',defaultAudio,'}'],{type:'application/json'});
+ return {blob,count:records.length};
+}
 </script>
 </body>
 </html>

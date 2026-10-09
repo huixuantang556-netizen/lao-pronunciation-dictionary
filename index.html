@@ -206,6 +206,7 @@
       <div class="view-nav-group view-nav-tools" role="group" aria-label="词条与备份管理"><button type="button" data-view="add" aria-controls="addPanel">添加词条</button><button type="button" id="exportButton">⇧ 导出备份</button><button type="button" id="importButton">⇩ 同步导入</button></div>
     </nav>
     <input id="importFile" class="hidden" type="file" accept="application/json,.json" /><p id="backupStatus" class="backup-status" aria-live="polite"></p>
+    <small id="tagImportVersion" style="display:block;color:var(--muted);margin:4px 0 12px">标签导入版 1008.2 · 正在初始化</small>
     <details class="dictionary-settings"><summary>在线发音设置</summary><p class="tag-hint">自己的录音和默认发音可分别播放、同时保留。首次点击默认发音会把该词的老挝语文字发送给语音服务。生成的声音保存在本机，之后无需重新生成。需先配置服务地址。</p><label>语音服务地址（HTTPS）<input id="ttsEndpoint" type="url" placeholder="https://你的语音服务.workers.dev" /></label><label>个人访问口令<input id="ttsToken" type="password" autocomplete="off" /></label><button type="button" id="saveTtsSettings">保存发音设置</button><p id="ttsStatus" class="tag-hint" aria-live="polite">尚未配置在线语音服务。</p></details>
     <details class="dictionary-settings" id="cloudAccountPanel">
       <summary>云端账号 · 手动同步</summary>
@@ -263,8 +264,8 @@
           <div id="practiceCard" class="practice-card">
             <p id="questionPrompt">看 IPA 音标，默写对应的老挝语字母或词条。</p>
             <div class="question-row" style="flex-wrap:wrap"><div id="questionIPA" class="question-ipa">—</div><button type="button" id="practicePlay" disabled>本题暂无录音</button><button type="button" id="practiceDetail" disabled style="font-size:14px;padding:8px 12px" title="打开当前词条详情，可查看答案并录制参考发音">详情 / 参考发音</button></div>
-            <input id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
-            <div class="practice-submit"><button type="button" class="primary" id="checkAnswer">检查答案</button><div class="practice-links"><button type="button" id="showAnswer">显示答案</button><button type="button" id="practiceNotes" hidden>查看完整备注</button></div></div>
+            <input hidden tabindex="-1" id="practiceAnswer" class="practice-answer" placeholder="输入对应的老挝语字母" autocomplete="off" />
+            <div class="practice-submit"><button type="button" class="primary" id="checkAnswer" hidden>检查答案</button><div class="practice-links"><button type="button" id="showAnswer">显示答案</button><button type="button" id="practiceNotes" hidden>查看完整备注</button></div></div>
             <p id="practiceResult" class="practice-result" aria-live="polite"></p>
             <div class="practice-footer"><div id="practiceMarkControls" hidden><span class="practice-mark-label">掌握程度</span><div class="practice-mark-options" role="group" aria-label="掌握程度"><button type="button" data-practice-mark="red">陌生</button><button type="button" data-practice-mark="yellow">模糊</button><button type="button" data-practice-mark="green">熟悉</button></div></div><div class="practice-navigation"><button type="button" id="previousQuestion" disabled>上一题</button><button type="button" id="nextQuestion">换一题</button></div></div>
             <p id="practiceMarkStatus" class="tag-hint" role="status"></p>
@@ -793,6 +794,8 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       let committed=false;
       try {
         const backup=JSON.parse(await file.text());
+        if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
+        if(backup?.format==='lao-tag-review')throw new Error('这是导出的标签整理词表，请选择“词典标签更新-2026-10-08.json”，而不是标签整理词表。');
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
         const codaIncoming=validateCodaProgress(backup.codaProgress);
         const learningBefore=await learningSnapshot(),review=backupReviewCollector();
@@ -843,7 +846,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     }
     function normalizeAnswer(value) { return (value||'').normalize('NFC').replace(/\s+/g,'').trim(); }
     function normalizeIPA(value) { return normalizeAnswer(value).replace(/[\/\[\]]/g,''); }
-    const reviewModes={ipaToWord:{prompt:'看 IPA 音标，默写对应的老挝语字母、词条或句子。',placeholder:'输入对应的老挝语字母、词条或句子',question:item=>`/${item.ipa}/`,answer:item=>item.word,normalize:normalizeAnswer},wordToIpa:{prompt:'看老挝语字母、词条或句子，默写 IPA 音标。',placeholder:'输入 IPA 音标，例如 k 或 kʰ',question:item=>item.word,answer:item=>item.ipa,normalize:normalizeIPA},wordToMeaning:{prompt:'看老挝语字母、词条或句子，写出中文意思。',placeholder:'输入中文意思',question:item=>item.word,answer:item=>item.meaning,normalize:normalizeAnswer},meaningToWord:{prompt:'看中文意思，默写老挝语字母、词条或句子。',placeholder:'输入对应的老挝语字母、词条或句子',question:item=>item.meaning,answer:item=>item.word,normalize:normalizeAnswer}};
+    const reviewModes={ipaToWord:{prompt:'看 IPA 音标，默写对应的老挝语字母、词条或句子。',placeholder:'输入对应的老挝语字母、词条或句子',question:item=>`/${item.ipa}/`,answer:item=>item.word,normalize:normalizeAnswer},wordToIpa:{prompt:'看老挝语字母、词条或句子，回忆 IPA 音标。',placeholder:'输入 IPA 音标，例如 k 或 kʰ',question:item=>item.word,answer:item=>item.ipa,normalize:normalizeIPA},wordToMeaning:{prompt:'看老挝语字母、词条或句子，写出中文意思。',placeholder:'输入中文意思',question:item=>item.word,answer:item=>item.meaning,normalize:normalizeAnswer},meaningToWord:{prompt:'看中文意思，默写老挝语字母、词条或句子。',placeholder:'输入对应的老挝语字母、词条或句子',question:item=>item.meaning,answer:item=>item.word,normalize:normalizeAnswer}};
     function availableModes(item) { return Object.entries(reviewModes).filter(([key,mode])=>Boolean((key==='ipaToWord'?item.ipa?.trim():mode.question(item)?.trim())&&mode.answer(item)?.trim())); }
     function practiceKindItems(items) {
       const kind=$('#practiceKind')?.value;
@@ -917,7 +920,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       const mode=reviewModes[direction];practiceId=item.id;practiceDirection=direction;practiceEvaluated=false;
       $('#questionPrompt').textContent=mode.prompt;$('#questionIPA').textContent=mode.question(item);$('#practiceAnswer').value='';$('#practiceAnswer').placeholder=mode.placeholder;
       $('#practiceAnswer').disabled=false;$('#checkAnswer').disabled=false;$('#showAnswer').disabled=false;$('#practiceNotes').hidden=false;$('#nextQuestion').textContent='换一题';
-      if(activeView==='practice')$('#practiceAnswer').focus();$('#practiceResult').className='practice-result';$('#practiceResult').textContent='输入答案后点击“检查答案”。';
+      $('#practiceResult').className='practice-result';$('#practiceResult').textContent='先在心里作答，点击“显示答案”，再选择掌握程度。';
       if(question.answer!==undefined){$('#practiceAnswer').value=question.answer;$('#practiceResult').textContent=question.result;$('#practiceResult').className=question.resultClass;practiceEvaluated=!!question.evaluated;$('#checkAnswer').disabled=practiceEvaluated;}
       $('#previousQuestion').disabled=practiceRound.cursor<=0;$('#practiceMarkControls').hidden=false;
       $('#practiceMarkStatus').textContent=({yellow:'已标记：模糊',green:'已标记：熟悉',red:'已标记：陌生'})[item.learningState]||(item._practiceType==='sentence'?'尚未标记；句子的掌握程度独立保存。':'尚未标记；匹配到字母表时会同时调整对应格子的颜色。');
@@ -1055,7 +1058,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     $('#recordButton').onclick=()=>recorder?.state==='recording'?recorder.stop():startRecording();
     $('#removeAudioButton').onclick=()=>{if(recorder){alert('请先停止录音，等录音准备完成。');return;}clearCurrentAudio();removePersonalAudio=true;$('#recordStatus').textContent='已标记删除自己的录音，点击“保存修改”或“保存词条”后生效。默认发音缓存不会删除。';};
     $('#previewButton').onclick=()=>{if(currentPreviewUrl) new Audio(currentPreviewUrl).play();};
-    $('#exportButton').onclick=async()=>{ try { await exportBackup(); } catch(error) { $('#backupStatus').textContent=`导出失败：${error.message||'请重试'}`; } };
+    $('#exportButton').onclick=()=>openBackupExport();
     $('#importButton').onclick=()=>$('#importFile').click();
     $('#importFile').onchange=e=>importBackup(e.target.files[0]);
     async function practiceWordAction(detail=false){
@@ -1582,6 +1585,11 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
         $('#alphabetDialogBody').innerHTML=matches.length?matches.map(item=>`<section class="alphabet-detail"><strong lang="lo">${escapeHtml(item.word)}</strong><p>${escapeHtml(item.ipa||'未填写音标')} · ${escapeHtml(item.meaning||'未填写中文')}</p><p class="alphabet-note">${escapeHtml(item.note||'暂无备注。点击下方“修改 / 补录”填写。')}</p>${noteImagesMarkup(item.noteImages)}<div class="actions"><button type="button" data-letter-play="${item.id}" ${hasAudio(item)?'':'disabled'}>${hasAudio(item)?'▶ 我的录音':'尚无我的录音'}</button><button type="button" data-letter-edit="${item.id}">修改 / 补录</button></div></section>`).join(''):`<p>当前词典还没有对应词条。添加后，它的录音和备注会自动显示在这里。</p><button type="button" data-letter-add="${id}">添加这个字母</button>`;
         $('#alphabetDialogBody').innerHTML+=`<label>这个格子的颜色 <select data-letter-color="${cell.key}">${[['default','默认 · 清除标记'],['yellow','黄色 · 需加强'],['red','红色 · 重点'],['green','绿色 · 已熟悉']].map(([value,label])=>`<option value="${value}" ${value===(cell.color||'default')?'selected':''}>${label}</option>`).join('')}</select></label><p id="alphabetColorStatus" class="tag-hint" role="status">选择后自动保存，不影响字母、录音或备注。</p>`;
         if(!$('#alphabetDialog').open)$('#alphabetDialog').showModal();
+        if(typeof letterExamplesHtml==='function'){
+          const examples=await letterExamplesHtml(cell.forms.join('|'));
+          if(request!==alphabetOpenRequest||!$('#alphabetDialog').open)return;
+          $('#alphabetDialogBody').insertAdjacentHTML('beforeend',examples);
+        }
         if(notes&&matches.length===1&&hasAudio(matches[0])) {
           try {await playStoredAudio(matches[0]);}
           catch(error){$('#alphabetStatus').textContent='备注已打开，录音未能播放：'+error.message;}
@@ -2271,7 +2279,7 @@ async function learningSetup(){
 async function learningGlyph(form,details=false){
  const words=await allEntries(),matches=alphabetMatches({forms:form.split('|')},words);learningDraft=null;
  if(!details&&matches.length<=1){if(matches.length){const w=matches[0],snap=await learningSnapshot(),m=snap.learningMaterials.find(m=>m.contentType==='word'&&m.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref))),ref=m?.audioSources.filter(learningIsReference).at(-1);if(ref){const asset=snap.learningAudio.find(a=>a.id===ref.assetId);if(!asset)throw new Error('教材原音尚未同步到本机。');await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);}else await learningWordSpeech(w);}else{const text=form.split('|')[0],blob=await learningCachedSpeech(text)||await defaultSpeech(text);await learningPlayBlob(blob);}return;}
- learningModal(form.replaceAll('x','◌')+' · 词典资料',matches.length?matches.map(w=>'<section><h3 lang="lo">'+learningEsc(w.word)+'</h3><p>'+learningEsc(w.ipa||'')+' '+learningEsc(w.meaning||'')+'</p><p>'+learningEsc(w.note||'暂无备注')+'</p>'+noteImagesMarkup(w.noteImages)+'<button data-learn="word-audio" data-word="'+w.id+'">▶ 已有发音</button><button data-learn="word-detail" data-word="'+w.id+'">完整资料</button></section>').join(''):'<p>词库中还没有对应资料。可以在“老语字母”中添加此字母的词条及录音。</p>');
+ const examples=typeof letterExamplesHtml==='function'?await letterExamplesHtml(form):'';learningModal(form.replaceAll('x','◌')+' · 词典资料',(matches.length?matches.map(w=>'<section><h3 lang="lo">'+learningEsc(w.word)+'</h3><p>'+learningEsc(w.ipa||'')+' '+learningEsc(w.meaning||'')+'</p><p>'+learningEsc(w.note||'暂无备注')+'</p>'+noteImagesMarkup(w.noteImages)+'<button data-learn="word-audio" data-word="'+w.id+'">▶ 已有发音</button><button data-learn="word-detail" data-word="'+w.id+'">完整资料</button></section>').join(''):'<p>词库中还没有对应资料。可以在“老语字母”中添加此字母的词条及录音。</p>')+examples);
 }
 async function learningResolve(id){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);let m=snap.learningMaterials.find(x=>x.id===id);if(!m&&id.startsWith('word:')){const w=learningFindWord(id.slice(5),words);if(w)m=snap.learningMaterials.find(x=>x.contentType==='word'&&x.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref)))||learningWordMaterial(w);}if(!m)throw new Error('这条学习材料不存在。');return {m,snap,words,w:m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null};}
 async function learningPlayBlob(blob,start=0,end=null){
@@ -3975,7 +3983,7 @@ function reviewShowQuestion(item,question){
  $('#checkAnswer').disabled=practiceEvaluated;$('#showAnswer').disabled=false;$('#practiceNotes').hidden=false;$('#practiceMarkControls').hidden=false;
  $('#practiceResult').className=question.resultClass||'practice-result';$('#practiceResult').textContent=question.result||'作答后选择掌握程度，安排下次复习。';
  $('#practiceMarkStatus').textContent=question.rated?'本次已记录；返回修改评级不会新增一次记录。':'';$('#nextQuestion').textContent='换一题';$('#previousQuestion').disabled=practiceRound.cursor<=0;
- $('#practiceProgress').textContent='今日复习 · 第 '+(practiceRound.cursor+1)+' 项（优先到期，再学新词）';if(activeView==='practice')$('#practiceAnswer').focus();persistPractice();
+ $('#practiceProgress').textContent='今日复习 · 第 '+(practiceRound.cursor+1)+' 项（优先到期，再学新词）';persistPractice();
 }
 const reviewOriginalChoose=choosePractice;
 choosePractice=async function(options={}){
@@ -4362,12 +4370,8 @@ async function importTagPatch(patch){
  const q=tx.objectStore('entries').getAll();q.onsuccess=()=>{try{plan=tagPatchPlan(patch,q.result);if(plan.writes.length!==initial.writes.length||plan.writes.some(w=>!initial.writes.some(x=>x.id===w.id&&x.word===w.word&&x.meaning===w.meaning)))throw Error('确认期间数据发生变化，请重新导入');for(const w of plan.writes)tx.objectStore('entries').put(w);}catch(e){error=e;tx.abort();}};
  try{await done;}catch(e){throw error||e;}await render();$('#backupStatus').textContent='标签整理完成：更新 '+plan.writes.length+' 条，已一致 '+plan.unchanged+' 条，跳过 '+plan.skipped+' 条。原有音频等资料未改动。';
 }
-$('#importFile').onchange=async e=>{
- const file=e.target.files[0];if(!file)return;if(backupBusy)return;backupBusy=true;
- try{const data=JSON.parse(await file.text());if(data.format==='lao-tags-patch-v1')await importTagPatch(data);else{backupBusy=false;await importBackup(file);}}
- catch(error){$('#backupStatus').textContent='导入失败：'+(error.message||error);}
- finally{backupBusy=false;e.target.value='';}
-};
+$('#importFile').onchange=e=>importBackup(e.target.files[0]);
+if($('#tagImportVersion'))$('#tagImportVersion').textContent='标签导入版 1008.2 · 已就绪';
 </script>
 <script data-large-backup>
 /* Serialize audio rows one at a time. Never stringify the complete audio library. */
@@ -4390,6 +4394,45 @@ async function exportBackup(progress=()=>{}){
  const blob=new Blob([JSON.stringify(header).slice(0,-1),',"entries":',entries,',"learning":',new Blob(learningParts),',"defaultAudio":',defaultAudio,'}'],{type:'application/json'});
  return {blob,count:records.length};
 }
+</script>
+<style>#practiceAnswer,#checkAnswer{display:none!important}</style>
+<script data-practice-recall>
+function recallSyncModes(){
+ const select=$('#practiceMode'),letters=$('#practiceKind').value==='letters';
+ for(const option of select.options){const allowed=!letters||['wordToIpa','ipaToWord'].includes(option.value);option.hidden=!allowed;option.disabled=!allowed;}
+ if(letters&&!['wordToIpa','ipaToWord'].includes(select.value))select.value='wordToIpa';
+}
+const recallRestore=restorePractice;
+restorePractice=function(){const result=recallRestore();recallSyncModes();return result;};
+const recallChoose=choosePractice;
+choosePractice=async function(...args){recallSyncModes();return recallChoose(...args);};
+const recallModes=availableModes;
+availableModes=function(item){return recallModes(item).filter(([key])=>$('#practiceKind').value!=='letters'||['wordToIpa','ipaToWord'].includes(key));};
+$('#practiceKind').addEventListener('change',recallSyncModes,true);
+recallSyncModes();
+
+function letterExampleMatch(form,text){
+ const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ return String(form).split(/\s*\|\s*|\s*\/\s*/).some(f=>{
+  f=f.normalize('NFC').replace(/x/g,'◌').trim();if(!f)return false;
+  if(!f.includes('◌'))return text.normalize('NFC').includes(f);
+  const pattern=f.split('◌').map(esc).join('[ກ-ຮ][່້໊໋]?');
+  return new RegExp(pattern+'(?![ະາິີຶືຸູັົໍ])','u').test(text.normalize('NFC'));
+ });
+}
+function relatedLetterEntry(w){return window.learningAlphabetRows().some(r=>r[2].some(f=>alphabetMatches({forms:f.split('|')},[w]).length));}
+async function letterExamplesHtml(form){
+ const [words,snap]=await Promise.all([allEntries(),learningSnapshot()]),h=learningEsc;
+ const vocab=words.filter(w=>!relatedLetterEntry(w)&&letterExampleMatch(form,w.word));
+ const hidden=new Set(snap.learningPlacements.filter(p=>p.deleted).map(p=>p.materialId)),active=new Set(snap.learningPlacements.filter(p=>!p.deleted).map(p=>p.materialId));
+ const sentences=snap.learningMaterials.filter(m=>['sentence','dialogue'].includes(m.contentType)&&m.textLao&&(!hidden.has(m.id)||active.has(m.id))&&letterExampleMatch(form,m.textLao));
+ const seen=new Set(),unique=sentences.filter(m=>{const k=m.textLao+'|'+m.translationZh;if(seen.has(k))return false;seen.add(k);return true;});
+ const list=(title,rows,button)=>'<details><summary>'+title+' · '+rows.length+'</summary><div style="max-height:320px;overflow:auto">'+(rows.length?rows.map(button).join(''):'<p>现有资料中暂无匹配项。</p>')+'</div></details>';
+ return '<section class="letter-examples"><h3>包含这个字母的词与句子</h3><p class="tag-hint">按字形匹配现有资料；元音形变可能未匹配，不代表发音或音节分析。点击播放已有发音。</p>'+list('单词／短语',vocab,w=>'<p><button data-letter-example-word="'+h(w.id)+'"><span lang="lo">'+h(w.word)+'</span> · '+h(w.meaning||'拼读材料')+' ▶</button></p>')+list('句子',unique,m=>'<p><button data-letter-example-material="'+h(m.id)+'"><span lang="lo">'+h(m.textLao)+'</span> · '+h(m.translationZh)+' ▶</button></p>')+'<p class="letter-example-status" role="status"></p></section>';
+}
+const letterRelatedOriginal=learningRelatedHtml;
+learningRelatedHtml=async function(w){return relatedLetterEntry(w)?letterExamplesHtml(w.word):letterRelatedOriginal(w);};
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-letter-example-word],[data-letter-example-material]');if(!b)return;const status=b.closest('.letter-examples').querySelector('.letter-example-status');try{status.textContent='正在播放…';if(b.dataset.letterExampleWord){const w=(await allEntries()).find(w=>String(w.id)===b.dataset.letterExampleWord);if(!w)throw Error('词条已不存在');await learningWordSpeech(w);}else await learningPlay(b.dataset.letterExampleMaterial);status.textContent='';}catch(error){status.textContent=error.message;}});
 </script>
 </body>
 </html>

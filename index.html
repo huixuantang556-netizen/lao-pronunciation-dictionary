@@ -2344,7 +2344,7 @@ async function learningCompare(id){
 async function learningOpenDetail(id){
  const resolved=await learningResolve(id),{w,snap,words}=resolved;const place=snap.learningPlacements.find(p=>p.lessonId===learningLesson.id&&p.materialId===resolved.m.id&&!p.deleted);const m={...resolved.m,purpose:place?.purpose||resolved.m.purpose,note:place?.textbookNote||resolved.m.note,translationZh:place?.textbookMeaning||resolved.m.translationZh,tags:[...new Set([...resolved.m.tags,...(place?.tags||[])])]};learningDetail=id;learningDraft=null;learningPendingRecording=null;
  const related=w?await learningRelatedHtml(w):'',h=learningEsc;
- learningModal(w?.word||m.textLao,'<div class="learn-detail">'+(m.audioNeedsReview?'<p>文字已修改，已有发音需要核对。</p><button data-learn="v2-review-audio" data-id="'+h(id)+'">已逐一核对：现有录音仍适用</button>':'')+(m.purpose?'<p>用途：'+h(m.purpose)+'</p>':'')+'<p class="ipa">'+h(w?.ipa||'')+'</p><p>'+h(w?w.meaning:m.translationZh)+'</p>'+(w&&m.translationZh&&m.translationZh!==w.meaning?'<p>教材释义：'+h(m.translationZh)+'</p>':'')+'<div class="learn-chips">'+[...new Set([...(w?tagsFor(w):[]),...m.tags])].map(t=>'<span>'+h(t)+'</span>').join('')+'</div><p class="learn-note">'+h(w?.note||'')+'</p>'+(m.note?'<p class="learn-note">教材备注：'+h(m.note)+'</p>':'')+(w?noteImagesMarkup(w.noteImages):'')+'<p class="tag-hint">来源：'+h(m.source||m.sourceType)+' · '+h(m.contentType==='reading_drill'?'教材朗读练习':m.contentType==='word'?'词典词条':m.unitType==='phrase'?'短语':'句子')+'</p>'+(m.focusLetters.length||m.focusVowels.length?'<p>训练重点：'+h([...m.focusLetters,...m.focusVowels].join(' · '))+'</p>':'')+'<div class="learn-toolbar"><button data-learn="play" data-id="'+h(id)+'">▶ 参考发音</button><button data-learn="gemini" data-id="'+h(id)+'">Gemini 默认发音</button><button data-learn="record" id="learningRecord">🎙 开始跟读</button>'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改文字资料</button>':'<button data-learn="edit-material" data-id="'+h(id)+'">修改材料</button>')+'</div><p class="tag-hint">手录参考发音优先；没有时复用已有音频或 Gemini 默认发音。参考音与我的跟读分别保存，支持顺序对比。</p><div class="learn-record-controls"><button data-learn="record-reference" id="learningReferenceRecord">🎙 录制参考发音</button><div id="learningRecordingDraft"><button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button></div></div><button data-learn="compare" data-id="'+h(id)+'">参考发音 → 我的跟读</button>'+await learningWordAudioManagerHtml(m,w,snap)+'<div class="learn-related">'+(m.contentType==='word'?'':'<h3>关联词条</h3>'+(m.pendingLinkedWords?.length?'<p class="tag-hint">待关联（词库缺少或有同名词）：'+h(m.pendingLinkedWords.join('、'))+'</p>':'')+m.linkedWordSyncIds.map(ref=>{const x=learningFindWord(ref,words);return x?'<button data-learn="word-detail" data-word="'+x.id+'">'+h(x.word)+' · '+h(x.meaning)+'</button>':'<span>原关联词已删除或尚未同步</span>';}).join(''))+'</div>'+related+(m.schemaVersion===2&&typeof lessonV2AudioControls==='function'?lessonV2AudioControls(m):'')+(place?'<button data-learn="unlink" data-id="'+h(id)+'">移除此课关联（保留原资料）</button>':'')+'</div>');
+ learningModal(w?.word||m.textLao,'<div class="learn-detail learn-detail-compact"><button class="learn-detail-play" data-learn="play" data-id="'+h(id)+'">▶ 播放</button>'+(m.audioNeedsReview?'<p>文字已修改，已有发音需要核对。</p><button data-learn="v2-review-audio" data-id="'+h(id)+'">已逐一核对：现有录音仍适用</button>':'')+(m.purpose?'<p>用途：'+h(m.purpose)+'</p>':'')+'<p class="ipa">'+h(w?.ipa||'')+'</p><p>'+h(w?w.meaning:m.translationZh)+'</p>'+(w&&m.translationZh&&m.translationZh!==w.meaning?'<p>教材释义：'+h(m.translationZh)+'</p>':'')+'<div class="learn-chips">'+[...new Set([...(w?tagsFor(w):[]),...m.tags])].map(t=>'<span>'+h(t)+'</span>').join('')+'</div><p class="learn-note">'+h(w?.note||'')+'</p>'+(m.note?'<p class="learn-note">教材备注：'+h(m.note)+'</p>':'')+(w?noteImagesMarkup(w.noteImages):'')+related+'<p class="tag-hint">来源：'+h(m.source||m.sourceType)+' · '+h(m.contentType==='reading_drill'?'教材朗读练习':m.contentType==='word'?'词典词条':m.unitType==='phrase'?'短语':'句子')+'</p>'+(m.focusLetters.length||m.focusVowels.length?'<p>训练重点：'+h([...m.focusLetters,...m.focusVowels].join(' · '))+'</p>':'')+'<section class="learn-audio-bottom" aria-label="录音与音频管理"><div class="learn-toolbar"><button data-learn="gemini" data-id="'+h(id)+'">Gemini 默认发音</button><button data-learn="record" id="learningRecord">🎙 开始跟读</button>'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改文字资料</button>':'<button data-learn="edit-material" data-id="'+h(id)+'">修改材料</button>')+'</div><p class="tag-hint">手录参考发音优先；没有时复用已有音频或 Gemini 默认发音。参考音与我的跟读分别保存，支持顺序对比。</p><div class="learn-record-controls"><button data-learn="record-reference" id="learningReferenceRecord">🎙 录制参考发音</button><div id="learningRecordingDraft"><button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button></div></div><button data-learn="compare" data-id="'+h(id)+'">参考发音 → 我的跟读</button>'+await learningWordAudioManagerHtml(m,w,snap)+'<div class="learn-related">'+(m.contentType==='word'?'':'<h3>关联词条</h3>'+(m.pendingLinkedWords?.length?'<p class="tag-hint">待关联（词库缺少或有同名词）：'+h(m.pendingLinkedWords.join('、'))+'</p>':'')+m.linkedWordSyncIds.map(ref=>{const x=learningFindWord(ref,words);return x?'<button data-learn="word-detail" data-word="'+x.id+'">'+h(x.word)+' · '+h(x.meaning)+'</button>':'<span>原关联词已删除或尚未同步</span>';}).join(''))+'</div>'+ (m.schemaVersion===2&&typeof lessonV2AudioControls==='function'?lessonV2AudioControls(m):'')+(place?'<button data-learn="unlink" data-id="'+h(id)+'">移除此课关联（保留原资料）</button>':'')+'</section></div>');
 }
 async function learningStartRecording(role='follow'){
  if(learningRecorder&&role!==learningRecordingRole)throw new Error('请先停止当前录音。');
@@ -4395,7 +4395,7 @@ async function exportBackup(progress=()=>{}){
  return {blob,count:records.length};
 }
 </script>
-<style>#practiceAnswer,#checkAnswer{display:none!important}</style>
+<style>#practiceAnswer,#checkAnswer,#practiceNotes{display:none!important}.learn-detail-compact{position:relative;padding-top:8px}.learn-detail-compact>.ipa{padding-right:110px;min-height:44px}.learn-detail-play{position:absolute;right:0;top:0}.learn-audio-bottom{display:block;border-top:1px solid var(--line);padding-top:20px;margin-top:24px}.letter-example-group h4{margin:14px 0 8px}.letter-example-group>p{margin:6px 0}.letter-example-group button{text-align:left;white-space:normal;overflow-wrap:anywhere;max-width:100%}</style>
 <script data-practice-recall>
 function recallSyncModes(){
  const select=$('#practiceMode'),letters=$('#practiceKind').value==='letters';
@@ -4405,34 +4405,44 @@ function recallSyncModes(){
 const recallRestore=restorePractice;
 restorePractice=function(){const result=recallRestore();recallSyncModes();return result;};
 const recallChoose=choosePractice;
-choosePractice=async function(...args){recallSyncModes();return recallChoose(...args);};
+choosePractice=async function(...args){recallSyncModes();const result=await recallChoose(...args);if(/输入答案后.*检查答案/.test($('#practiceResult').textContent))$('#practiceResult').textContent='';return result;};
 const recallModes=availableModes;
 availableModes=function(item){return recallModes(item).filter(([key])=>$('#practiceKind').value!=='letters'||['wordToIpa','ipaToWord'].includes(key));};
 $('#practiceKind').addEventListener('change',recallSyncModes,true);
 recallSyncModes();
 
+function letterExampleCanonical(text){return String(text||'').normalize('NFC').replaceAll('ໜ','ຫນ').replaceAll('ໝ','ຫມ');}
 function letterExampleMatch(form,text){
  const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
  return String(form).split(/\s*\|\s*|\s*\/\s*/).some(f=>{
-  f=f.normalize('NFC').replace(/x/g,'◌').trim();if(!f)return false;
-  if(!f.includes('◌'))return text.normalize('NFC').includes(f);
+  f=letterExampleCanonical(f).replace(/x/g,'◌').trim();if(!f)return false;
+  if(!f.includes('◌'))return letterExampleCanonical(text).includes(f);
   const pattern=f.split('◌').map(esc).join('[ກ-ຮ][່້໊໋]?');
-  return new RegExp(pattern+'(?![ະາິີຶືຸູັົໍ])','u').test(text.normalize('NFC'));
+  return new RegExp(pattern+'(?![ະາິີຶືຸູັົໍ])','u').test(letterExampleCanonical(text));
  });
 }
-function relatedLetterEntry(w){return window.learningAlphabetRows().some(r=>r[2].some(f=>alphabetMatches({forms:f.split('|')},[w]).length));}
+function relatedLetterEntry(w){
+ const key=s=>letterExampleCanonical(s).replace(/[\s◌x]/g,'');
+ const forms=window.learningAlphabetRows().flatMap(r=>r[2]).flatMap(f=>f.split('|'));
+ if(forms.some(f=>key(f)===key(w.word)||alphabetMatches({forms:[f]},[w]).length))return true;
+ // Parenthesized alternate spellings in alphabet records are not example words.
+ const parts=String(w.word).split(/[()（）]/).map(s=>s.trim()).filter(Boolean);
+ return !w.meaning&&parts.length>1&&parts.every(p=>forms.some(f=>key(f)===key(p)));
+}
 async function letterExamplesHtml(form){
  const [words,snap]=await Promise.all([allEntries(),learningSnapshot()]),h=learningEsc;
  const vocab=words.filter(w=>!relatedLetterEntry(w)&&letterExampleMatch(form,w.word));
  const hidden=new Set(snap.learningPlacements.filter(p=>p.deleted).map(p=>p.materialId)),active=new Set(snap.learningPlacements.filter(p=>!p.deleted).map(p=>p.materialId));
  const sentences=snap.learningMaterials.filter(m=>['sentence','dialogue'].includes(m.contentType)&&m.textLao&&(!hidden.has(m.id)||active.has(m.id))&&letterExampleMatch(form,m.textLao));
  const seen=new Set(),unique=sentences.filter(m=>{const k=m.textLao+'|'+m.translationZh;if(seen.has(k))return false;seen.add(k);return true;});
- const list=(title,rows,button)=>'<details><summary>'+title+' · '+rows.length+'</summary><div style="max-height:320px;overflow:auto">'+(rows.length?rows.map(button).join(''):'<p>现有资料中暂无匹配项。</p>')+'</div></details>';
+ const list=(title,rows,button)=>'<section class="letter-example-group"><h4>'+title+' · '+rows.length+'</h4>'+(rows.length?rows.slice(0,2).map(button).join(''):'<p>现有资料中暂无匹配项。</p>')+(rows.length>2?'<details><summary>展开其余 '+(rows.length-2)+' 条</summary><div style="max-height:320px;overflow:auto">'+rows.slice(2).map(button).join('')+'</div></details>':'')+'</section>';
  return '<section class="letter-examples"><h3>包含这个字母的词与句子</h3><p class="tag-hint">按字形匹配现有资料；元音形变可能未匹配，不代表发音或音节分析。点击播放已有发音。</p>'+list('单词／短语',vocab,w=>'<p><button data-letter-example-word="'+h(w.id)+'"><span lang="lo">'+h(w.word)+'</span> · '+h(w.meaning||'拼读材料')+' ▶</button></p>')+list('句子',unique,m=>'<p><button data-letter-example-material="'+h(m.id)+'"><span lang="lo">'+h(m.textLao)+'</span> · '+h(m.translationZh)+' ▶</button></p>')+'<p class="letter-example-status" role="status"></p></section>';
 }
 const letterRelatedOriginal=learningRelatedHtml;
 learningRelatedHtml=async function(w){return relatedLetterEntry(w)?letterExamplesHtml(w.word):letterRelatedOriginal(w);};
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-letter-example-word],[data-letter-example-material]');if(!b)return;const status=b.closest('.letter-examples').querySelector('.letter-example-status');try{status.textContent='正在播放…';if(b.dataset.letterExampleWord){const w=(await allEntries()).find(w=>String(w.id)===b.dataset.letterExampleWord);if(!w)throw Error('词条已不存在');await learningWordSpeech(w);}else await learningPlay(b.dataset.letterExampleMaterial);status.textContent='';}catch(error){status.textContent=error.message;}});
+const compactOriginalDetail=learningOpenDetail;
+learningOpenDetail=async function(id){await compactOriginalDetail(id);if(learningDetail!==id)return;const audio=learningDialog.querySelector('.learn-audio-bottom'),history=learningDialog.querySelector('.review-word-history');if(audio&&history)audio.before(history);};
 </script>
 </body>
 </html>

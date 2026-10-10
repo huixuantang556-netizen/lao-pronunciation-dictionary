@@ -976,7 +976,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       }catch(error){$('#practiceResult').textContent='备注读取失败：'+error.message;}
     }
     $('#practiceNotes').onclick=openPracticeNotes;
-    $('#previousQuestion').onclick=()=>choosePractice({back:true});
+    $('#previousQuestion').onclick=()=>practiceNavigateWithAudio({back:true});
     $('#practiceAnswer').oninput=persistPractice;
     window.addEventListener('pagehide',persistPractice);
     window.addEventListener('beforeunload',persistPractice);
@@ -1087,7 +1087,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     }
     $('#practicePlay').onclick=()=>practiceWordAction(false);
     $('#practiceDetail').onclick=()=>practiceWordAction(true);
-    $('#checkAnswer').onclick=checkPracticeAnswer; $('#showAnswer').onclick=revealPracticeAnswer; $('#nextQuestion').onclick=()=>choosePractice({restart:Boolean(practiceRound?.completed)});
+    $('#checkAnswer').onclick=checkPracticeAnswer; $('#showAnswer').onclick=revealPracticeAnswer; $('#nextQuestion').onclick=()=>practiceNavigateWithAudio({restart:Boolean(practiceRound?.completed)});
     $('#practiceAnswer').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();checkPracticeAnswer();}};
     $('#practiceKind').onchange=async()=>{practiceRestored=true;selectedPracticeTags.clear();$('#practiceTagSearch').value='';await render();await choosePractice({restart:true});};
     $('#practiceScope').onchange=choosePractice; $('#practiceMode').onchange=choosePractice;
@@ -4413,6 +4413,35 @@ function recallSyncModes(){
  const select=$('#practiceMode'),letters=$('#practiceKind').value==='letters';
  for(const option of select.options){const allowed=!letters||['wordToIpa','ipaToWord'].includes(option.value);option.hidden=!allowed;option.disabled=!allowed;}
  if(letters&&!['wordToIpa','ipaToWord'].includes(select.value))select.value='wordToIpa';
+}
+let practiceNavigationAudioRun=0;
+async function practiceNavigateWithAudio(options){
+ const run=++practiceNavigationAudioRun;
+ stopPracticeAudio();
+ try{
+  await choosePractice(options);
+  if(run!==practiceNavigationAudioRun||activeView!=='practice'||!practiceId||practiceRound?.completed)return;
+  const id=practiceId,request=practiceRequest,generation=playbackGeneration;
+  const current=()=>run===practiceNavigationAudioRun&&id===practiceId&&request===practiceRequest&&generation===playbackGeneration&&activeView==='practice';
+  const item=await practiceGetItem(id);if(!item||!current())return;
+  const {m,w,snap}=await learningResolve(item._practiceMaterialId||'word:'+item.syncId);
+  if(!current())return;
+  if(m.audioNeedsReview)throw Error('本题发音需要核对，请打开详情。');
+  const refs=m.audioSources||[];
+  let ref=m.defaultAudioKey&&typeof lessonV2AudioKey==='function'?refs.find(a=>lessonV2AudioKey(a)===m.defaultAudioKey&&!a.needsReview):null;
+  let blob,start=0,end=null;
+  if(!ref)ref=refs.filter(a=>a.role==='reference').at(-1);
+  if(!ref&&w)blob=audioBlobFor(w)||await learningCachedSpeech(w.word);
+  if(!ref&&!blob)ref=refs.filter(learningIsReference).at(-1);
+  if(ref){
+   if(ref.needsReview)throw Error('本题发音需要核对，请打开详情。');
+   blob=ref.source==='gemini'?await learningCachedSpeech(ref.text||w?.word||m.textLao):snap.learningAudio.find(a=>a.id===ref.assetId)?.blob;
+   start=ref.start||0;end=ref.end??null;
+  }else if(!blob)blob=await learningCachedSpeech(w?.word||m.textLao);
+  if(!current())return;
+  if(!blob){$('#practiceResult').textContent='本题暂无已保存音频，可点击“播放”或进入详情添加参考发音。';return;}
+  await learningPlayBlob(blob,start,end);
+ }catch(error){if(run===practiceNavigationAudioRun&&activeView==='practice')$('#practiceResult').textContent='未能自动播放：'+error.message+'；可点击“播放”重试。';}
 }
 const recallRestore=restorePractice;
 restorePractice=function(){const result=recallRestore();recallSyncModes();return result;};

@@ -4448,11 +4448,38 @@ async function letterExamplesHtml(form){
  const sentences=snap.learningMaterials.filter(m=>['sentence','dialogue'].includes(m.contentType)&&m.textLao&&(!hidden.has(m.id)||active.has(m.id))&&letterExampleMatch(form,m.textLao));
  const seen=new Set(),unique=sentences.filter(m=>{const k=m.textLao+'|'+m.translationZh;if(seen.has(k))return false;seen.add(k);return true;});
  const list=(title,rows,button)=>'<section class="letter-example-group"><h4>'+title+' · '+rows.length+'</h4>'+(rows.length?rows.slice(0,2).map(button).join(''):'<p>现有资料中暂无匹配项。</p>')+(rows.length>2?'<details><summary>展开其余 '+(rows.length-2)+' 条</summary><div style="max-height:320px;overflow:auto">'+rows.slice(2).map(button).join('')+'</div></details>':'')+'</section>';
- return '<section class="letter-examples"><h3>包含这个字母的词与句子</h3><p class="tag-hint">按字形匹配现有资料；元音形变可能未匹配，不代表发音或音节分析。点击播放已有发音。</p>'+list('单词／短语',vocab,w=>'<p><button data-letter-example-word="'+h(w.id)+'"><span lang="lo">'+h(w.word)+'</span> · '+h(w.meaning||'拼读材料')+' ▶</button></p>')+list('句子',unique,m=>'<p><button data-letter-example-material="'+h(m.id)+'"><span lang="lo">'+h(m.textLao)+'</span> · '+h(m.translationZh)+' ▶</button></p>')+'<p class="letter-example-status" role="status"></p></section>';
+ return '<section class="letter-examples"><h3>包含这个字母的词与句子</h3><p class="tag-hint">按字形匹配现有资料；元音形变可能未匹配，不代表发音或音节分析。单击播放，双击打开详情／录制参考发音；Shift+Enter 也可打开详情。</p>'+list('单词／短语',vocab,w=>'<p><button data-letter-example-word="'+h(w.id)+'"><span lang="lo">'+h(w.word)+'</span> · '+h(w.meaning||'拼读材料')+' ▶</button></p>')+list('句子',unique,m=>'<p><button data-letter-example-material="'+h(m.id)+'"><span lang="lo">'+h(m.textLao)+'</span> · '+h(m.translationZh)+' ▶</button></p>')+'<p class="letter-example-status" role="status"></p></section>';
 }
 const letterRelatedOriginal=learningRelatedHtml;
 learningRelatedHtml=async function(w){return relatedLetterEntry(w)?letterExamplesHtml(w.word):letterRelatedOriginal(w);};
-document.addEventListener('click',async e=>{const b=e.target.closest('[data-letter-example-word],[data-letter-example-material]');if(!b)return;const status=b.closest('.letter-examples').querySelector('.letter-example-status');try{status.textContent='正在播放…';if(b.dataset.letterExampleWord){const w=(await allEntries()).find(w=>String(w.id)===b.dataset.letterExampleWord);if(!w)throw Error('词条已不存在');await learningWordSpeech(w);}else await learningPlay(b.dataset.letterExampleMaterial);status.textContent='';}catch(error){status.textContent=error.message;}});
+let letterExampleTimer=null,letterExampleAction=0;
+async function letterExampleActivate(b,details=false){
+ const action=++letterExampleAction,status=b.closest('.letter-examples').querySelector('.letter-example-status');
+ try{
+  if(typeof learningHasWork==='function'&&learningHasWork())throw Error('请先保存或结束当前录音和编辑，再打开例词。');
+  status.textContent=details?'正在打开详情…':'正在播放…';
+  let id=b.dataset.letterExampleMaterial,w;
+  if(b.dataset.letterExampleWord){w=(await allEntries()).find(w=>String(w.id)===b.dataset.letterExampleWord);if(!w)throw Error('词条已不存在');id='word:'+w.syncId;}
+  if(action!==letterExampleAction||!b.isConnected)return;
+  if(details){stopPracticeAudio();await learningOpenDetail(id);}else if(w)await learningWordSpeech(w);else await learningPlay(id);
+  status.textContent='';
+ }catch(error){status.textContent=error.message;}
+}
+const letterExampleSelector='[data-letter-example-word],[data-letter-example-material]';
+document.addEventListener('click',e=>{
+ const b=e.target.closest(letterExampleSelector);if(!b)return;
+ clearTimeout(letterExampleTimer);
+ if(e.detail>1)return;
+ letterExampleTimer=setTimeout(()=>{if(b.isConnected)void letterExampleActivate(b);},350);
+});
+document.addEventListener('dblclick',e=>{
+ const b=e.target.closest(letterExampleSelector);if(!b)return;
+ e.preventDefault();clearTimeout(letterExampleTimer);void letterExampleActivate(b,true);
+});
+document.addEventListener('keydown',e=>{
+ const b=e.target.closest(letterExampleSelector);if(!b||e.key!=='Enter'||!e.shiftKey)return;
+ e.preventDefault();clearTimeout(letterExampleTimer);void letterExampleActivate(b,true);
+});
 const compactOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){await compactOriginalDetail(id);if(learningDetail!==id)return;const audio=learningDialog.querySelector('.learn-audio-bottom'),history=learningDialog.querySelector('.review-word-history');if(audio&&history)audio.before(history);};
 </script>

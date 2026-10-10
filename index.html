@@ -4461,7 +4461,12 @@ async function letterExampleActivate(b,details=false){
   let id=b.dataset.letterExampleMaterial,w;
   if(b.dataset.letterExampleWord){w=(await allEntries()).find(w=>String(w.id)===b.dataset.letterExampleWord);if(!w)throw Error('词条已不存在');id='word:'+w.syncId;}
   if(action!==letterExampleAction||!b.isConnected)return;
-  if(details){stopPracticeAudio();await learningOpenDetail(id);}else if(w)await learningWordSpeech(w);else await learningPlay(id);
+  if(details){
+   stopPracticeAudio();
+   const parent=letterDetailCapture(b);
+   await learningOpenDetail(id);
+   if(parent){letterDetailParents.push(parent);letterDetailBackButton();}
+  }else if(w)await learningWordSpeech(w);else await learningPlay(id);
   status.textContent='';
  }catch(error){status.textContent=error.message;}
 }
@@ -4482,6 +4487,44 @@ document.addEventListener('keydown',e=>{
 });
 const compactOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){await compactOriginalDetail(id);if(learningDetail!==id)return;const audio=learningDialog.querySelector('.learn-audio-bottom'),history=learningDialog.querySelector('.review-word-history');if(audio&&history)audio.before(history);};
+
+// Preserve the actual parent nodes: expanded sections, audio handlers and scroll positions survive.
+const letterDetailParents=[];
+function letterDetailCapture(button){
+ const dialog=button.closest('dialog');if(!dialog?.open)return null;
+ if(dialog!==learningDialog)return {external:dialog,button};
+ return {nodes:[...dialog.childNodes],className:dialog.className,detail:learningDetail,
+  settings:learningSettings,draft:learningDraft,button,scroll:dialog.scrollTop,
+  nested:[...dialog.querySelectorAll('*')].filter(n=>n.scrollTop||n.scrollLeft).map(n=>[n,n.scrollTop,n.scrollLeft])};
+}
+function letterDetailBackButton(){
+ if(!letterDetailParents.length||learningDialog.querySelector('[data-letter-detail-back]'))return;
+ const button=document.createElement('button');button.type='button';button.dataset.letterDetailBack='';
+ button.textContent='← 返回上一级';button.style.cssText='font-size:14px;padding:7px 12px;margin:0 0 12px';
+ learningDialog.prepend(button);
+ const close=learningDialog.querySelector('[data-learn="close"]');if(close)close.setAttribute('aria-label','返回上一级');
+}
+if(typeof learningClose==='function'){
+ const originalClose=learningClose;
+ learningClose=function(){
+  if(!letterDetailParents.length)return originalClose();
+  if(learningRecorder||learningBusy){alert('请先停止录音或等待保存完成。');return;}
+  if((learningDraft?.dirty||learningPendingRecording)&&!confirm('还有未保存的内容，放弃并返回上一级？'))return;
+  clearTimeout(letterExampleTimer);letterExampleAction++;stopPracticeAudio();
+  learningDraft=null;learningPendingRecording=null;
+  const parent=letterDetailParents.pop();
+  if(parent.external){learningDialog.close();parent.button.focus({preventScroll:true});return;}
+  learningDetail=parent.detail;learningSettings=parent.settings;learningDraft=parent.draft;
+  learningDialog.className=parent.className;learningDialog.replaceChildren(...parent.nodes);
+  parent.button.focus({preventScroll:true});learningDialog.scrollTop=parent.scroll;
+  for(const [node,top,left] of parent.nested){node.scrollTop=top;node.scrollLeft=left;}
+  letterDetailBackButton();
+ };
+ const parentModal=learningModal;
+ learningModal=function(...args){const result=parentModal(...args);letterDetailBackButton();return result;};
+ learningDialog.addEventListener('close',()=>{letterDetailParents.length=0;});
+ document.addEventListener('click',e=>{if(e.target.closest('[data-letter-detail-back]')){e.preventDefault();learningClose();}});
+}
 </script>
 </body>
 </html>

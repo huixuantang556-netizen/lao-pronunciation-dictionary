@@ -2007,7 +2007,7 @@ function codaVowelDisplay(text){
   if(!part.startsWith('◌'))return codaEscape(part);
   const mark=codaPlaceholderMarks[part.slice(1)];let path='';
   if(mark){const [d,[x0,y0,x1,y1]]=mark,tx=350-(x0+x1)/2,ty=(part==='◌ຸ'||part==='◌ູ')?1040+y1:520+y0;path='<path d="'+d+'" transform="translate('+tx+' '+ty+') scale(1 -1)" fill="currentColor"/>';}
-  return '<svg aria-hidden="true" focusable="false" viewBox="0 0 700 1300" style="display:inline-block;width:.7em;height:1.3em;vertical-align:-.3em;overflow:visible"><circle cx="350" cy="800" r="170" fill="none" stroke="currentColor" stroke-width="22" stroke-dasharray="1 70" stroke-linecap="round"/>'+path+'</svg>';
+  return '<svg aria-hidden="true" focusable="false" viewBox="0 0 700 1300" style="display:inline-block;width:.7em;height:1.3em;vertical-align:-.3em;overflow:visible"><title>'+codaEscape(part)+'</title><circle cx="350" cy="800" r="170" fill="none" stroke="currentColor" stroke-width="22" stroke-dasharray="1 70" stroke-linecap="round"/>'+path+'</svg>';
  }).join('');
 }
 function codaVowelKnowledge(){
@@ -4496,6 +4496,7 @@ async function practiceNavigateWithAudio(options){
   const id=practiceId,request=practiceRequest,generation=playbackGeneration;
   const current=()=>run===practiceNavigationAudioRun&&id===practiceId&&request===practiceRequest&&generation===playbackGeneration&&activeView==='practice';
   const item=await practiceGetItem(id);if(!item||!current())return;
+  if(item._vowelRule){await practiceWordAction(false);return;}
   const {m,w,snap}=await learningResolve(item._practiceMaterialId||'word:'+item.syncId);
   if(!current())return;
   if(m.audioNeedsReview)throw Error('本题发音需要核对，请打开详情。');
@@ -4626,6 +4627,58 @@ if(typeof learningClose==='function'){
  learningDialog.addEventListener('close',()=>{letterDetailParents.length=0;});
  document.addEventListener('click',e=>{if(e.target.closest('[data-letter-detail-back]')){e.preventDefault();learningClose();}});
 }
+</script>
+<script data-practice-vowels>
+/* Virtual rule cards: never inserted into the user's dictionary. Review events use existing sync. */
+function practiceVowelCards(){
+ return CodaLesson.vowels.flatMap((r,i)=>['forward','reverse'].map(direction=>{
+  const reverse=direction==='reverse',id='vowel-rule:'+r.ruleId+':'+direction;
+  return {id,syncId:id,_vowelRule:true,ruleId:r.ruleId,word:reverse?r.closedVowel:r.baseVowel,ipa:reverse?r.baseVowel:r.closedVowel,meaning:'元音形变 · 第 '+(i+1)+' 组 · '+(reverse?'还原原始元音':'写出遇尾辅音后的形式'),category:'字母,元音形变',note:r.baseVowel+' → '+r.closedVowel,_practiceCourses:[]};
+ }));
+}
+const vowelAllItems=practiceAllItems;
+practiceAllItems=async function(...args){
+ const items=await vowelAllItems(...args),events=await reviewRead();
+ const cards=practiceVowelCards().map(item=>{const last=events.filter(e=>e.target==='word:'+item.syncId&&e.rating).at(-1);return {...item,learningState:last?.rating};});
+ return [...items,...cards];
+};
+const vowelGetItem=practiceGetItem;
+practiceGetItem=async function(id){return practiceVowelCards().find(x=>x.id===id)||vowelGetItem(id);};
+const vowelKindItems=practiceKindItems;
+practiceKindItems=function(items){
+ const normal=vowelKindItems(items.filter(x=>!x._vowelRule));
+ if($('#practiceKind').value!=='letters')return normal;
+ const {library,chapter,lesson}=practiceSourceFilters;
+ // Built-in rules are not assigned to a user-created course.
+ return library!=='all'||chapter||lesson?normal:[...normal,...items.filter(x=>x._vowelRule)];
+};
+for(const key of ['wordToIpa','ipaToWord']){
+ const original=reviewModes[key];reviewModes[key]={...original,question:item=>item._vowelRule?item.word:original.question(item),answer:item=>item._vowelRule?item.ipa:original.answer(item)};
+}
+const vowelMarkEntry=markPracticeEntry;
+markPracticeEntry=async function(id,color){if(practiceVowelCards().some(x=>x.id===id))return 0;return vowelMarkEntry(id,color);};
+function practiceDrawPlaceholder(node){
+ const text=node.textContent;
+ if(/[\u0e80-\u0eff]/u.test(text)&&/[xX◌]/.test(text)){
+  node.setAttribute('aria-label',text.replace(/[xX]/g,'◌'));
+  node.innerHTML=codaVowelDisplay(text.replace(/[xX]/g,'◌'));
+ }else node.removeAttribute('aria-label');
+}
+const vowelChoose=choosePractice;
+choosePractice=async function(...args){
+ const result=await vowelChoose(...args);
+ if(practiceId){const item=await practiceGetItem(practiceId);if(item?._vowelRule)$('#questionPrompt').textContent=item.meaning+'。先回忆，再显示答案。';}
+ practiceDrawPlaceholder($('#questionIPA'));practiceDrawPlaceholder($('#practiceResult'));return result;
+};
+const vowelReveal=revealPracticeAnswer;
+revealPracticeAnswer=async function(...args){await vowelReveal(...args);practiceDrawPlaceholder($('#practiceResult'));};
+$('#showAnswer').onclick=()=>revealPracticeAnswer();
+const vowelWordAction=practiceWordAction;
+practiceWordAction=async function(detail=false){
+ const item=practiceVowelCards().find(x=>x.id===practiceId);if(!item)return vowelWordAction(detail);
+ if(detail){stopPracticeAudio();learningModal('元音形变','<p>'+learningEsc(item.meaning)+'</p><div style="font-size:38px;line-height:1.8" aria-label="'+learningEsc(item.note)+'">'+codaVowelDisplay(item.note)+'</div><p>◌ 表示辅音位置；右侧末尾的 ◌ 表示尾辅音位置。正向、反向各为独立题目。</p>');}
+ else {stopPracticeAudio();const blob=await codaCachedSpeech(item.word);if(blob)await learningPlayBlob(blob);else $('#practiceResult').textContent='这个形式暂无已保存音频；不会自动生成。';}
+};
 </script>
 <script src="./offline.js"></script>
 </body>

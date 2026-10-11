@@ -1176,14 +1176,58 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       return l?'local':'remote';
     }
     function cloudConflictDescription(value){if(!value||value.deleted)return '已删除';return JSON.stringify(value.payload,null,2);}
-    async function cloudResolveConflicts(items){
+    function cloudConflictInfo(item){
+      const l=item.local?.payload||{},r=item.remote?.payload||{},cell=l.alphabetCell||r.alphabetCell;
+      const display=v=>String(v??'').replace(/[xX]/g,'◌');
+      if(cell){
+        const key=cell.cell.replace(/^color:/,''),[row,col]=key.split(':').map(Number),def=alphabetRows[row],color=cell.cell.startsWith('color:');
+        const text=color?(item.cellText??def?.[2]?.[col]):(l.alphabetCell?.text||r.alphabetCell?.text||def?.[2]?.[col]);
+        return {title:display(text||'空白格')+' · '+(def?def[0]+' '+def[1]:'字母表'),kind:color?'掌握程度／颜色':'格子文字',cell:true,color};
+      }
+      let word=l.entry?.word||r.entry?.word||l.textLao||r.textLao||l.name||r.name;
+      if(!word){try{word=JSON.parse(l.cacheKey||r.cacheKey)[1];}catch(_){}}
+      const fields=[['word','文字'],['ipa','音标'],['meaning','释义'],['category','标签'],['note','备注'],['learningState','掌握程度'],['reviewStats','复习记录']];
+      const changes=fields.filter(([key])=>!cloudSame(l.entry?.[key],r.entry?.[key])).map(([,name])=>name);
+      if(!cloudSame(l.audio,r.audio))changes.push('录音');
+      if(item.local?.deleted||item.remote?.deleted)changes.push('删除状态');
+      return {title:word||item.label||'学习材料',kind:changes.join('、')||'其他资料／同步历史不同'};
+    }
+    function cloudConflictPreviewLoader(uid,api,blobs){return async a=>{
+      if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('音频索引无效');
+      const blob=blobs.get(a.path)||await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});
+      if(blob.size!==a.size||await cloudHash(blob)!==a.sha)throw new Error('音频校验失败');
+      return new Blob([blob],{type:a.mime});
+    };}
+    async function cloudResolveConflicts(items,loadAudio){
       if(!items.length)return [];
       return new Promise((resolve,reject)=>{
         const dialog=document.createElement('dialog');dialog.style.cssText='width:min(900px,94vw);max-height:88vh;overflow:auto;border:1px solid #bdd5cf;border-radius:16px;padding:20px';
         const title=document.createElement('h2');title.textContent='同步冲突 · '+items.length+' 项';dialog.append(title);
         const hint=document.createElement('p');hint.textContent='请逐项选择，或统一选择后再检查。不同录音和删除不会自动覆盖。展开可查看完整差异。';dialog.append(hint);
         const controls=document.createElement('div'),selects=[];dialog.append(controls);
-        for(const item of items){const section=document.createElement('section');section.style.cssText='padding:12px 0;border-bottom:1px solid #ddd';const label=document.createElement('strong');label.textContent=item.label;section.append(label);const select=document.createElement('select');for(const [value,text] of [['','请选择保留版本'],['local','保留本机'],['remote','使用云端']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}select.style.margin='8px';section.append(select);selects.push(select);const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='查看本机／云端完整差异';details.append(summary);const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px';pre.textContent='本机：\n'+cloudConflictDescription(item.local)+'\n\n云端：\n'+cloudConflictDescription(item.remote);details.append(pre);section.append(details);dialog.append(section);}
+        let closed=false;const players=[],urls=[];
+        const stopPreviews=()=>{players.forEach(a=>a.pause());};
+        for(const item of items){
+          const info=cloudConflictInfo(item),section=document.createElement('section');section.style.cssText='padding:16px 0;border-bottom:1px solid #ddd';
+          const heading=document.createElement('h3');heading.textContent=info.title;heading.style.cssText='font-family:inherit;font-size:22px;line-height:1.7;margin:4px 0';section.append(heading);
+          const type=document.createElement('p');type.textContent='需核对：'+info.kind;section.append(type);
+          const sides=document.createElement('div');sides.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px';section.append(sides);
+          for(const [side,name] of [['local','本机（当前设备）'],['remote','云端（账号已上传版本）']]){
+            const value=item[side],p=value?.payload||{},e=p.entry||p,box=document.createElement('div');box.style.cssText='padding:12px;background:#f0f7f4;border-radius:10px;overflow-wrap:anywhere';sides.append(box);
+            const add=(label,text)=>{const line=document.createElement('p');line.textContent=label+text;line.style.cssText='margin:6px 0;white-space:pre-wrap';box.append(line);};
+            add('',name);
+            if(!value||value.deleted){add('',value?.deleted?'已删除':'没有这条记录');continue;}
+            if(info.cell){const v=p.alphabetCell?.text;add(info.color?'掌握程度：':'格子文字：',info.color?({red:'陌生（红）',yellow:'模糊（黄）',green:'熟悉（绿）','':'未标记'})[v]??String(v??'未设置'):String(v??'未设置').replace(/[xX]/g,'◌'));}
+            else {for(const [key,label] of [['word','文字：'],['textLao','老挝语：'],['ipa','音标：'],['meaning','释义：'],['category','标签：'],['note','备注：']])if(e[key])add(label,e[key]);if(e.learningState)add('掌握程度：',({red:'陌生',yellow:'模糊',green:'熟悉'})[e.learningState]||e.learningState);if(e.updatedAt){const date=new Date(e.updatedAt);if(!isNaN(date))add('记录修改时间：',date.toLocaleString());}}
+            if(p.audio){add('音频：',p.audio.mime+' · '+Math.round(p.audio.size/1024)+' KB');
+              const play=document.createElement('button'),msg=document.createElement('p');play.textContent='▶ 试听'+(side==='local'?'本机':'云端')+'录音';play.disabled=!loadAudio;box.append(play,msg);
+              let player;play.onclick=async()=>{play.disabled=true;try{stopPreviews();if(!player){msg.textContent='正在读取并校验音频…';const blob=await loadAudio(p.audio);if(closed)return;const url=URL.createObjectURL(blob);urls.push(url);player=new Audio(url);players.push(player);}stopPreviews();await player.play();msg.textContent='正在试听（不会保存或覆盖）';}catch(error){msg.textContent='无法试听：'+error.message;}finally{play.disabled=false;}};
+            }else if(!info.cell)add('音频：','此记录没有附带音频（不代表其他来源没有发音）');
+          }
+          const select=document.createElement('select');select.setAttribute('aria-label',info.title+'：选择保留版本');for(const [value,text] of [['','请核对后选择'],['local','保留本机整条记录'],['remote','使用云端整条记录']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}select.style.cssText='margin:12px 0;width:100%';section.append(select);selects.push(select);
+          const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='完整差异（包括复习记录等）';details.append(summary);const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px';pre.textContent='本机：\n'+cloudConflictDescription(item.local)+'\n\n云端：\n'+cloudConflictDescription(item.remote);details.append(pre);section.append(details);dialog.append(section);
+        }
+        dialog.addEventListener('close',()=>{closed=true;stopPreviews();urls.forEach(url=>URL.revokeObjectURL(url));});
         for(const [value,label] of [['local','全部选本机'],['remote','全部选云端']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>selects.forEach(s=>s.value=value);controls.append(button);}
         const status=document.createElement('p'),save=document.createElement('button'),cancel=document.createElement('button');save.textContent='确认全部选择并继续';cancel.textContent='取消同步';dialog.append(status,save,cancel);const close=()=>{dialog.close();dialog.remove();};cancel.onclick=()=>{close();reject(new Error('已取消同步，冲突选择未应用。'));};dialog.addEventListener('cancel',e=>{e.preventDefault();cancel.onclick();});save.onclick=()=>{if(selects.some(s=>!s.value)){status.textContent='还有未选择的项目，请先选择。';return;}const result=selects.map(s=>s.value);close();resolve(result);};document.body.append(dialog);dialog.showModal();
       });
@@ -1275,11 +1319,11 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
           if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
           if(action==='conflict'){
             const label=alphabetConfigKey(key)?'字母表格子 '+key.split(':').slice(-2).join(':'):l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
-            conflicts.push({key,label,local:l,remote:r,row});continue;
+            conflicts.push({key,label,local:l,remote:r,row,cellText:alphabetBefore[key.replace('entry:alphabet-cell-v1:','').replace(/^color:/,'')]});continue;
           }
           const target=action==='local'?l:r;if(target)plan.push({key,action,target,row});
         }
-        const resolutions=await cloudResolveConflicts(conflicts);
+        const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,blobs));
         conflicts.forEach((c,i)=>plan.push({key:c.key,row:c.row,action:resolutions[i],target:resolutions[i]==='local'?c.local:c.remote}));
         const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
         if(!confirm('将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
@@ -2652,7 +2696,7 @@ async function learningCloudSync(uid,api,status){
    if(action==='conflict'){conflicts.push({label:l?.payload?.textLao||r?.payload?.textLao||l?.payload?.name||key,local:l,remote:r,index:plan.length});}
    plan.push({key,kind:key.slice(0,key.indexOf(':')),id:key.slice(key.indexOf(':')+1),row,action,target:action==='local'?l:r});
   }
-  const resolutions=await cloudResolveConflicts(conflicts);conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
+  const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,assets));conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
   const validateAudio=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('学习音频索引无效。');};
   const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));
   for(const p of plan){if(!p.target)continue;let value={...p.target.payload};if(value.id!==p.id)throw new Error('材料编号不一致。');if(p.kind==='learningAudio'){

@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <meta name="theme-color" content="#087f70">
+  <meta name="apple-mobile-web-app-capable" content="yes">
 <style data-lao-looped-font>
 @font-face {
   font-family: "Lao Looped App";
@@ -4566,5 +4570,6 @@ if(typeof learningClose==='function'){
  document.addEventListener('click',e=>{if(e.target.closest('[data-letter-detail-back]')){e.preventDefault();learningClose();}});
 }
 </script>
+<script src="./offline.js"></script>
 </body>
 </html>

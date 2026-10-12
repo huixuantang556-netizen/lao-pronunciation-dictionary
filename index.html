@@ -4680,6 +4680,61 @@ practiceWordAction=async function(detail=false){
  else {stopPracticeAudio();const blob=await codaCachedSpeech(item.word);if(blob)await learningPlayBlob(blob);else $('#practiceResult').textContent='这个形式暂无已保存音频；不会自动生成。';}
 };
 </script>
+<script data-practice-results>
+/* Completed round snapshots share the existing learning backup/sync, not dictionary entries. */
+function roundResultBuild(round,events,at=Date.now()){
+ const byId=new Map(events.map(e=>[e.id,e]));
+ return {version:1,id:round.resultId,startedAt:round.startedAt,completedAt:at,kind:round.resultKind||'words',daily:!!round.daily,
+  rows:round.history.map(q=>{const e=byId.get(q.reviewEventId),s=q.resultSnapshot||{};return {word:s.word||e?.word||'未能读取的题目',meaning:s.meaning||e?.meaning||'',direction:q.direction||'',rating:['red','yellow','green'].includes(e?.rating)?e.rating:'unrated'};})};
+}
+function roundResultValid(r){return r?.version===1&&typeof r.id==='string'&&r.id.startsWith('practice-round:')&&Number.isFinite(r.startedAt)&&Number.isFinite(r.completedAt)&&Array.isArray(r.rows)&&r.rows.every(x=>typeof x.word==='string'&&typeof x.meaning==='string'&&typeof x.direction==='string'&&['red','yellow','green','unrated'].includes(x.rating));}
+const roundValidate=learningValidateRecord;
+learningValidateRecord=function(kind,row){if(row?.roundResult!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||!roundResultValid(row.roundResult)||row.id!==row.roundResult.id))throw Error('本轮默写记录格式无效');return roundValidate(kind,row);};
+function roundResultHtml(r){
+ const h=learningEsc,labels={red:'陌生',yellow:'模糊',green:'熟悉',unrated:'未标记／跳过'};
+ return '<p>'+h(new Date(r.completedAt).toLocaleString('zh-CN'))+' · '+(r.daily?'今日复习':'自由练习')+' · 共 '+r.rows.length+' 题</p><p class="tag-hint">按你本轮选择的掌握程度汇总，不代表自动判卷结果。</p>'+Object.entries(labels).map(([key,label])=>{const rows=r.rows.filter(x=>x.rating===key);return '<details'+(key==='red'&&rows.length?' open':'')+'><summary>'+label+' · '+rows.length+' 题</summary>'+rows.map(x=>'<p><span lang="lo" style="font-size:22px;line-height:1.8">'+codaVowelDisplay(x.word.replace(/[xX]/g,'◌'))+'</span> '+h(x.meaning)+' <small>'+h(x.word.includes('◌')&&x.meaning.includes('元音形变')?'元音形变':reviewDirections[x.direction]||x.direction)+'</small></p>').join('')+'</details>';}).join('');
+}
+const roundResultPanel=document.createElement('section');roundResultPanel.hidden=true;roundResultPanel.setAttribute('aria-live','polite');$('#practiceProgress').after(roundResultPanel);
+const roundHistoryPanel=document.createElement('details');roundHistoryPanel.innerHTML='<summary>历次默写结果</summary><p class="tag-hint">从本功能启用后记录完整轮次；未完成的轮次仍可在“学习记录”查看逐题记录。</p><label>完成日期 <input type="date" data-round-date></label><div data-round-list></div><button type="button" data-round-more hidden>显示更多</button>';
+$('#reviewHistory').after(roundHistoryPanel);let roundHistoryLimit=10;
+async function roundHistoryDraw(){
+ const date=roundHistoryPanel.querySelector('[data-round-date]').value;
+ const rows=(await learningRows('learningMaterials')).map(x=>x.roundResult).filter(roundResultValid).filter(x=>!date||reviewDay(x.completedAt)===date).sort((a,b)=>b.completedAt-a.completedAt);
+ roundHistoryPanel.querySelector('[data-round-list]').innerHTML=rows.length?rows.slice(0,roundHistoryLimit).map(r=>'<details><summary>'+learningEsc(new Date(r.completedAt).toLocaleString('zh-CN'))+' · '+r.rows.length+' 题</summary>'+roundResultHtml(r)+'</details>').join(''):'<p>暂无符合条件的完整轮次。</p>';
+ roundHistoryPanel.querySelector('[data-round-more]').hidden=rows.length<=roundHistoryLimit;
+}
+function roundHistoryRefresh(){void roundHistoryDraw().catch(e=>{roundHistoryPanel.querySelector('[data-round-list]').textContent='读取失败：'+e.message;});}
+roundHistoryPanel.ontoggle=()=>{if(roundHistoryPanel.open)roundHistoryRefresh();};
+roundHistoryPanel.querySelector('[data-round-date]').onchange=()=>{roundHistoryLimit=10;roundHistoryRefresh();};
+roundHistoryPanel.querySelector('[data-round-more]').onclick=()=>{roundHistoryLimit+=10;roundHistoryRefresh();};
+const roundSaves=new Map();
+async function roundResultSave(round){
+ if(roundSaves.has(round.resultId))return roundSaves.get(round.resultId);
+ const task=(async()=>{
+  const snap=await learningSnapshot(),existing=snap.learningMaterials.find(x=>x.id===round.resultId);
+  if(existing?.roundResult)return existing.roundResult;
+  const result=roundResultBuild(round,reviewEvents(snap.learningMaterials));
+  await learningWrite({learningMaterials:[{...learningBlank(result.id,'knowledge','默写轮次结果'),roundResult:result}]},snap);return result;
+ })();roundSaves.set(round.resultId,task);
+ try{return await task;}finally{roundSaves.delete(round.resultId);}
+}
+const resultChoose=choosePractice;
+choosePractice=async function(...args){
+ const value=await resultChoose(...args),round=practiceRound,request=practiceRequest;roundResultPanel.hidden=true;
+ if(!round)return value;
+ if(!round.resultId){round.resultId='practice-round:'+crypto.randomUUID();round.startedAt=Date.now();round.resultKind=$('#practiceKind').value;}
+ const question=round.history[round.cursor];
+ if(question&&!question.resultSnapshot){const item=await practiceGetItem(question.id);if(item)question.resultSnapshot={word:item.word||'',meaning:item.meaning||''};}
+ if(round!==practiceRound||request!==practiceRequest)return value;
+ persistPractice();
+ if(round.completed&&round.history.length){
+  roundResultPanel.hidden=false;roundResultPanel.textContent='正在保存本轮结果…';
+  try{const result=await roundResultSave(round);if(round===practiceRound&&request===practiceRequest){roundResultPanel.innerHTML='<h3>本轮默写结果</h3>'+roundResultHtml(result)+'<p class="tag-hint">已保存，可在“历次默写结果”回看。</p>';if(roundHistoryPanel.open)roundHistoryRefresh();}}
+  catch(e){if(round===practiceRound){roundResultPanel.textContent='本轮结果未保存：'+e.message;const retry=document.createElement('button');retry.textContent='重试保存';retry.onclick=()=>choosePractice({resume:true});roundResultPanel.append(retry);}}
+ }
+ return value;
+};
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

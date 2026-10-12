@@ -546,7 +546,7 @@ function speechResultUncertain(key){try{localStorage.setItem(workspaceName('spee
 function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncertain-result'));}
     async function playEntrySpeech(item, source = 'auto') {
       stopPracticeAudio();const generation=playbackGeneration;
-      try{const own=source==='default'?null:audioBlobFor(item);if(source==='personal'&&!own)throw new Error('这个词条没有自己的录音。');if(!own)$('#ttsStatus').textContent='正在准备默认发音…';const blob=own||await defaultSpeech(item.word);if(generation!==playbackGeneration)return;practiceAudioUrl=URL.createObjectURL(blob);practiceAudio=new Audio(practiceAudioUrl);const playing=practiceAudio;playing.onended=()=>{if(practiceAudio===playing)stopPracticeAudio();};await playing.play();if(!own)$('#ttsStatus').textContent='正在播放默认发音；它与自己的录音分别保留。';}catch(error){if(generation!==playbackGeneration)return;stopPracticeAudio();$('#ttsStatus').textContent=error.message;alert(error.name==='AbortError'?'语音生成超时，请重试。':error.message);}
+      try{if(source==='auto'){const clip=await recordedReferenceForWord(item);if(generation!==playbackGeneration)return;if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}const own=source==='default'?null:audioBlobFor(item);if(source==='personal'&&!own)throw new Error('这个词条没有自己的录音。');if(!own)$('#ttsStatus').textContent='正在准备默认发音…';const blob=own||await defaultSpeech(item.word);if(generation!==playbackGeneration)return;practiceAudioUrl=URL.createObjectURL(blob);practiceAudio=new Audio(practiceAudioUrl);const playing=practiceAudio;playing.onended=()=>{if(practiceAudio===playing)stopPracticeAudio();};await playing.play();if(!own)$('#ttsStatus').textContent='正在播放默认发音；它与自己的录音分别保留。';}catch(error){if(generation!==playbackGeneration)return;stopPracticeAudio();$('#ttsStatus').textContent=error.message;alert(error.name==='AbortError'?'语音生成超时，请重试。':error.message);}
     }
     const bulkPrompt = '请把我接下来提供的杂乱老挝语词本整理成可直接粘贴导入的表格文本。第一行必须是：老挝语 | IPA | 中文 | 标签 | 备注。每行一个词条或字母，严格五列，用半角竖线 | 分隔。只有老挝语必填；原文缺失或不能确定的 IPA、中文等请留空，不要猜测补写，字母没有中文意思可以留空。多个标签用中文或英文逗号分隔。备注可保留发音要点、例句和记忆方法；单元格内换行写成 <br>，正文中的竖线改成全角 ｜。忠实保留老挝语拼写、IPA 声调与附加符号，同形词的不同词义分别成行。不输出解释、编号或额外表格。下面是我的原始词本：';
     let bulkReadyText = null;
@@ -2264,7 +2264,7 @@ function learningFindWord(ref,words){return words.find(x=>syncKeys(x).includes(r
 function learningWordMaterial(word){return {id:'word:'+word.syncId,contentType:'word',linkedWordSyncIds:[word.syncId],textLao:'',translationZh:'',tags:[],note:'',focusLetters:[],focusVowels:[],audioSources:[],sourceType:'textbook_vocab',updatedAt:Date.now()};}
 // Read the shared cache, including saved audio from a previous endpoint. Never copy its Blob.
 async function learningCachedSpeech(text){const exact=await codaCachedSpeech(text);if(exact)return exact;return (await cloudCacheRows()).find(row=>{try{return JSON.parse(row.key)[1]===text;}catch(_){return false;}})?.blob;}
-async function learningWordSpeech(word){if(hasAudio(word)){await playEntrySpeech(word,'personal');return;}const blob=await learningCachedSpeech(word.word);if(blob){await learningPlayBlob(blob);return;}await playEntrySpeech(word,'default');}
+async function learningWordSpeech(word){const clip=await recordedReferenceForWord(word);if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}if(hasAudio(word)){await playEntrySpeech(word,'personal');return;}const blob=await learningCachedSpeech(word.word);if(blob){await learningPlayBlob(blob);return;}await playEntrySpeech(word,'default');}
 async function learningUnlink(id){const snap=await learningSnapshot(),place=snap.learningPlacements.find(p=>p.lessonId===learningLesson.id&&p.materialId===id&&!p.deleted);if(!place)return;await learningWrite({learningPlacements:[{...place,deleted:true,updatedAt:Date.now()}]},snap);}
 function learningPlacementFor(id,section,position,lesson){return {id:lesson.id+':'+id,materialId:id,materialType:'teaching',textbookId:lesson.textbookId,chapterId:lesson.chapterId,lessonId:lesson.id,section,position,updatedAt:Date.now()};}
 function learningPlacement(id,section,position){return learningPlacementFor(id,section,position,learningLesson);}
@@ -2369,6 +2369,7 @@ async function learningPlayBlob(blob,start=0,end=null){
 }
 async function learningPlay(id,source='reference',index=null){
  const {m,w,snap}=await learningResolve(id),text=w?.word||m.textLao,refs=m.audioSources||[];
+ if(index===null&&source==='reference'){const clip=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
  if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred);return;}}
  if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
@@ -3150,7 +3151,7 @@ function lessonPageAsset(w,snap,cache){
  if(m.audioNeedsReview)return null;
  const preferred=refs.find(a=>lessonV2AudioKey(a)===m.defaultAudioKey&&!a.needsReview);
  const manual=refs.filter(a=>a.role==='reference'&&!a.needsReview).at(-1);
- const ref=preferred||manual;
+ const ref=manual||preferred;
  const assetFor=r=>{if(r?.source==='gemini')return cache.has(r.text)?{blob:cache.get(r.text)}:null;const a=snap.learningAudio.find(a=>a.id===r?.assetId);return a?.blob?{blob:a.blob,start:r.start||0,end:r.end??null}:null;};
  if(ref)return assetFor(ref);
  const own=w.entry&&audioBlobFor(w.entry);if(own)return {blob:own};
@@ -4900,6 +4901,8 @@ async function studyPlaySaved(item,run){
    const {m,w,snap}=await learningResolve(item._practiceMaterialId||'word:'+item.syncId);if(!current())return;
    if(!m||m.audioNeedsReview)throw Error('参考发音需要核对，请打开详情');
    const refs=m.audioSources||[];
+   const recorded=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);
+   if(recorded){if(current())await learningPlayBlob(recorded.blob,recorded.start,recorded.end);return;}
    let ref=m.defaultAudioKey&&typeof lessonV2AudioKey==='function'?refs.find(a=>lessonV2AudioKey(a)===m.defaultAudioKey&&learningIsReference(a)):null;
    if(!ref)ref=refs.filter(a=>a.role==='reference').at(-1);
    if(!ref&&w)blob=audioBlobFor(w)||await learningCachedSpeech(w.word);
@@ -4983,6 +4986,22 @@ learningRelatedHtml=async function(word){
   .replace('class="learn-related"','class="learn-related letter-examples"')
   .replace(/(<\/section>)$/, '<p class="letter-example-status" role="status"></p>$1');
 };
+</script>
+<script data-reference-priority>
+function recordedReference(material,snap){
+ const ref=(material.audioSources||[]).filter(a=>a.source==='user'&&a.role==='reference').at(-1);
+ if(!ref)return null;
+ if(ref.needsReview||material.audioNeedsReview)throw Error('手录参考发音需要核对，请在详情中确认后播放。');
+ const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
+ if(!asset?.blob)throw Error('手录参考发音尚未同步到本机，请先同步；不会改播默认发音。');
+ return {blob:asset.blob,start:ref.start||0,end:ref.end??null};
+}
+async function recordedReferenceForWord(word){
+ const snap=await learningSnapshot(),keys=new Set(syncKeys(word));
+ const candidates=snap.learningMaterials.filter(m=>!m.deleted&&m.contentType==='word'&&(m.linkedWordSyncIds||[]).some(k=>keys.has(k))).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+ for(const m of candidates){const clip=recordedReference(m,snap);if(clip)return clip;}
+ return null;
+}
 </script>
 <script src="./offline.js"></script>
 </body>

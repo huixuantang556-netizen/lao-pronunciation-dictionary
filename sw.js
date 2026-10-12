@@ -1,9 +1,12 @@
 // Build replaces this token with a digest of the complete app shell.
-const VERSION = 'ad4b1086554c7614';
+const VERSION = '3a1c09bbf43ad202';
 const PREFIX = 'lao-shell-' + encodeURIComponent(self.registration.scope) + '-';
 const CACHE = PREFIX + VERSION;
 const FILES = ['./', 'manifest.webmanifest', 'offline.js', 'icon-192.png', 'icon-512.png', 'assets/fonts/NotoSansLaoLooped-Variable.woff2', 'assets/fonts/NotoSansLaoLooped-Variable.ttf'];
 const urls = FILES.map(path => new URL(path, self.registration.scope).href);
+self.addEventListener('message', event => {
+  if(event.data?.type==='ACTIVATE_SAVED_UPDATE'&&event.source?.url?.startsWith(self.registration.scope))event.waitUntil(self.skipWaiting());
+});
 async function cleanResponse(response) {
   if (!response.ok) throw new Error('Shell download failed: ' + response.status);
   const headers = new Headers(response.headers);

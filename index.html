@@ -1388,7 +1388,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
             try{for(const change of changes){if(change.deleteId!==undefined)store.delete(change.deleteId);else store.put(change.value);}tx.objectStore('cloud_meta').put(alphabetAfter,'alphabetCells');tx.objectStore('cloud_meta').put(checkpoint,'checkpoint');}catch(_){tx.abort();}
           };
         });
-        await render();await choosePractice();if(typeof activeView!=='undefined'&&activeView==='alphabet')await renderAlphabet();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。字母表修改也已同步；两类音频已保存在本机，可离线播放。');
+        await render();await choosePractice({resume:true});if(typeof activeView!=='undefined'&&activeView==='alphabet')await renderAlphabet();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。字母表修改也已同步；两类音频已保存在本机，可离线播放。');
       return true;
       }finally{panels.forEach(x=>x.inert=false);window.removeEventListener('beforeunload',beforeUnload);}
     }
@@ -4734,6 +4734,64 @@ choosePractice=async function(...args){
  }
  return value;
 };
+</script>
+<script data-practice-handoff>
+/* Immutable handoffs: receiving a snapshot never replaces an active practice session. */
+let practiceHandoffBusy=false;
+function handoffKey(item){return item._practiceMaterialId?'material:'+item._practiceMaterialId:item.syncId?'word:'+item.syncId:null;}
+function handoffValid(s){
+ return s?.version===1&&typeof s.id==='string'&&s.id.startsWith('practice-handoff:')&&Number.isFinite(s.savedAt)&&typeof s.device==='string'&&s.device.length<120&&s.round&&Array.isArray(s.round.queue)&&Array.isArray(s.round.history)&&s.round.queue.length+s.round.history.length<=10000&&s.round.queue.every(x=>typeof x==='string')&&s.round.history.every(q=>q&&typeof q.id==='string'&&Object.hasOwn(reviewModes,q.direction))&&Number.isInteger(s.round.cursor)&&s.round.cursor>=-1&&s.round.cursor<=s.round.history.length&&s.filters&&['words','letters','sentences','words-sentences'].includes(s.filters.kind)&&['mixed',...Object.keys(reviewModes)].includes(s.filters.mode)&&['all','mistakes','focus'].includes(s.filters.scope)&&['all','any'].includes(s.filters.tagMode)&&Array.isArray(s.filters.tags)&&s.filters.tags.every(t=>typeof t==='string')&&s.sources&&['all','teaching','communication'].includes(s.sources.library)&&typeof s.sources.chapter==='string'&&typeof s.sources.lesson==='string';
+}
+const handoffValidate=learningValidateRecord;
+learningValidateRecord=function(kind,row){if(row?.practiceHandoff!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||!handoffValid(row.practiceHandoff)||row.id!==row.practiceHandoff.id))throw Error('跨设备练习进度格式无效');return handoffValidate(kind,row);};
+function handoffGuard(){if(practiceHandoffBusy||recorder||editingId!==null||ttsPending.size||backupBusy||learningHasWork()||practiceChecking||(typeof batchAudioBusy!=='undefined'&&batchAudioBusy)||(typeof alphabetSaving!=='undefined'&&alphabetSaving))throw Error('请先完成录音、编辑、同步或保存操作。');}
+async function practiceSaveHandoff(){
+ if(!practiceRound||practiceRound.completed||!practiceRound.history.length)return null;
+ persistPractice();const saved=JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1'))||'null');
+ if(!saved?.round||JSON.stringify(saved.round)!==JSON.stringify(practiceRound))throw Error('本机进度未能保存，请检查浏览器存储空间。');
+ const round=JSON.parse(JSON.stringify(practiceRound)),items=await practiceAllItems(),byId=new Map(items.map(x=>[x.id,x]));
+ const key=id=>{const item=byId.get(id),k=item&&handoffKey(item);if(!k)throw Error('部分题目缺少同步编号或已删除，请先完成当前轮次。');return k;};
+ round.queue=round.queue.map(key);round.history=round.history.map(q=>({...q,id:key(q.id)}));
+ const snapshot={version:1,id:'practice-handoff:'+crypto.randomUUID(),savedAt:Date.now(),device:/Android/i.test(navigator.userAgent)?'Android 手机':/iPhone|iPad/i.test(navigator.userAgent)?'iPhone / iPad':'电脑或其他设备',round,filters:{kind:saved.kind,mode:saved.mode,scope:saved.scope,tagMode:saved.tagMode,tags:saved.tags},sources:{...practiceSourceFilters}};
+ if(!handoffValid(snapshot))throw Error('进度校验失败，未同步。');
+ const snap=await learningSnapshot();
+ // An unchanged checkpoint does not need another cloud record.
+ const same=snap.learningMaterials.find(m=>m.practiceHandoff&&JSON.stringify(m.practiceHandoff.round)===JSON.stringify(round)&&JSON.stringify(m.practiceHandoff.filters)===JSON.stringify(snapshot.filters)&&JSON.stringify(m.practiceHandoff.sources)===JSON.stringify(snapshot.sources));
+ if(same)return same.practiceHandoff;
+ const row={...learningBlank(snapshot.id,'knowledge','未完成默写 · '+snapshot.device),practiceHandoff:snapshot};
+ if(new Blob([JSON.stringify(row)]).size>245000)throw Error('本轮进度过大，暂不能跨设备同步；本机进度仍保留。');
+ await learningWrite({learningMaterials:[row]},snap);return snapshot;
+}
+function handoffRoundKey(eligible,daily){return daily?JSON.stringify([reviewDay(Date.now()),practiceSourceKey(),$('#practiceKind').value,$('#practiceMode').value,$('#practiceScope').value,[...selectedPracticeTags].sort(),$('#practiceTagMode').value]):JSON.stringify([practiceSourceKey(),$('#practiceKind').value,$('#practiceMode').value,$('#practiceScope').value,$('#practiceTagMode').value,[...selectedPracticeTags].sort(),eligible.map(x=>[x.id,x.word,x.ipa,x.meaning]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'en',{numeric:true}))]);}
+async function practiceResumeHandoff(s){
+ handoffGuard();if(!handoffValid(s))throw Error('进度格式无效');
+ const items=await practiceAllItems(),byKey=new Map();for(const item of items){const key=handoffKey(item);if(key)byKey.set(key,item);for(const alias of item.syncAliases||[])byKey.set('word:'+alias,item);}
+ const keys=[...s.round.queue,...s.round.history.map(q=>q.id)];
+ if(keys.some(key=>!byKey.has(key)))throw Error('当前设备缺少这轮的部分词条或课程。请先完成词典和学习材料同步，再继续；不会跳过缺失题目。');
+ if(!confirm('继续 '+s.device+' 的默写？已展示 '+s.round.history.length+' / '+(s.round.total||s.round.history.length)+' 题。\n当前未完成练习会先保留一个进度副本，不自动覆盖其他设备。'))return;
+ await practiceSaveHandoff();stopPracticeAudio();
+ const old={round:practiceRound,sources:{...practiceSourceFilters},daily:reviewDaily,kind:$('#practiceKind').value,mode:$('#practiceMode').value,scope:$('#practiceScope').value,tagMode:$('#practiceTagMode').value,tags:[...selectedPracticeTags]};
+ try{
+  practiceSourceFilters={...s.sources};for(const [id,key] of [['practiceKind','kind'],['practiceMode','mode'],['practiceScope','scope'],['practiceTagMode','tagMode']])$('#'+id).value=s.filters[key];selectedPracticeTags.clear();s.filters.tags.forEach(t=>selectedPracticeTags.add(t));
+  const eligible=practiceItems(items),allowed=new Set(eligible.map(x=>x.id));if(keys.some(key=>!allowed.has(byKey.get(key).id)))throw Error('本机筛选或题目资料与原轮次不一致，尚未替换当前进度。');
+  const round=JSON.parse(JSON.stringify(s.round));round.queue=round.queue.map(k=>byKey.get(k).id);round.history=round.history.map(q=>({...q,id:byKey.get(q.id).id}));round.completed=false;round.key=handoffRoundKey(eligible,round.daily);practiceRound=round;reviewDaily=!!round.daily;practiceRestored=true;
+  localStorage.setItem(workspaceName('lao-practice-sources-v1'),JSON.stringify(practiceSourceFilters));localStorage.setItem(workspaceName('lao-review-daily-v1'),reviewDaily?'1':'0');persistPractice();
+  await showView('practice');
+ }catch(e){practiceRound=old.round;practiceSourceFilters=old.sources;reviewDaily=old.daily;for(const [id,key] of [['practiceKind','kind'],['practiceMode','mode'],['practiceScope','scope'],['practiceTagMode','tagMode']])$('#'+id).value=old[key];selectedPracticeTags.clear();old.tags.forEach(t=>selectedPracticeTags.add(t));localStorage.setItem(workspaceName('lao-practice-sources-v1'),JSON.stringify(old.sources));localStorage.setItem(workspaceName('lao-review-daily-v1'),old.daily?'1':'0');persistPractice();throw e;}
+}
+const handoffPanel=document.createElement('details');handoffPanel.innerHTML='<summary>跨设备继续默写</summary><p>电脑先点账号里的“云端同步”，手机登录同一账号后也点同步，再在下方选择进度继续。仅同步不会替换当前轮次。</p><button type="button" data-handoff-refresh>查看可继续的进度</button><div data-handoff-list></div>';roundHistoryPanel.after(handoffPanel);
+async function practiceHandoffDraw(){
+ const list=handoffPanel.querySelector('[data-handoff-list]');list.replaceChildren();
+ const rows=(await learningRows('learningMaterials')).map(m=>m.practiceHandoff).filter(handoffValid).sort((a,b)=>b.savedAt-a.savedAt);
+ if(!rows.length){list.textContent='暂无已同步的未完成轮次。';return;}
+ for(const s of rows.slice(0,20)){const button=document.createElement('button');button.style.cssText='display:block;margin:8px 0;white-space:normal';button.textContent=new Date(s.savedAt).toLocaleString('zh-CN')+' · '+s.device+' · 已标记 '+s.round.history.filter(q=>q.rated).length+'，已展示 '+s.round.history.length+' / '+(s.round.total||s.round.history.length)+' · 继续';button.onclick=async()=>{button.disabled=true;try{await practiceResumeHandoff(s);}catch(e){alert(e.message);}finally{button.disabled=false;}};list.append(button);}
+}
+const handoffRefresh=()=>void practiceHandoffDraw().catch(e=>{handoffPanel.querySelector('[data-handoff-list]').textContent=e.message;});handoffPanel.ontoggle=()=>{if(handoffPanel.open)handoffRefresh();};handoffPanel.querySelector('[data-handoff-refresh]').onclick=handoffRefresh;
+const handoffSync=runCloudSync;
+runCloudSync=async function(...args){handoffGuard();if(args[0]!==cloudWorkspace)throw Error('请先进入当前账号的词典空间。');practiceHandoffBusy=true;try{await migrateSyncIds();await practiceSaveHandoff();return await handoffSync(...args);}finally{practiceHandoffBusy=false;}};
+const handoffLearningSync=learningCloudSync;
+learningCloudSync=async function(...args){practiceHandoffBusy=true;try{const result=await handoffLearningSync(...args);handoffPanel.open=true;await practiceHandoffDraw();return result;}finally{practiceHandoffBusy=false;}};
+window.prepareLaoAppUpdate=async function(){handoffGuard();persistPractice();if(practiceRound){const saved=JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1'))||'null');if(JSON.stringify(saved?.round)!==JSON.stringify(practiceRound))throw Error('默写进度未能保存，已停止更新。');}stopPracticeAudio();};
 </script>
 <script src="./offline.js"></script>
 </body>

@@ -4,6 +4,8 @@
   panel.innerHTML = `<summary>离线与安装 · 试用版</summary>
     <p>不登录也可以使用本机词典。程序与学习资料分别保存；新设备不会自动出现旧设备的录音。</p>
     <p data-offline-status role="status">正在检查离线安装条件…</p>
+    <button type="button" data-check-update>检查更新</button>
+    <button type="button" data-apply-update hidden>保存进度并更新</button>
     <button type="button" data-install hidden>安装到桌面</button>
     <button type="button" data-persist>申请保留本机资料</button>
     <p data-storage role="status"></p>
@@ -14,6 +16,12 @@
   const status = panel.querySelector('[data-offline-status]');
   const storage = panel.querySelector('[data-storage]');
   const install = panel.querySelector('[data-install]');
+  const apply=panel.querySelector('[data-apply-update]'),check=panel.querySelector('[data-check-update]');
+  let applying=false;
+  navigator.serviceWorker?.addEventListener('controllerchange',()=>{
+    if(applying)location.reload();
+    else {status.textContent='程序控制器已更新。当前页面不会强制刷新；保存后可点击更新。';apply.hidden=false;}
+  });
   let prompt;
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault(); prompt = event; install.hidden = false;
@@ -41,16 +49,28 @@
   (async () => {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
+      const ready=()=>{if(registration.waiting){apply.hidden=false;status.textContent='新版已就绪，点击“保存进度并更新”，无需关闭其他页面。';}};
+      check.onclick=async()=>{try{await registration.update();ready();if(!registration.waiting&&!registration.installing)status.textContent='检查完成，暂无等待启用的新版。';}catch(e){status.textContent='检查失败：'+e.message;}};
+      apply.onclick=async()=>{
+        apply.disabled=true;
+        try{
+          if(typeof window.prepareLaoAppUpdate!=='function')throw Error('请先保存当前内容，再刷新页面。');
+          await window.prepareLaoAppUpdate();applying=true;
+          if(registration.waiting){registration.waiting.postMessage({type:'ACTIVATE_SAVED_UPDATE'});status.textContent='进度已保存，正在启用新版…';}
+          else location.reload();
+        }catch(e){applying=false;status.textContent='尚未更新：'+e.message;}
+        finally{apply.disabled=false;}
+      };
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing;
         worker?.addEventListener('statechange', () => {
           if (worker.state === 'installed' && navigator.serviceWorker.controller)
-            status.textContent = '更新已下载。完成录音和保存后，关闭本应用全部窗口，再打开即可更新。';
+            ready();
           if (worker.state === 'redundant') status.textContent = '离线安装未完成，请联网重新打开。';
         });
       });
       await navigator.serviceWorker.ready;
-      status.textContent = registration.waiting ? '更新已就绪；保存后关闭所有应用窗口，再打开即可更新。' : '程序本体已保存，可断网重新打开。单词卡和音频需要另行保存到本机。';
+      status.textContent = '程序本体已保存，可断网重新打开。单词卡和音频需要另行保存到本机。';ready();
     } catch (e) { status.textContent = '离线安装失败，尚不能保证断网启动：' + e.message; }
   })();
 })();

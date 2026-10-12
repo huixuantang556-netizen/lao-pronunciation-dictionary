@@ -1,7 +1,7 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>更新离线程序</title><body style="font:18px system-ui;max-width:640px;margin:40px auto;padding:20px;line-height:1.8">
 <h1>更新离线程序</h1><p>本操作只检查程序更新，不清除词条、录音或学习记录。请保持联网。</p>
-<button id="update">检查修复版</button><p id="status" role="status"></p><a href="./">返回词典</a>
+<button id="update">检查修复版</button><button id="activate" hidden>启用新版并打开词典</button><p id="status" role="status"></p><a href="./">返回词典</a>
 <script>
 document.querySelector('#update').onclick=async()=>{
  const status=document.querySelector('#status');status.textContent='正在检查…';
@@ -10,7 +10,9 @@ document.querySelector('#update').onclick=async()=>{
  await registration.update();
  const worker=registration.installing;
  if(worker)await new Promise((resolve,reject)=>{const check=()=>{if(worker.state==='installed'||worker.state==='activated')resolve();else if(worker.state==='redundant')reject(new Error('下载失败，请重试'));};worker.addEventListener('statechange',check);check();});
- status.textContent=registration.waiting?'修复版已下载。请关闭此网站的所有标签页及桌面应用窗口，再从原图标打开。无需卸载。':'检查完成，请关闭此页面，再打开词典验证。';
+ status.textContent=registration.waiting?'新版已下载。请先保存其他页面的编辑或录音，再点击“启用新版并打开词典”；无需关闭其他页面，不清除本机资料。':'检查完成，可返回词典。';
+ const activate=document.querySelector('#activate');activate.hidden=!registration.waiting;
+ activate.onclick=()=>{if(!confirm('请确认其他页面的编辑或录音已经保存。其他页面不会被强制刷新。继续启用新版？'))return;navigator.serviceWorker.addEventListener('controllerchange',()=>location.href='./',{once:true});if(registration.waiting)registration.waiting.postMessage({type:'ACTIVATE_SAVED_UPDATE'});else location.href='./';};
  }catch(error){status.textContent='更新失败：'+error.message;}
 };
 </script></body></html>

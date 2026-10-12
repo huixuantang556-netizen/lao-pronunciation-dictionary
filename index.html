@@ -4793,6 +4793,149 @@ const handoffLearningSync=learningCloudSync;
 learningCloudSync=async function(...args){practiceHandoffBusy=true;try{const result=await handoffLearningSync(...args);handoffPanel.open=true;await practiceHandoffDraw();return result;}finally{practiceHandoffBusy=false;}};
 window.prepareLaoAppUpdate=async function(){handoffGuard();persistPractice();if(practiceRound){const saved=JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1'))||'null');if(JSON.stringify(saved?.round)!==JSON.stringify(practiceRound))throw Error('默写进度未能保存，已停止更新。');}stopPracticeAudio();};
 </script>
+<style data-practice-cards>
+#practicePanel .practice-layout{display:block;min-width:0}
+#practicePanel .practice-card{max-width:850px;margin:auto;min-width:0;overflow-wrap:anywhere}
+#practicePanel .question-row{justify-content:center;text-align:center;margin:24px 0;min-height:90px}
+#practicePanel .question-ipa{font-size:clamp(32px,6vw,54px);line-height:1.8;flex:1 1 100%;min-width:0;white-space:normal}
+#practicePanel .question-row button{min-height:48px}
+#practicePanel #questionPrompt{text-align:center;color:#708881;font-size:15px}
+#practicePanel .practice-submit{display:block}
+#practicePanel .practice-links{display:block}
+#practicePanel #showAnswer{width:100%;min-height:76px;background:#edf6f3;color:#336e62;border-radius:12px;font-size:18px;border:0}
+.study-settings{margin:12px 0 20px}.study-settings>summary{padding:12px;cursor:pointer;color:#507b70}
+.study-settings-body{padding:14px;background:#f5f9f7;border-radius:14px}
+#practicePanel .study-settings-body .practice-side{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;max-width:100%;margin-bottom:16px}
+.study-translation{text-align:center;font-size:21px;color:#254a42}.study-translation p{margin:8px 0}
+.study-examples:empty{display:none}.study-examples{margin:20px 0}
+.study-example{position:relative;border-top:1px solid #e5eeea;padding:16px 0}.study-example p{margin:5px 0;line-height:1.9}
+.study-example [lang=lo]{font-size:24px}.study-example-translation{font-size:17px;color:#586d66}
+.study-example-translation,.study-example-play{display:none}.study-revealed .study-example-translation,.study-revealed .study-example-play{display:block}
+.study-example-play{min-height:44px;margin-top:8px}.study-audio-status{font-size:14px;color:#677a74}
+#practicePanel .practice-mark-options{display:flex;flex:1;gap:10px}
+#practicePanel #practiceMarkControls{width:100%}#practicePanel .practice-mark-label{display:none}
+#practicePanel .practice-mark-options button{flex:1;min-height:54px;border-radius:12px;font-size:18px}
+#practicePanel .practice-navigation{display:flex;width:100%;justify-content:space-between;margin:8px 0 0}
+#practicePanel .practice-navigation button{min-height:48px;min-width:100px;font-size:16px}
+#practicePanel .practice-footer{gap:8px}#practicePanel #practiceMarkStatus{font-size:13px}
+@media(max-width:760px),(pointer:coarse) and (max-width:1100px){
+ body.study-view main{width:100%;max-width:100%;box-sizing:border-box;padding:12px 12px 28px}
+ body.study-view .grid{display:block;min-width:0}
+ body.study-view #practicePanel{padding:14px 12px;border-radius:16px;width:100%;box-sizing:border-box;min-width:0}
+ body.study-view #practice-title{font-size:22px;margin:4px 0 12px}
+ body.study-view .view-nav{display:flex;overflow-x:auto;flex-wrap:nowrap;max-width:100%;gap:6px}
+ body.study-view .view-nav button{min-height:44px;flex-shrink:0;font-size:15px}
+ #practicePanel .practice-card{padding:18px 10px;border:0;box-shadow:none;border-radius:0}
+ #practicePanel .question-ipa{font-size:42px}
+ #practicePanel .practice-footer{position:sticky;bottom:0;background:rgba(255,255,255,.98);padding:12px 0 calc(10px + env(safe-area-inset-bottom));z-index:2}
+ #practicePanel .practice-mark-options{gap:8px}
+ #practicePanel .practice-mark-options button{font-size:18px;min-height:56px;padding:8px}
+ #practicePanel .practice-side select,#practicePanel .practice-side input{font-size:16px;min-height:44px;max-width:100%;box-sizing:border-box}
+ #practicePanel .study-settings-body .practice-side{display:block;padding:8px}
+ #practicePanel .study-settings-body .practice-side label{display:block;margin-top:12px}
+ #practicePanel #reviewHint{font-size:13px}.study-settings>summary{font-size:15px}
+}
+</style>
+<script data-practice-cards>
+// Presentation only: dictionaries, recordings and saved review events remain untouched.
+let studyCardRun=0,studyCardItem=null,studyCardRevealed=false;
+function studyExamples(item,snap){
+ const keys=new Set(syncKeys(item)),hidden=new Set((snap.learningPlacements||[]).filter(p=>p.deleted).map(p=>p.materialId)),active=new Set((snap.learningPlacements||[]).filter(p=>!p.deleted).map(p=>p.materialId));
+ const letter=item._vowelRule||item._practiceType==='letter'||$('#practiceKind').value==='letters';
+ const rows=(snap.learningMaterials||[]).filter(m=>!m.deleted&&['sentence','dialogue'].includes(m.contentType)&&m.textLao&&m.textLao!==item.word&&(!hidden.has(m.id)||active.has(m.id)));
+ const linked=m=>(m.linkedWordSyncIds||[]).some(k=>keys.has(k));
+ const match=m=>linked(m)||(letter?letterExampleMatch(item.word,m.textLao):String(item.word||'').trim()&&letterExampleCanonical(m.textLao).includes(letterExampleCanonical(item.word)));
+ const seen=new Set();return rows.filter(match).sort((a,b)=>Number(linked(b))-Number(linked(a))).filter(m=>{const key=m.textLao+'|'+(m.translationZh||'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,3);
+}
+function studyLao(node,text,placeholder=false){node.removeAttribute('aria-label');node.textContent=text||'';node.lang='lo';if(placeholder&&/[xX◌]/.test(text||''))node.innerHTML=codaVowelDisplay(String(text).replace(/[xX]/g,'◌'));}
+const studyPanel=$('#practicePanel'),studyCard=$('#practiceCard');
+const studyExtras=document.createElement('details');studyExtras.className='study-settings';studyExtras.innerHTML='<summary>练习设置 · 学习记录 · 同步进度</summary><div class="study-settings-body"></div>';
+studyPanel.insertBefore(studyExtras,studyPanel.querySelector('.practice-layout'));
+const studySettingsBody=studyExtras.lastElementChild;
+for(const selector of ['.practice-side','#reviewHistory','#roundHistoryPanel','#handoffPanel']){const n=studyPanel.querySelector(selector);if(n)studySettingsBody.append(n);}
+studySettingsBody.append(roundHistoryPanel,handoffPanel);
+const studyExamplesBox=document.createElement('section');studyExamplesBox.className='study-examples';studyExamplesBox.setAttribute('aria-label','已有例句');studyCard.querySelector('.question-row').after(studyExamplesBox);
+const studyTranslation=document.createElement('div');studyTranslation.className='study-translation';studyTranslation.setAttribute('aria-live','polite');studyExamplesBox.before(studyTranslation);
+const studyStatus=document.createElement('p');studyStatus.className='study-audio-status';studyStatus.setAttribute('role','status');studyCard.append(studyStatus);
+$('#showAnswer').textContent='点击揭晓 · 听发音';
+$('#nextQuestion').textContent='下一题';
+// A new round starts with Lao recognition. Existing sessions and advanced directions remain valid.
+function studyDefaultDirection(){if(!practiceRound||practiceRound.completed)$('#practiceMode').value=$('#practiceKind').value==='letters'?'wordToIpa':'wordToMeaning';}
+if(!localStorage.getItem(workspaceName('lao-practice-session-v1')))studyDefaultDirection();
+$('#practiceKind').addEventListener('change',()=>{$('#practiceMode').value=$('#practiceKind').value==='letters'?'wordToIpa':'wordToMeaning';},true);
+function studyHideAnswer(){
+ studyCardRevealed=false;studyCard.classList.remove('study-revealed');studyTranslation.replaceChildren();studyStatus.textContent='';studyExamplesBox.replaceChildren();
+ $('#practiceResult').hidden=true;$('#practicePlay').hidden=true;$('#practiceDetail').hidden=true;$('#practiceNotes').hidden=true;
+ for(const b of $('#practiceMarkControls').querySelectorAll('button'))b.disabled=true;
+ $('#showAnswer').hidden=false;$('#showAnswer').disabled=true;
+}
+async function studyRender(run){
+ studyHideAnswer();if(!practiceId||practiceRound?.completed){$('#showAnswer').hidden=true;$('#practiceResult').hidden=false;return;}
+ const id=practiceId,request=practiceRequest,item=await practiceGetItem(id);
+ if(run!==studyCardRun||request!==practiceRequest||id!==practiceId||!item)return;
+ studyCardItem=item;
+ $('#nextQuestion').textContent='下一题';
+ const reverse=['ipaToWord','meaningToWord'].includes(practiceDirection);
+ $('#questionPrompt').textContent=reverse?'请回忆答案，点击卡片揭晓':'请回忆发音和含义，点击卡片揭晓';
+ if(!reverse)studyLao($('#questionIPA'),item.word,$('#practiceKind').value==='letters'||item._vowelRule);
+ $('#showAnswer').disabled=false;
+ let snap;try{snap=await learningSnapshot();}catch(e){if(run===studyCardRun)studyStatus.textContent='例句暂时无法读取：'+e.message;return;}if(run!==studyCardRun||request!==practiceRequest||id!==practiceId)return;
+ for(const m of studyExamples(item,snap)){
+  const row=document.createElement('article'),lo=document.createElement('p'),zh=document.createElement('p'),play=document.createElement('button');
+  row.className='study-example';studyLao(lo,m.textLao);zh.className='study-example-translation';zh.textContent=m.translationZh||'暂无翻译';
+  play.type='button';play.className='study-example-play';play.textContent='▶ 例句';play.setAttribute('aria-label','播放例句 '+m.textLao);
+  play.onclick=e=>{e.stopPropagation();void studyPlaySaved({_practiceMaterialId:m.id,word:m.textLao},studyCardRun);};row.append(lo,zh,play);studyExamplesBox.append(row);
+ }
+}
+async function studyPlaySaved(item,run){
+ const id=practiceId,request=practiceRequest;
+ stopPracticeAudio();const generation=playbackGeneration;
+ const current=()=>run===studyCardRun&&id===practiceId&&request===practiceRequest&&generation===playbackGeneration&&activeView==='practice';
+ try{
+  let blob,start=0,end=null;
+  if(item._vowelRule)blob=await codaCachedSpeech(item.word);
+  else{
+   const {m,w,snap}=await learningResolve(item._practiceMaterialId||'word:'+item.syncId);if(!current())return;
+   if(!m||m.audioNeedsReview)throw Error('参考发音需要核对，请打开详情');
+   const refs=m.audioSources||[];
+   let ref=m.defaultAudioKey&&typeof lessonV2AudioKey==='function'?refs.find(a=>lessonV2AudioKey(a)===m.defaultAudioKey&&learningIsReference(a)):null;
+   if(!ref)ref=refs.filter(a=>a.role==='reference').at(-1);
+   if(!ref&&w)blob=audioBlobFor(w)||await learningCachedSpeech(w.word);
+   if(!ref&&!blob)ref=refs.filter(learningIsReference).at(-1);
+   if(ref){if(ref.needsReview)throw Error('参考发音需要核对，请打开详情');blob=ref.source==='gemini'?await learningCachedSpeech(ref.text||w?.word||m.textLao):snap.learningAudio.find(a=>a.id===ref.assetId)?.blob;start=ref.start||0;end=ref.end??null;}
+   else if(!blob)blob=await learningCachedSpeech(w?.word||m.textLao);
+  }
+  if(!current())return;
+  if(!blob){studyStatus.textContent='暂无已保存发音，可在“详情 / 参考发音”中补充。';return;}
+  studyStatus.textContent='';await learningPlayBlob(blob,start,end);
+ }catch(e){if(run===studyCardRun&&id===practiceId&&request===practiceRequest&&activeView==='practice')studyStatus.textContent='未能播放：'+e.message+'；请点播放重试。';}
+}
+async function studyReveal(){
+ if(studyCardRevealed||!studyCardItem||$('#showAnswer').disabled||practiceRound?.completed)return;
+ const run=studyCardRun,item=studyCardItem;
+ studyCardRevealed=true;studyCard.classList.add('study-revealed');$('#showAnswer').hidden=true;
+ const answer=document.createElement('p'),translation=document.createElement('p');
+ if(item._vowelRule)studyLao(answer,item.ipa,true);
+ else if(['ipaToWord','meaningToWord'].includes(practiceDirection))studyLao(answer,item.word,$('#practiceKind').value==='letters');
+ else answer.textContent=item.ipa?'/'+item.ipa+'/':'';
+ translation.textContent=item.meaning||'';studyTranslation.append(answer,translation);
+ $('#practicePlay').hidden=false;$('#practiceDetail').hidden=false;$('#practiceNotes').hidden=!item.note;
+ for(const b of $('#practiceMarkControls').querySelectorAll('button'))b.disabled=false;
+ // Keep the persisted answer text compatible with round history and device handoff.
+ $('#practiceResult').textContent='答案是：'+fullAnswer(item,practiceDirection);persistPractice();
+ await studyPlaySaved(item,run);
+}
+$('#showAnswer').onclick=studyReveal;
+$('#practicePlay').onclick=()=>{if(studyCardItem)void studyPlaySaved(studyCardItem,studyCardRun);};
+studyCard.addEventListener('click',e=>{if(!e.target.closest('button,a,input,select,summary,details,.practice-footer'))void studyReveal();});
+const studyChoose=choosePractice;
+choosePractice=async function(...args){const run=++studyCardRun;studyCardItem=null;stopPracticeAudio();studyHideAnswer();await studyChoose(...args);if(run===studyCardRun)await studyRender(run);};
+practiceNavigateWithAudio=async function(options){await choosePractice(options);};
+const studyShowView=showView;
+showView=function(view,...args){document.body.classList.toggle('study-view',view==='practice');return studyShowView(view,...args);};
+document.body.classList.toggle('study-view',activeView==='practice');
+if(activeView==='practice')void studyRender(++studyCardRun);
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

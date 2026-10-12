@@ -2040,7 +2040,7 @@ async function renderCodaChapter(){
  if(codaTab==='dead'){
  html=codaIntro()+codaStructureMap()+codaRuleCards()+'<p class="coda-note">记忆重点：短元音三类均为“短调”；长元音中／高为“中降调”，低辅音为“四声”。这些是教材名称，不把短元音与短调当作同一字段。</p><h3>拼读示范表</h3>'+codaDrillTable(items)+'<div id="codaReferences">'+codaReferenceCards()+'</div>';
  }else if(codaTab==='live'){
- html='<h3>活闭音节 · 先认识五个尾音</h3><p>元音后接下列活尾。本阶段只认识结构，不混入死闭声调练习。</p><div class="coda-cards">'+CodaLesson.codas.filter(c=>c.type==='live').map(c=>'<article class="coda-card"><strong lang="lo">'+c.letter+'</strong>/'+c.sound+'/ · 活尾</article>').join('')+'</div><p class="coda-note">本章节后续再展开活闭声调。当前请先完成死闭六组和元音形变。</p>';
+ html='<section class="live-coda-notes">'+liveCodaNotesHtml()+'</section>';
  }else{html=codaVowels();codaQueue=[];codaQuestion=null;codaRoundStarted=false;codaTrainingKey='';}
  $('#codaContent').innerHTML=html;$('#codaStatus').textContent='';
  if(codaTab==='dead')$('#codaLinkResults').innerHTML=codaLinkResults();
@@ -2969,7 +2969,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
  const sectionHtml=s=>(typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
- return (grouped?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+(learningSettings?'<button data-learn="v2-organize">整理分类／编辑内容</button>':'')+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
+ return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+(learningSettings?'<button data-learn="v2-organize">整理分类／编辑内容</button>':'')+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
  (grouped?grouped.nav+(grouped.sections.length?grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
@@ -3793,7 +3793,7 @@ const liveCodaNgRules={
  ing:{rows:[['◌ິ（短）','◌ິງ','ຍິງ'],['◌ີ（长）','◌ີງ','ລີງ']],note:'这一组元音没有形变，直接加尾辅音 ງ；仍要区分短元音与长元音。'},
  ong:{rows:[['◌ຸ（短）','◌ຸງ','ກຸ້ງ'],['ໂ◌（长）','ໂ◌ງ','ໂຮງ'],['◌ໍ（长）','◌ອງ','ກອງ']],note:'注意书写变化 ◌ໍ → ◌ອ：ກ + ◌ໍ + ງ → ກອງ。',extra:'多音节词要逐个音节看：ໂຮງແຮມ = ໂຮງ + ແຮມ。第一个音节以 ງ 结尾，第二个以 ມ 结尾；不能认为整词的所有音节都以 ງ 结尾。'}
 };
-function liveCodaNgRulesHtml(group){const r=liveCodaNgRules[group],h=learningEsc;return '<section class="lcn-ng-rules"><h4>'+group+' 组 · 拼读规则</h4><p class="tag-hint">教材近似记音 · '+liveCodaNgGroups[group].split('|').length+' 个例词</p><table><thead><tr><th>元音原型</th><th>遇到 ງ 后</th><th>示例</th></tr></thead><tbody>'+r.rows.map(row=>'<tr>'+row.map(text=>'<td>'+h(text)+'</td>').join('')+'</tr>').join('')+'</tbody></table><p>'+h(r.note)+'</p>'+(r.extra?'<p class="lcn-ng-caution">'+h(r.extra)+'</p>':'')+'</section>';}
+function liveCodaNgRulesHtml(group){const r=liveCodaNgRules[group],h=learningEsc;return '<section class="lcn-ng-rules"><h4>'+group+' 组 · 拼读规则</h4><p class="tag-hint">教材近似记音 · '+liveCodaNgGroups[group].split('|').length+' 个例词</p><table><thead><tr><th>元音原型</th><th>遇到 ງ 后</th><th>示例</th></tr></thead><tbody>'+r.rows.map(row=>'<tr>'+row.map((text,i)=>'<td>'+(i===2&&/^[\u0e80-\u0eff]+$/.test(text)?'<button type="button" data-lcn-play="'+h(text)+'" title="单击播放，双击查看详情">'+h(text)+'</button>':h(text))+'</td>').join('')+'</tr>').join('')+'</tbody></table><p>'+h(r.note)+'</p>'+(r.extra?'<p class="lcn-ng-caution">'+h(r.extra)+'</p>':'')+'</section>';}
 function liveCodaNotesHtml(){
  const h=learningEsc,r=liveCodaNotes.find(r=>r.letter===liveCodaSelected)||liveCodaNotes[0],ng=r.letter==='ງ';
  const play=word=>'<button type="button" data-lcn-play="'+h(word)+'">'+h(word)+'</button>';
@@ -4957,7 +4957,7 @@ const learningGroupState=new Map();
 function learningGroupKind(block){return block.contentType==='word-ref'?'words':['sentence','dialogue','reading'].includes(block.contentType)?'dialogue':'other';}
 function learningGroupView(data,course){
  const state=learningGroupState.get(course.id)||{kind:'words',category:''};
- if(state.kind==='original'||learningSettings)return null;
+ if(course.library!=='communication'||state.kind==='original'||learningSettings)return null;
  const sections=data.sections.map(s=>({...s,blocks:s.blocks.filter(b=>learningGroupKind(b)===state.kind)})).filter(s=>s.blocks.length);
  const categories=[...new Set(sections.map(s=>s.title))];
  const category=categories.includes(state.category)?state.category:'';

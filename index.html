@@ -3617,12 +3617,19 @@ async function pronunciationRenderImported(key){
  }catch(e){if(container.isConnected)container.querySelector('.pron-custom-list').textContent=e.message;}
 }
 async function pronunciationPlay(text){
- const snap=await learningSnapshot();
+ const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);
+ // Word recordings may have empty textLao: the word's stable IDs are the link.
+ const matchingWords=words.filter(w=>learningNorm(w.word)===learningNorm(text));
+ const keys=new Set(matchingWords.flatMap(syncKeys));
+ const linked=snap.learningMaterials.filter(m=>!m.deleted&&m.contentType==='word'&&(m.linkedWordSyncIds||[]).some(k=>keys.has(k)));
+ const matching=snap.learningMaterials.filter(m=>!m.deleted&&learningNorm(m.textLao)===learningNorm(text));
+ const candidates=[...new Map([...linked,...matching].map(m=>[m.id,m])).values()].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+ for(const m of candidates){const clip=recordedReference(m,snap);if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
  for(const m of snap.learningMaterials.filter(m=>!m.deleted&&m.textLao===text)){
   const refs=(m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).slice().reverse();
   for(const ref of refs){const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);if(asset?.blob){await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);return;}}
  }
- const word=(await allEntries()).find(w=>w.word===text&&hasAudio(w));
+ const word=matchingWords.find(hasAudio);
  if(word){await learningPlayBlob(audioBlobFor(word));return;}
  const cached=await learningCachedSpeech(text);if(cached){await learningPlayBlob(cached);return;}
  throw Error('“'+text+'”尚无已保存音频。请打开详情中的“录音 / 管理”添加；本次未调用语音生成。');
@@ -5028,13 +5035,6 @@ function referencePlaybackNotice(label){
  if(typeof document==='undefined')return;
  for(const node of document.querySelectorAll('[data-reference-playback-status]'))node.textContent='本次选择：'+label;
 }
-const referencePriorityDetail=learningOpenDetail;
-learningOpenDetail=async function(id){
- await referencePriorityDetail(id);if(learningDetail!==id)return;
- const toolbar=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!toolbar)return;
- const button=document.createElement('button');button.type='button';button.dataset.learn='play';button.dataset.id=id;button.className='primary';button.textContent='▶ 播放参考发音（手录优先）';toolbar.prepend(button);
- const hint=document.createElement('p');hint.dataset.referencePlaybackStatus='';hint.setAttribute('role','status');hint.textContent='播放修复版 1013.1 · 点击上方绿色按钮，优先播放手录参考发音。';toolbar.after(hint);
-};
 </script>
 <script src="./offline.js"></script>
 </body>

@@ -1970,7 +1970,7 @@ function codaReferenceClick(id,detail){
  if(detail===0){void codaShowEntry(id);return;}
  if(codaReferenceLast===id&&codaReferenceTimer){cancelCodaReferenceClick();void codaShowEntry(id);return;}
  cancelCodaReferenceClick();codaReferenceLast=id;
- codaReferenceTimer=setTimeout(async()=>{cancelCodaReferenceClick();if(activeView!=='coda')return;try{const x=await getEntry(id);if(x)await playEntrySpeech(x,'default');}catch(e){$('#codaStatus').textContent=e.message;}},350);
+ codaReferenceTimer=setTimeout(async()=>{cancelCodaReferenceClick();if(activeView!=='coda')return;try{const x=await getEntry(id);if(x)await playEntrySpeech(x,'auto');}catch(e){$('#codaStatus').textContent=e.message;}},350);
 }
 function codaStructureMap(){
  const arrowRow='<span class="coda-down" aria-hidden="true">↓</span><span></span><span class="coda-down" aria-hidden="true">↓</span><span></span><span class="coda-down" aria-hidden="true">↓</span>';
@@ -2369,7 +2369,17 @@ async function learningPlayBlob(blob,start=0,end=null){
 }
 async function learningPlay(id,source='reference',index=null){
  const {m,w,snap}=await learningResolve(id),text=w?.word||m.textLao,refs=m.audioSources||[];
- if(index===null&&source==='reference'){const clip=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
+ // An explicit audio-row choice must be resolved before any word-level fallback.
+ if(index!==null){
+  if(!Number.isInteger(index)||index<0||!refs[index])throw Error('音频列表已变化，请重新打开详情后选择。');
+  const selected=refs[index];
+  if(selected.source==='gemini'){await playEntrySpeech({word:selected.text||text},'default');return;}
+  const asset=snap.learningAudio.find(a=>a.id===selected.assetId&&!a.deleted);
+  if(!asset?.blob)throw Error('这段录音尚未同步到本机；不会改播默认发音。');
+  referencePlaybackNotice((selected.role==='reference'?'手录参考发音':selected.role==='follow'?'我的跟读':'指定音频')+' · '+(asset.name||selected.assetId));
+  await learningPlayBlob(asset.blob,selected.start||0,selected.end??null);return;
+ }
+ if(index===null&&source==='reference'){const clip=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
  if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred);return;}}
  if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
@@ -4994,7 +5004,7 @@ function recordedReference(material,snap){
  if(ref.needsReview||material.audioNeedsReview)throw Error('手录参考发音需要核对，请在详情中确认后播放。');
  const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
  if(!asset?.blob)throw Error('手录参考发音尚未同步到本机，请先同步；不会改播默认发音。');
- return {blob:asset.blob,start:ref.start||0,end:ref.end??null};
+ return {blob:asset.blob,start:ref.start||0,end:ref.end??null,label:'手录参考发音 · '+(asset.name||ref.assetId)};
 }
 async function recordedReferenceForWord(word){
  const snap=await learningSnapshot(),keys=new Set(syncKeys(word));
@@ -5002,6 +5012,17 @@ async function recordedReferenceForWord(word){
  for(const m of candidates){const clip=recordedReference(m,snap);if(clip)return clip;}
  return null;
 }
+function referencePlaybackNotice(label){
+ if(typeof document==='undefined')return;
+ for(const node of document.querySelectorAll('[data-reference-playback-status]'))node.textContent='本次选择：'+label;
+}
+const referencePriorityDetail=learningOpenDetail;
+learningOpenDetail=async function(id){
+ await referencePriorityDetail(id);if(learningDetail!==id)return;
+ const toolbar=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!toolbar)return;
+ const button=document.createElement('button');button.type='button';button.dataset.learn='play';button.dataset.id=id;button.className='primary';button.textContent='▶ 播放参考发音（手录优先）';toolbar.prepend(button);
+ const hint=document.createElement('p');hint.dataset.referencePlaybackStatus='';hint.setAttribute('role','status');hint.textContent='播放修复版 1013.1 · 点击上方绿色按钮，优先播放手录参考发音。';toolbar.after(hint);
+};
 </script>
 <script src="./offline.js"></script>
 </body>

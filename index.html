@@ -2969,19 +2969,19 @@ async function lessonV2Preview(raw){
 }
 function lessonV2Export(snap,course){const key=course.packageKey,find=(kind,id)=>snap.learningMaterials.find(m=>m.id===lessonV2Id(key,kind,id));return {format:'lao-lesson-v2',course:Object.fromEntries(['textbookId','textbookName','chapterId','chapterName','lessonId','title','description','sceneMetadata','library','folderId','sourceLabel'].filter(k=>course[k]!==undefined).map(k=>[k,course[k]])),sections:(course.v2SectionIds||[]).map(id=>find('section',id)).filter(Boolean).map(m=>{const s=lessonV2Clone(m.v2Data);s.blocks=s.blocks.map(id=>find('block',id)).filter(m=>m&&m.v2Data.sectionId===s.id).map(m=>{const b=lessonV2Clone(m.v2Data);delete b.sectionId;const field=b.contentType==='table'?'rows':'items';if(lessonV2Displays[b.contentType]&&b.contentType!=='knowledge'&&Array.isArray(b.content[field]))b.content[field]=b.content[field].map(id=>find('item',id)).filter(m=>m&&m.v2Data.blockId===b.id&&!snap.learningPlacements.some(p=>p.lessonId===course.id&&p.materialId===m.id&&p.deleted)).map(m=>{const r=lessonV2Clone(m.v2Data);delete r.blockId;delete r.itemType;delete r.unitType;delete r.generatedId;return r;});return b;});return s;}),uncertain:snap.learningMaterials.find(m=>m.id==='course:'+course.id)?.v2Uncertain||[]};}
 async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}const h=learningEsc,c=learningLesson,d=lessonV2Export(snap,c),key=c.packageKey,chart=await readAlphabetOverrides();const rec=(kind,id)=>snap.learningMaterials.find(m=>m.id===lessonV2Id(key,kind,id));
- const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?learningFindWord(m.linkedWordSyncIds[0],words):null;return '<article class="learn-card"><button class="learn-card-main" data-learn="play-card" data-id="'+h(m.id)+'"><strong lang="lo">'+h((r.speaker?r.speaker+'：':'')+(w?.word||r.textLao||r.playableText||''))+'</strong><span>'+h(w?.meaning||r.translationZh||'')+'</span></button>'+(m.audioNeedsReview?'<small>文字已修改，发音需核对</small>':'')+'<div class="learn-card-actions"><button data-learn="play" data-id="'+h(m.id)+'" aria-label="播放" title="播放">'+(typeof lessonIcon==='function'?lessonIcon('play'):'▶')+'</button><button data-learn="follow" data-id="'+h(m.id)+'" aria-label="跟读录音" title="跟读录音">'+(typeof lessonIcon==='function'?lessonIcon('mic'):'录音')+'</button><button data-learn="detail" data-id="'+h(m.id)+'" aria-label="音频与详情" title="音频与详情">'+(typeof lessonIcon==='function'?lessonIcon('more'):'⋯')+'</button></div></article>';};
+ const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?learningFindWord(m.linkedWordSyncIds[0],words):null;return '<article class="learn-card"><button class="learn-card-main" data-learn="play-card" data-id="'+h(m.id)+'"><strong lang="lo">'+h((r.speaker?r.speaker+'：':'')+(w?.word||r.textLao||r.playableText||''))+'</strong><span>'+h(w?.meaning||r.translationZh||'')+'</span></button>'+(m.audioNeedsReview?'<small>文字已修改，发音需核对</small>':'')+'<div class="learn-card-actions">'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+h(m.id)+'">修改</button>')+'<button data-learn="play" data-id="'+h(m.id)+'" aria-label="播放" title="播放">'+(typeof lessonIcon==='function'?lessonIcon('play'):'▶')+'</button><button data-learn="follow" data-id="'+h(m.id)+'" aria-label="跟读录音" title="跟读录音">'+(typeof lessonIcon==='function'?lessonIcon('mic'):'录音')+'</button><button data-learn="detail" data-id="'+h(m.id)+'" aria-label="音频与详情" title="音频与详情">'+(typeof lessonIcon==='function'?lessonIcon('more'):'⋯')+'</button></div></article>';};
  const block=b=>{const m=rec('block',b.id),x=b.content;let body='';if(!lessonV2Displays[b.contentType]?.includes(b.displayType))body='<p>该内容类型暂未支持专用展示</p><pre>'+h(JSON.stringify(x,null,2))+'</pre>';
  else if(b.contentType==='knowledge')body='<p class="learn-note">'+h(x.body)+'</p><div class="learn-glyphs">'+(m.alphabetKeys||[]).map(k=>{const [r,c]=k.split(':').map(Number),f=chart[k]??window.learningAlphabetRows()[r]?.[2][c];return f?'<button class="learn-glyph" lang="lo" data-learn="glyph" data-form="'+h(f)+'" data-alphabet-key="'+h(k)+'">'+h(f.replaceAll('x','◌'))+'</button>':'';}).join('')+'</div>'+((m.unresolvedAlphabet||[]).length?'<p>待关联字母：'+h(m.unresolvedAlphabet.join('、'))+'</p>':'');
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
  else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-dialogue-split="'+h(m.id)+'">✂ 切分已有整段音频</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
- return '<section class="learn-knowledge"><h3>'+h(b.title||b.contentType)+'</h3><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings&&Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">＋ 添加 / 勾选移除卡片</button>':'')+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
+ return '<section class="learn-knowledge"><h3>'+h(b.title||b.contentType)+'</h3><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">管理卡片：添加／批量移除</button>':'')+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
  const sectionHtml=s=>(typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
- return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+(learningSettings?'<button data-learn="v2-organize">整理分类／编辑内容</button>':'')+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
+ return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button>'+'<button data-learn="v2-organize">分类改名／批量移除／编辑内容</button>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
  (grouped?grouped.nav+(grouped.sections.length?grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
@@ -3147,7 +3147,7 @@ function lessonPageToolbar(section,course){
  const words=lessonPageItems(section,course);if(!words.length)return '';
  const key=course.id+':'+section.id;lessonPages.set(key,{words,title:section.title});
  const h=learningEsc;
- return '<div class="lesson-page-player" data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(section.title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="停止整页播放">'+lessonIcon('stop')+'</button><label>语速<select data-page-speed><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select></label><label><input type="checkbox" data-page-loop>循环</label>'+(learningSettings?'<button data-page-action="prepare">'+lessonIcon('audio')+'本页合成／切分</button>':'')+'</div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
+ return '<div class="lesson-page-player" data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(section.title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="停止整页播放">'+lessonIcon('stop')+'</button><label>语速<select data-page-speed><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select></label><label><input type="checkbox" data-page-loop>循环</label>'+'<button data-page-action="prepare">'+lessonIcon('audio')+'本页生成／重做／切分</button>'+'</div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
 }
 function lessonIcon(type){
  const paths={play:'<path d="m8 5 11 7-11 7Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',audio:'<path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/>'};
@@ -3205,9 +3205,9 @@ async function lessonPageListen(page,bar){
  await play(0);
 }
 async function lessonPagePrepare(page,fromBatch=false){
- if((!learningSettings&&!fromBatch)||batchAudioBusy||recorder||learningHasWork())throw Error('请先完成正在进行的编辑或录音，并进入课程设置。');
+ if(batchAudioBusy||recorder||learningHasWork())throw Error('请先完成正在进行的编辑或录音，并进入课程设置。');
  stopPracticeAudio();const words=await lessonPageResolve(page.words);
- batchDialog.innerHTML='<h2>本页合成与切分</h2><p>'+learningEsc(page.title)+' · '+words.length+' 项。不限 30 项，每批最多 5,000 字符。长页面分批生成，整页播放会自动按顺序衔接各段。</p><p>完整原音会保留，切片只补充缺少的默认音频，不覆盖已有录音。</p><label>从第 <input id="pageFrom" type="number" min="1" max="'+words.length+'" value="1"> 项</label><label>到第 <input id="pageTo" type="number" min="1" max="'+words.length+'" value="'+words.length+'"> 项</label><p><button id="pageGenerate">合成／打开已有整段并切分</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ batchDialog.innerHTML='<h2>本页合成与切分</h2><p>'+learningEsc(page.title)+' · '+words.length+' 项。不限 30 项，每批最多 5,000 字符。长页面分批生成，整页播放会自动按顺序衔接各段。</p><p>完整原音会保留，切片只补充缺少的默认音频，不覆盖已有录音。</p><label>从第 <input id="pageFrom" type="number" min="1" max="'+words.length+'" value="1"> 项</label><label>到第 <input id="pageTo" type="number" min="1" max="'+words.length+'" value="'+words.length+'"> 项</label><p><label><input id="pageForce" type="checkbox">重新生成所选整段（不用旧缓存，可能消耗额度；成功后替换整段默认音）</label></p><p><button id="pageGenerate">合成／打开已有整段并切分</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  batchDialog.insertAdjacentHTML('beforeend','<details><summary>核对本页顺序</summary><ol>'+words.map(w=>'<li>'+learningEsc(w.word)+' · '+learningEsc(w.meaning)+'</li>').join('')+'</ol></details>');
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
  $('#pageGenerate').onclick=async()=>{if(batchAudioBusy)return;batchAudioBusy=true;$('#pageGenerate').disabled=true;
@@ -3217,10 +3217,10 @@ async function lessonPagePrepare(page,fromBatch=false){
    const chosen=words.slice(from-1,to).map(({id,word,meaning,dialogueId})=>({id,word,meaning,dialogueId})),text=lessonPageText(chosen);
    if(text.length>5000)throw Error('所选内容超过 5,000 字符，请缩小范围');
    if(localStorage.getItem(batchDraftKey)&&!confirm('开始这一批会替换上一次切分草稿（不会删除原音和已保存切片）。继续？'))return;
-   let blob=await learningCachedSpeech(text);
-   if(!blob&&page.dialogueId&&from===1&&to===words.length)blob=await learningCachedSpeech(chosen.map(w=>w.word).join('\n'));
-   if(!blob&&fromBatch)await batchAssertMissing(chosen);
-   if(!blob){if(!confirm('将合成 '+chosen.length+' 项整段音频，发起一次请求，可能计费。继续？'))return;batchNotice('正在等待生成结果，最长约 3 分钟，请勿重复提交或关闭…');blob=await defaultSpeech(text,{batchPause:true});}
+   const force=Boolean($('#pageForce')?.checked);let blob=force?null:await learningCachedSpeech(text);
+   if(!force&&!blob&&page.dialogueId&&from===1&&to===words.length)blob=await learningCachedSpeech(chosen.map(w=>w.word).join('\n'));
+   if(!force&&!blob&&fromBatch)await batchAssertMissing(chosen);
+   if(!blob){if(!confirm('将合成 '+chosen.length+' 项整段音频，发起一次请求，可能计费。继续？'))return;batchNotice('正在等待生成结果，最长约 3 分钟，请勿重复提交或关闭…');blob=await defaultSpeech(text,{batchPause:true,force});}
    const key=JSON.stringify([ttsSettings.endpoint||'',text]);await ttsCache('readwrite',key,blob);
    if(page.dialogueId&&from===1&&to===words.length){
     const full=await learningResolve(page.dialogueId),fullText=chosen.map(w=>w.word).join('\n');
@@ -3233,7 +3233,7 @@ async function lessonPagePrepare(page,fromBatch=false){
   }catch(e){batchNotice(e.message);}finally{batchAudioBusy=false;if($('#pageGenerate'))$('#pageGenerate').disabled=false;}
  };
 }
-async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.dialogueGroups?.length){await dialogueReplaceClips(s);return;}
+async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await dialogueReplaceClips(s);return;}
  const current=await lessonPageResolve(s.words);
  if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('本页文字已变化，请重新核对，未保存切片');
  const cache=await cloudCacheRows(),existing=new Set(cache.flatMap(r=>{try{return [JSON.parse(r.key)[1]];}catch(_){return [];}})),seen=new Set(),clips=[];
@@ -3293,7 +3293,7 @@ function courseEditPlan(data,snap,course){
  return rows;
 }
 async function courseEditOpen(){
- if(!learningSettings)throw Error('请先进入课程设置');if(learningHasWork())throw Error('请先完成当前编辑或录音');
+ if(learningHasWork())throw Error('请先完成当前编辑或录音');
  stopPracticeAudio();
  const snap=await learningSnapshot(),course=learningLesson,d=lessonV2Export(snap,course),h=learningEsc;
  learningDraft={kind:'course-editor',dirty:false};let selected=d.sections[0]?.id;
@@ -3313,14 +3313,15 @@ async function courseEditOpen(){
  }
  function draw(){
   const section=d.sections.find(s=>s.id===selected)||d.sections[0];selected=section.id;
-  learningModal('整理分类／编辑内容','<form id="courseEditor"><p class="tag-hint">上方分类按钮是“小节”；下面主题标签是筛选信息。可改名、排序和移动内容，保留原 ID 与音频。</p><div class="ce-toolbar"><select id="ceSelect">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select><button type="button" data-ce="section-up">分类前移</button><button type="button" data-ce="section-down">分类后移</button><button type="button" data-ce="new">＋ 新分类</button></div><label>分类名称<input id="ceTitle" required value="'+h(section.title)+'"></label><div class="two"><label>主题标签（逗号分隔）<input id="ceTopics" value="'+h(tags(section.topics))+'"></label><label>用途标签<input id="ceRoles" value="'+h(tags(section.roles))+'"></label></div>'+
-   section.blocks.map(b=>'<details class="ce-block" data-ce-block="'+h(b.id)+'"><summary>'+h(b.title||b.contentType)+' · 编辑</summary><label>内容组／对话名称<input data-field="title" value="'+h(b.title||'')+'"></label><div class="two">'+['topics','roles','tags'].map((field,i)=>'<label>'+['主题标签','用途标签','词汇标签'][i]+'<input data-field="'+field+'" value="'+h(tags(b[field]))+'"></label>').join('')+'</div><div class="ce-toolbar"><label>移到分类<select data-ce-move="'+h(b.id)+'">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select></label><button type="button" data-ce="block-up" data-block="'+h(b.id)+'">前移</button><button type="button" data-ce="block-down" data-block="'+h(b.id)+'">后移</button></div>'+
-    (b.contentType==='word-ref'?'<p>词汇正文与私人词典共用，请从词条详情修改。此处只调整分组标签，不改私人词典标签。</p>':['dialogue','sentence','reading'].includes(b.contentType)?b.content.items.map((r,i)=>'<fieldset data-ce-item="'+h(r.itemId)+'"><legend>第 '+(i+1)+' 句</legend>'+(b.contentType==='dialogue'?'<label>说话人<input data-field="speaker" value="'+h(r.speaker||'')+'"></label>':'')+'<label>老挝语<textarea data-field="textLao" required rows="2">'+h(r.textLao)+'</textarea></label><label>中文翻译<textarea data-field="translationZh" rows="2">'+h(r.translationZh||'')+'</textarea></label><label>备注<textarea data-field="note" rows="2">'+h(r.note||'')+'</textarea></label></fieldset>').join(''):'<p>此类正文请从原有详情或导入功能编辑。</p>')+'</details>').join('')+'<p>修改老挝语后，原录音不会删除，但会标记为待核对；中文翻译和标签修改不会影响发音。</p><button class="primary" type="submit">保存全部修改</button><button type="button" data-learn="close">取消</button></form>');
+  learningModal('整理分类／编辑内容','<form id="courseEditor"><p class="tag-hint">二级小按钮对应下面的“内容组／对话名称”；外层小节用于组织资料。可改名、排序和移动内容，保留原 ID 与音频。</p><div class="ce-toolbar"><select id="ceSelect">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select><button type="button" data-ce="section-up">分类前移</button><button type="button" data-ce="section-down">分类后移</button><button type="button" data-ce="new">＋ 新分类</button></div><label>分类名称<input id="ceTitle" required value="'+h(section.title)+'"></label><div class="two"><label>主题标签（逗号分隔）<input id="ceTopics" value="'+h(tags(section.topics))+'"></label><label>用途标签<input id="ceRoles" value="'+h(tags(section.roles))+'"></label></div>'+
+   section.blocks.map(b=>'<label><input type="checkbox" data-ce-remove="'+h(b.id)+'"> 选中分组：'+h(b.title||b.contentType)+'</label><details class="ce-block" data-ce-block="'+h(b.id)+'"><summary>'+h(b.title||b.contentType)+' · 编辑</summary><label>内容组／对话名称<input data-field="title" value="'+h(b.title||'')+'"></label><div class="two">'+['topics','roles','tags'].map((field,i)=>'<label>'+['主题标签','用途标签','词汇标签'][i]+'<input data-field="'+field+'" value="'+h(tags(b[field]))+'"></label>').join('')+'</div><div class="ce-toolbar"><label>移到分类<select data-ce-move="'+h(b.id)+'">'+d.sections.map(s=>'<option value="'+h(s.id)+'" '+(s.id===selected?'selected':'')+'>'+h(s.title)+'</option>').join('')+'</select></label><button type="button" data-ce="block-up" data-block="'+h(b.id)+'">前移</button><button type="button" data-ce="block-down" data-block="'+h(b.id)+'">后移</button></div>'+
+    (b.contentType==='word-ref'?'<p>词汇正文与私人词典共用，请从词条详情修改。此处只调整分组标签，不改私人词典标签。</p>':['dialogue','sentence','reading'].includes(b.contentType)?b.content.items.map((r,i)=>'<fieldset data-ce-item="'+h(r.itemId)+'"><legend>第 '+(i+1)+' 句</legend>'+(b.contentType==='dialogue'?'<label>说话人<input data-field="speaker" value="'+h(r.speaker||'')+'"></label>':'')+'<label>老挝语<textarea data-field="textLao" required rows="2">'+h(r.textLao)+'</textarea></label><label>中文翻译<textarea data-field="translationZh" rows="2">'+h(r.translationZh||'')+'</textarea></label><label>备注<textarea data-field="note" rows="2">'+h(r.note||'')+'</textarea></label></fieldset>').join(''):'<p>此类正文请从原有详情或导入功能编辑。</p>')+'</details>').join('')+'<p>修改老挝语后，原录音不会删除，但会标记为待核对；中文翻译和标签修改不会影响发音。</p><button type="button" data-ce="remove-blocks">移除勾选分组</button><button class="primary" type="submit">保存全部修改</button><button type="button" data-learn="close">取消</button></form>');
   $('#courseEditor').oninput=()=>learningDraft.dirty=true;
   $('#ceSelect').onchange=e=>{collect();selected=e.target.value;draw();};
   $('#courseEditor').onclick=e=>{
    const b=e.target.closest('[data-ce]');if(!b)return;collect();const a=b.dataset.ce;
-   if(a==='new'){const s={id:'section-'+crypto.randomUUID(),title:'新分类',topics:[],roles:[],blocks:[]};d.sections.push(s);selected=s.id;}
+   if(a==='remove-blocks'){const ids=new Set([...learningDialog.querySelectorAll('[data-ce-remove]:checked')].map(el=>el.dataset.ceRemove));if(!ids.size)return;if(!confirm('从本课移除 '+ids.size+' 个分组及其卡片入口？词典和录音保留，点击保存才生效。'))return;d.sections.find(s=>s.id===selected).blocks=d.sections.find(s=>s.id===selected).blocks.filter(b=>!ids.has(b.id));}
+   else if(a==='new'){const s={id:'section-'+crypto.randomUUID(),title:'新分类',topics:[],roles:[],blocks:[]};d.sections.push(s);selected=s.id;}
    else{const list=a.startsWith('section')?d.sections:d.sections.find(s=>s.id===selected).blocks,id=a.startsWith('section')?selected:b.dataset.block,i=list.findIndex(x=>x.id===id),j=i+(a.endsWith('up')?-1:1);if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];}
    learningDraft.dirty=true;draw();
   };
@@ -3673,7 +3674,7 @@ function listEditorParse(text){
  return lines.map((line,i)=>{const parts=line.split('|').map(s=>s.trim());if(parts.length!==5||!parts[0])throw Error('第 '+(i+1)+' 行须为五列，老挝语不能为空。');return {textLao:parts[0],ipa:parts[1],translationZh:parts[2],tags:learningTags(parts[3]),note:parts[4].replaceAll('<br>','\n')};});
 }
 async function listEditorOpen(blockId){
- if(!learningSettings||learningHasWork())throw Error('请进入设置模式，并先完成当前编辑。');
+ if(learningHasWork())throw Error('请先完成当前编辑。');
  const course={...learningLesson},snap=await learningSnapshot(),words=await allEntries(),d=lessonV2Export(snap,course),section=d.sections.find(s=>s.blocks.some(b=>b.id===blockId)),block=section?.blocks.find(b=>b.id===blockId);if(!block?.content.items)throw Error('此列表暂不支持文本卡片编辑。');
  const h=learningEsc;let pending=null;
  learningDraft={kind:'list-editor',dirty:false};
@@ -4994,11 +4995,11 @@ function learningGroupView(data,course){
  const state=learningGroupState.get(course.id)||{kind:'words',category:''};
  if(course.library!=='communication'||state.kind==='original'||learningSettings)return null;
  const sections=data.sections.map(s=>({...s,blocks:s.blocks.filter(b=>learningGroupKind(b)===state.kind)})).filter(s=>s.blocks.length);
- const categories=[...new Set(sections.map(s=>s.title))];
- const category=categories.includes(state.category)?state.category:'';
+ const categories=sections.flatMap(s=>s.blocks.map(b=>({id:b.id,title:b.title||s.title})));
+ const category=categories.some(b=>b.id===state.category)?state.category:'';
  const h=learningEsc;
- const nav='<nav class="learning-primary-groups" aria-label="内容分类">'+[['words','核心单词'],['dialogue','情景对话']].map(([key,title])=>'<button type="button" data-learning-group="'+key+'" aria-pressed="'+(state.kind===key)+'">'+title+'</button>').join('')+'</nav><nav class="learning-secondary-groups" aria-label="细分类别"><button type="button" data-learning-category="" aria-pressed="'+(!category)+'">全部'+(state.kind==='words'?'单词':'情景')+'</button>'+categories.map(title=>'<button type="button" data-learning-category="'+h(title)+'" aria-pressed="'+(category===title)+'">'+h(title)+'</button>').join('')+'</nav><details class="learning-original-access"><summary>其他资料与原章节</summary><p>知识点、表格及原章节顺序保留在这里。</p><button type="button" data-learning-group="original">查看原章节</button></details>';
- return {nav,sections:sections.filter(s=>!category||s.title===category)};
+ const nav='<nav class="learning-primary-groups" aria-label="内容分类">'+[['words','单词'],['dialogue','情景对话']].map(([key,title])=>'<button type="button" data-learning-group="'+key+'" aria-pressed="'+(state.kind===key)+'">'+title+'</button>').join('')+'</nav><nav class="learning-secondary-groups" aria-label="细分类别"><button type="button" data-learning-category="" aria-pressed="'+(!category)+'">全部'+(state.kind==='words'?'单词':'情景')+'</button>'+categories.map(b=>'<button type="button" data-learning-category="'+h(b.id)+'" aria-pressed="'+(category===b.id)+'">'+h(b.title)+'</button>').join('')+'</nav><details class="learning-original-access"><summary>其他资料与原章节</summary><p>知识点、表格及原章节顺序保留在这里。</p><button type="button" data-learning-group="original">查看原章节</button></details>';
+ return {nav,sections:sections.map(s=>({...s,blocks:s.blocks.filter(b=>!category||b.id===category)})).filter(s=>s.blocks.length)};
 }
 learningPanel.addEventListener('click',async e=>{
  const b=e.target.closest('[data-learning-group],[data-learning-category]');if(!b)return;
@@ -5421,10 +5422,10 @@ async function dialogueSplit(id){
  if(!batchDialog.open)batchDialog.showModal();
 }
 function dialogueSplitOptions(s){
- if(!s.dialogueGroups?.length)return;
+ if(!s.pageMode)return;
  const save=batchDialog.querySelector('#batchSave'),label=document.createElement('label');
  label.style.display='block';label.style.margin='16px 0';
- label.innerHTML='<input type="checkbox"> 用这段新音频替换已有短句默认音（不修改手录参考音）';
+ label.innerHTML='<input type="checkbox"> 用这段新音频替换已有单条默认音（不修改手录参考音）';
  const checkbox=label.querySelector('input');checkbox.checked=Boolean(s.dialogueReplace);
  checkbox.onchange=()=>{s.dialogueReplace=checkbox.checked;batchRemember();};save.parentElement.before(label);
 }
@@ -5432,7 +5433,7 @@ const dialogueOriginalEditor=batchEditor;
 batchEditor=function(){dialogueOriginalEditor();dialogueSplitOptions(batchAudioState);};
 async function dialogueReplaceClips(s){
  const current=await lessonPageResolve(s.words);
- if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('短句文字已改变，请重新打开切分。');
+ if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('词句文字已改变，请重新打开切分。');
  if(!confirm('确认用已试听的切片替换这些短句的默认发音？相同文字共用默认音，其他位置也会更新。整段原音及手录参考音保留。'))throw Error('已取消替换，旧音频不变。');
  const clips=new Map();current.forEach((w,i)=>{if(!clips.has(w.word))clips.set(w.word,batchWav(s.buffer,...s.ranges[i]));});
  await dialogueWriteClips(clips);

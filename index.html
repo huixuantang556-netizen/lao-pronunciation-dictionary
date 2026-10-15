@@ -5462,6 +5462,52 @@ document.addEventListener('click',async e=>{
  button.disabled=true;try{await dialogueSplit(button.dataset.dialogueSplit);}catch(error){alert(error.message);}finally{button.disabled=false;}
 });
 </script>
+<script data-learning-bundle="batch-regenerate">
+/* Explicit paid retry from the cutting screen; previews never overwrite the old batch. */
+async function batchRegenerateSource(s){
+ if(!s?.words?.length)throw Error('没有可重新生成的项目。');
+ const text=lessonPageText(s.words);
+ if(text.length>5000)throw Error('本批超过 5,000 字符，请返回列表选择较小范围。');
+ const blob=await defaultSpeech(text,{batchPause:true,force:true,previewOnly:true});
+ const buffer=await batchDecode(blob);
+ return {blob,buffer,ranges:batchRanges(buffer,s.words.length,.25)||[]};
+}
+async function batchAcceptRegenerated(s,result){
+ if(batchAudioState!==s)throw Error('当前批次已变化，未替换。');
+ await ttsCache('readwrite',s.key,result.blob);
+ batchAudioState={...s,...result,confirmed:[],continuous:false};
+ batchRemember();
+}
+async function batchRegenerateCurrent(){
+ if(batchAudioBusy)return;
+ if(recorder||learningHasWork())throw Error('请先完成编辑或录音。');
+ if(!confirm('重新生成当前整批音频会消耗额度。会先试听新版本，采用后需要重新核对切分位置；已保存的单条音频和手录音不会被自动修改。继续？'))return;
+ const s=batchAudioState;batchAudioBusy=true;let dialog,url,accepted=false;
+ try{
+  batchDialog.querySelectorAll('audio').forEach(a=>a.pause());stopPracticeAudio();
+  batchNotice('正在重新生成本批音频，请勿重复提交。原音频及切分进度暂时保留…');
+  const result=await batchRegenerateSource(s);
+  dialog=document.createElement('dialog');url=URL.createObjectURL(result.blob);
+  dialog.innerHTML='<h2>试听重新生成的整批音频</h2><audio controls style="width:100%"></audio><p>满意后采用新音频并重新切分；取消会保留原音频和切分进度。已消耗的生成额度不会退回。</p><button data-accept>采用新音频，重新切分</button> <button data-cancel>取消，保留旧版本</button><p role="status"></p>';
+  dialog.querySelector('audio').src=url;document.body.append(dialog);dialog.showModal();
+  await new Promise(resolve=>{let saving=false;
+   dialog.querySelector('[data-cancel]').onclick=()=>{if(!saving)resolve();};
+   dialog.addEventListener('cancel',e=>{e.preventDefault();if(!saving)resolve();});
+   dialog.querySelector('[data-accept]').onclick=async()=>{if(saving)return;saving=true;try{await batchAcceptRegenerated(s,result);accepted=true;resolve();}catch(e){dialog.querySelector('[role="status"]').textContent=e.message;saving=false;}};
+  });
+  if(accepted){batchEditor();batchNotice('已采用新整段音频。旧切分时间和试听确认已重置，请重新试听核对后保存切片。');}
+  else batchNotice('已取消采用新版本；原音频和切分进度仍保留。生成额度不会退回。');
+ }catch(e){batchNotice(e.message+' 原批次未被自动清除。');}
+ finally{if(dialog){dialog.querySelector('audio').pause();dialog.close();dialog.remove();}if(url)URL.revokeObjectURL(url);batchAudioBusy=false;}
+}
+const batchBeforeRegenerateEditor=batchEditor;
+batchEditor=function(){
+ batchBeforeRegenerateEditor();
+ const button=document.createElement('button');button.type='button';button.textContent='↻ 发音不满意？重新生成本批音频';
+ button.onclick=()=>batchRegenerateCurrent().catch(e=>batchNotice(e.message));
+ batchDialog.querySelector('#batchFull').parentElement.after(button);
+};
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

@@ -5478,10 +5478,10 @@ async function batchAcceptRegenerated(s,result){
  batchAudioState={...s,...result,confirmed:[],continuous:false};
  batchRemember();
 }
-async function batchRegenerateCurrent(){
- if(batchAudioBusy)return;
+async function batchRegenerateCurrent(approved=false){
+ if(batchAudioBusy){batchNotice('当前音频操作尚未完成，请勿重复提交。');return;}
  if(recorder||learningHasWork())throw Error('请先完成编辑或录音。');
- if(!confirm('重新生成当前整批音频会消耗额度。会先试听新版本，采用后需要重新核对切分位置；已保存的单条音频和手录音不会被自动修改。继续？'))return;
+ if(!approved)throw Error('请点击页面内的“确认重新生成”后提交。');
  const s=batchAudioState;batchAudioBusy=true;let dialog,url,accepted=false;
  try{
   batchDialog.querySelectorAll('audio').forEach(a=>a.pause());stopPracticeAudio();
@@ -5501,11 +5501,17 @@ async function batchRegenerateCurrent(){
  finally{if(dialog){dialog.querySelector('audio').pause();dialog.close();dialog.remove();}if(url)URL.revokeObjectURL(url);batchAudioBusy=false;}
 }
 const batchBeforeRegenerateEditor=batchEditor;
+const batchOriginalNotice=batchNotice;
+batchNotice=function(message){batchOriginalNotice(message);const top=batchDialog.querySelector('[data-regenerate-status]');if(top)top.textContent=message;};
 batchEditor=function(){
  batchBeforeRegenerateEditor();
- const button=document.createElement('button');button.type='button';button.textContent='↻ 发音不满意？重新生成本批音频';
- button.onclick=()=>batchRegenerateCurrent().catch(e=>batchNotice(e.message));
- batchDialog.querySelector('#batchFull').parentElement.after(button);
+ const panel=document.createElement('section');panel.style.cssText='padding:12px 0;';
+ panel.innerHTML='<button type="button" data-redo>↻ 发音不满意？重新生成本批音频</button><div data-redo-confirm hidden><p>重新生成会消耗额度。先试听再决定是否采用；已保存的单条音频和手录音不自动修改。</p><button type="button" data-redo-start>确认重新生成（可能计费）</button> <button type="button" data-redo-cancel>取消</button></div><p data-regenerate-status role="status" aria-live="polite" style="white-space:pre-wrap"></p>';
+ const button=panel.querySelector('[data-redo]'),box=panel.querySelector('[data-redo-confirm]'),start=panel.querySelector('[data-redo-start]'),cancel=panel.querySelector('[data-redo-cancel]');
+ button.onclick=()=>{if(batchAudioBusy){batchNotice('已有音频操作正在进行，请等待完成。');return;}box.hidden=false;batchNotice('尚未提交生成请求。请在下方确认；生成过程中请勿重复点击。');};
+ cancel.onclick=()=>{box.hidden=true;batchNotice('已取消，未提交生成请求。');};
+ start.onclick=async()=>{if(start.disabled)return;button.disabled=start.disabled=cancel.disabled=true;start.textContent='正在处理，请稍候…';try{await batchRegenerateCurrent(true);}catch(e){batchNotice(e.message);}finally{button.disabled=start.disabled=cancel.disabled=false;start.textContent='确认重新生成（可能计费）';}};
+ batchDialog.querySelector('#batchFull').parentElement.after(panel);
 };
 </script>
 <script src="./offline.js"></script>

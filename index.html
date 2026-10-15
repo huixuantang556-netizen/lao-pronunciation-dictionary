@@ -2974,7 +2974,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  else if(b.contentType==='knowledge')body='<p class="learn-note">'+h(x.body)+'</p><div class="learn-glyphs">'+(m.alphabetKeys||[]).map(k=>{const [r,c]=k.split(':').map(Number),f=chart[k]??window.learningAlphabetRows()[r]?.[2][c];return f?'<button class="learn-glyph" lang="lo" data-learn="glyph" data-form="'+h(f)+'" data-alphabet-key="'+h(k)+'">'+h(f.replaceAll('x','◌'))+'</button>':'';}).join('')+'</div>'+((m.unresolvedAlphabet||[]).length?'<p>待关联字母：'+h(m.unresolvedAlphabet.join('、'))+'</p>':'');
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
- else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
+ else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-dialogue-split="'+h(m.id)+'">✂ 切分已有整段音频</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
  return '<section class="learn-knowledge"><h3>'+h(b.title||b.contentType)+'</h3><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings&&Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">＋ 添加 / 勾选移除卡片</button>':'')+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
@@ -3078,7 +3078,7 @@ let batchAudioState=null,batchAudioBusy=false,batchAudioURL=null;
 const batchDraftKey=workspaceName('lao-batch-audio-draft-v1');
 const batchDialog=document.createElement('dialog');batchDialog.id='batchAudioDialog';document.body.append(batchDialog);
 function batchNotice(message){batchDialog.querySelector('[data-batch-status]').textContent=message;}
-function batchRemember(){if(batchAudioState?.key)localStorage.setItem(batchDraftKey,JSON.stringify({pageMode:Boolean(batchAudioState.pageMode),analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));}
+function batchRemember(){if(batchAudioState?.key)localStorage.setItem(batchDraftKey,JSON.stringify({pageMode:Boolean(batchAudioState.pageMode),dialogueReplace:Boolean(batchAudioState.dialogueReplace),analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));}
 function batchClose(){if(batchAudioBusy)return;stopPracticeAudio();batchDialog.querySelectorAll('audio').forEach(a=>a.pause());if(batchAudioURL)URL.revokeObjectURL(batchAudioURL);batchAudioURL=null;batchDialog.close();}
 batchDialog.addEventListener('cancel',e=>{e.preventDefault();batchClose();});
 async function batchDecode(blob){const ctx=new (window.AudioContext||window.webkitAudioContext)();try{return await ctx.decodeAudioData(await blob.arrayBuffer());}finally{await ctx.close();}}
@@ -3233,7 +3233,7 @@ async function lessonPagePrepare(page,fromBatch=false){
   }catch(e){batchNotice(e.message);}finally{batchAudioBusy=false;if($('#pageGenerate'))$('#pageGenerate').disabled=false;}
  };
 }
-async function lessonPageSaveClips(s){
+async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.dialogueGroups?.length){await dialogueReplaceClips(s);return;}
  const current=await lessonPageResolve(s.words);
  if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('本页文字已变化，请重新核对，未保存切片');
  const cache=await cloudCacheRows(),existing=new Set(cache.flatMap(r=>{try{return [JSON.parse(r.key)[1]];}catch(_){return [];}})),seen=new Set(),clips=[];
@@ -3382,7 +3382,7 @@ async function batchAssertMissing(words){
 }
 async function batchOpenSavedDialogue(id){
  if(batchAudioBusy||recorder||learningHasWork())return;
- const inventory=await batchFreshInventory(),d=inventory.content.dialogues.find(d=>d.id===id),state=inventory.states.get(id),full=state?.full||state?.savedBatch;
+ const inventory=await batchFreshInventory(),d=inventory.content.dialogues.find(d=>d.id===id),state=inventory.states.get(id);let full=state?.full||state?.savedBatch;const fullText=d?.words.map(w=>w.word).join('\n');const latest=fullText?await learningCachedSpeech(fullText):null;if(latest)full={blob:latest,key:JSON.stringify([ttsSettings.endpoint||'',fullText]),words:d.words.map(w=>({...w,dialogueId:id})),fresh:true};
  if(!d||!full)throw Error('未找到可用原音，请刷新列表或先同步音频；不会改为付费生成。');
  if(!full.words)throw Error('原音属于较大的批次，其中部分句子已不在课程中。请用“恢复切分草稿”打开；不会重复生成。');
  batchAudioBusy=true;
@@ -3391,12 +3391,12 @@ async function batchOpenSavedDialogue(id){
   if(draft&&draft.key!==full.key&&!confirm('打开已有原音会替换当前切分草稿，但不会删除原音和已保存切片。继续？'))return;
   stopPracticeAudio();let blob=full.blob,buffer=await batchDecode(blob);
   if(full.start||full.end!=null){const end=full.end??buffer.duration;if(full.start<0||end>buffer.duration+.05||end<=full.start)throw Error('原音片段范围无效，请在详情中核对。');blob=batchWav(buffer,full.start,Math.min(end,buffer.duration));buffer=await batchDecode(blob);}
-  const sameDraft=draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
+  const sameDraft=!full.fresh&&draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
   const words=sameDraft?draft.words:full.words,current=await lessonPageResolve(words);if(current.some((w,i)=>w.word!==words[i].word))throw Error('原音对应文字已变化，请先核对。');
   const key=full.key||JSON.stringify([ttsSettings.endpoint||'',lessonPageText(words)]);
   await ttsCache('readwrite',key,blob);
-  const resume=draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
-  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,dialogueGroups:resume?draft.dialogueGroups||[]:state.full?[{id,itemIds:d.words.map(w=>w.id)}]:[],ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
+  const resume=!full.fresh&&draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
+  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,dialogueGroups:resume?draft.dialogueGroups||[]:(full.fresh||state.full)?[{id,itemIds:d.words.map(w=>w.id)}]:[],ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
   batchRemember();batchEditor();
  }finally{batchAudioBusy=false;}
 }
@@ -5412,6 +5412,54 @@ learningOpenDetail=async function(id){
  host.querySelector('.sa-content').before(panel);
  for(const b of panel.querySelectorAll('button'))b.onclick=async()=>{b.disabled=true;panel.querySelector('[role="status"]').textContent='正在准备音频，请勿重复提交…';try{await saAudioStart(id,b.hasAttribute('data-resume'));panel.querySelector('[role="status"]').textContent='切分操作不额外消耗生成额度。';}catch(e){panel.querySelector('[role="status"]').textContent=e.message;}finally{b.disabled=false;}};
 };
+</script>
+<script data-learning-bundle="dialogue-split">
+/* Split an already generated dialogue into its existing course rows. Never generates audio. */
+async function dialogueSplit(id){
+ if(batchAudioBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音。');
+ await batchOpenSavedDialogue(id);
+ if(!batchDialog.open)batchDialog.showModal();
+}
+function dialogueSplitOptions(s){
+ if(!s.dialogueGroups?.length)return;
+ const save=batchDialog.querySelector('#batchSave'),label=document.createElement('label');
+ label.style.display='block';label.style.margin='16px 0';
+ label.innerHTML='<input type="checkbox"> 用这段新音频替换已有短句默认音（不修改手录参考音）';
+ const checkbox=label.querySelector('input');checkbox.checked=Boolean(s.dialogueReplace);
+ checkbox.onchange=()=>{s.dialogueReplace=checkbox.checked;batchRemember();};save.parentElement.before(label);
+}
+const dialogueOriginalEditor=batchEditor;
+batchEditor=function(){dialogueOriginalEditor();dialogueSplitOptions(batchAudioState);};
+async function dialogueReplaceClips(s){
+ const current=await lessonPageResolve(s.words);
+ if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('短句文字已改变，请重新打开切分。');
+ if(!confirm('确认用已试听的切片替换这些短句的默认发音？相同文字共用默认音，其他位置也会更新。整段原音及手录参考音保留。'))throw Error('已取消替换，旧音频不变。');
+ const clips=new Map();current.forEach((w,i)=>{if(!clips.has(w.word))clips.set(w.word,batchWav(s.buffer,...s.ranges[i]));});
+ await dialogueWriteClips(clips);
+ localStorage.removeItem(batchDraftKey);batchNotice('已更新 '+clips.size+' 个短句默认音频。整段原音及手录参考音未修改；普通播放仍手录优先。请备份或同步音频。');
+ batchDialog.querySelector('#batchSave').textContent='已保存';
+}
+function dialogueWriteClips(clips){return new Promise((resolve,reject)=>{
+ const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);
+ req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);
+ req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio'),read=store.getAllKeys();
+  read.onsuccess=()=>{for(const key of read.result){let text;try{text=JSON.parse(key)[1];}catch(_){continue;}if(clips.has(text))store.put(clips.get(text),key);}
+   for(const [text,blob] of clips)store.put(blob,JSON.stringify([ttsSettings.endpoint||'',text]));};
+  tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};
+ };
+});}
+const dialogueOriginalDetail=learningOpenDetail;
+learningOpenDetail=async function(id){
+ await dialogueOriginalDetail(id);if(learningDetail!==id)return;
+ const snap=await learningSnapshot();if(learningDetail!==id||!batchCourseContent(snap).dialogues.some(d=>d.id===id))return;
+ const toolbar=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!toolbar)return;
+ const button=document.createElement('button');button.textContent='✂ 将已有整段音频切分到短句';toolbar.prepend(button);
+ button.onclick=async()=>{button.disabled=true;try{await dialogueSplit(id);}catch(e){alert(e.message);}finally{button.disabled=false;}};
+};
+document.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-dialogue-split]');if(!button)return;
+ button.disabled=true;try{await dialogueSplit(button.dataset.dialogueSplit);}catch(error){alert(error.message);}finally{button.disabled=false;}
+});
 </script>
 <script src="./offline.js"></script>
 </body>

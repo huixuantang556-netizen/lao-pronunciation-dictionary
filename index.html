@@ -5109,6 +5109,120 @@ pronunciationPanel.addEventListener('dblclick',async event=>{
  try{if(choice?.detailId)await learningOpenDetail(choice.detailId);else if(choice?.text)await pronunciationManage(choice.text);else pronunciationOpenTone(slot.closest('[data-pron-tone]').dataset.pronTone);}catch(e){const status=document.querySelector('#pronunciationStatus');if(status)status.textContent=e.message;}
 },true);
 </script>
+<style>
+.sentence-analysis{margin:24px 0;border-top:1px solid var(--line);padding-top:18px;text-align:left}
+.sentence-analysis h3{margin:0 0 10px}.sentence-analysis p{line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.sentence-analysis details{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px}.sentence-analysis summary{cursor:pointer;line-height:1.8;overflow-wrap:anywhere}
+.sa-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.sentence-analysis button{min-height:44px;font-size:14px;padding:8px 12px}
+.sa-help,.sa-source{font-size:13px;color:var(--muted)}.sa-status{font-size:14px;color:var(--brand)}.sa-note{background:var(--soft);padding:12px;border-radius:10px}
+.sa-words{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.sa-unit{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff;max-width:100%;margin:8px 0}.sa-unit [data-sa-play]{flex:1;text-align:left;color:var(--brand);border:0;white-space:normal;overflow-wrap:anywhere}.sa-unit [lang=lo]{font-size:22px;line-height:1.8;letter-spacing:normal}.sa-unit small{flex-basis:100%;color:var(--muted);font-size:13px;line-height:1.6}.sa-grammar strong{font-weight:600}.sa-grammar{padding:8px 0}.sa-editor textarea{box-sizing:border-box;width:100%;font-size:16px}.sa-preview{padding:12px;background:var(--soft);border-radius:12px}.sa-link{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sa-link select{grid-column:1/-1;width:100%;font-size:16px;min-height:44px}.sa-quiz fieldset{margin:12px 0;border:1px solid var(--line);border-radius:10px}.sa-quiz select{min-height:44px;font-size:16px;width:100%}.sentence-analysis [hidden]{display:none!important}
+@media(max-width:560px){.sa-words{grid-template-columns:1fr}.sa-actions button{flex:1 1 130px}.sentence-analysis details{padding:10px}.sa-link{grid-template-columns:1fr}}
+</style>
+<script>
+/* Optional annotations: imported content never replaces a sentence or dictionary entry. */
+const sentenceAnalysisFormat='lao-sentence-analysis-v1';
+function saTextKey(text){return String(text||'').normalize('NFC').replace(/\s+/gu,'');}
+function saValidate(value,target){
+ if(!value||value.format!==sentenceAnalysisFormat)throw Error('解析格式不正确，请使用本页下载的 AI 模板。');
+ const text=(v,label,max=12000)=>{if(typeof v!=='string'||v.length>max)throw Error(label+'须为文本且不超过 '+max+' 字符。');return v.trim();};
+ const list=(v,label,max)=>{if(!Array.isArray(v)||v.length>max)throw Error(label+'须为列表且不超过 '+max+' 项。');return v;};
+ const original=text(value.original,'原文');if(!original||saTextKey(original)!==saTextKey(target))throw Error('解析原文与当前句子不一致。请打开正确的句子，或让 AI 保持原文不变。');
+ const grammar=items=>list(items||[],'语法',40).map(g=>({pattern:text(g.pattern,'句型',1000),explanation:text(g.explanation,'语法说明',6000)}));
+ const segments=list(value.segments,'分段',60).map((s,i)=>{
+  const lao=text(s.lao,'第 '+(i+1)+' 段原文',3000);if(!lao)throw Error('分段原文不能为空。');
+  return {lao,chinese:text(s.chinese||'','分段翻译',3000),grammar:grammar(s.grammar),words:list(s.words||[],'单词',80).map(w=>{const lao=text(w.lao,'单词',150);if(!lao||!saTextKey(s.lao).includes(saTextKey(lao)))throw Error('单词“'+lao+'”不在对应分段中。额外例词请写在语法说明里。');return {lao,meaning:text(w.meaning||'','本句词义',1000),role:text(w.role||'','词性／作用',1000)};})};
+ });
+ if(!segments.length||saTextKey(segments.map(s=>s.lao).join(''))!==saTextKey(original))throw Error('请按顺序完整拆分原文，不要遗漏、重复或改写字符（包括标点）。');
+ const quiz=list(value.quiz||[],'小测验',30).map(q=>{const options=list(q.options,'选项',6).map(x=>text(x,'选项',1000));if(options.length<2||!Number.isInteger(q.answer)||q.answer<0||q.answer>=options.length)throw Error('小测验 answer 须为正确选项的序号，从 0 开始。');return {question:text(q.question,'题目',2000),options,answer:q.answer,explanation:text(q.explanation||'','答案说明',3000)};});
+ return {format:sentenceAnalysisFormat,original,translation:text(value.translation||'','全文翻译'),notes:text(value.notes||'','说明'),segments,patterns:grammar(value.patterns),quiz};
+}
+function saTemplate(original){return {format:sentenceAnalysisFormat,original,translation:'',notes:'AI 整理，语言知识待核对。',segments:[{lao:original,chinese:'',words:[],grammar:[]}],patterns:[],quiz:[]};}
+function saPrompt(original){return `请为下面的老挝语原文提供中文学习解析，只输出一个合法 JSON 对象（不要 Markdown 表格，不要代码或 HTML）。不要改变原文、补写主语或标点。segments.lao 按顺序拼接后，忽略空白必须与 original 完全一致。单词和短语可以重叠（例如水、杯子、水杯），但每个 words.lao 必须实际出现在该段。
+只使用以下字段；不要自行填写词条 ID、音频网址或材料 ID。词义填写本句含义，人名和多义词写清语境。无法确定的语法或翻译要在 notes 或 explanation 中明确标注待核对，不能编造。自然翻译补出的内容也要注明。
+格式说明：translation 是全文翻译；segments 为逐句／分句拆解；words 每项为 {"lao":"原词或短语","meaning":"本句词义","role":"词性或本句作用"}；grammar 和 patterns 每项为 {"pattern":"结构","explanation":"中文说明，可含例句"}；quiz 每项为 {"question":"题目","options":["选项一","选项二","选项三"],"answer":0,"explanation":"解析"}，answer 从 0 开始。空数组允许保留。建议提供 3–5 道小测验。
+请填充下面模板，保留 format 和 original：
+${JSON.stringify(saTemplate(original),null,2)}`;}
+function saDownload(name,text){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function saWords(analysis){const rows=[],seen=new Set();for(const s of analysis.segments)for(const w of s.words){const key=JSON.stringify([w.lao,w.meaning]);if(!seen.has(key)){seen.add(key);rows.push(w);}}return rows;}
+function saGrammarHtml(rows){return rows.map(g=>'<div class="sa-grammar"><strong>'+learningEsc(g.pattern)+'</strong><p>'+learningEsc(g.explanation)+'</p></div>').join('');}
+function saUnitHtml(unit,label){const h=learningEsc;return '<span class="sa-unit"><button type="button" data-sa-play="'+h(unit.target||'')+'" aria-label="播放 '+h(unit.lao)+'"><span lang="lo">'+h(unit.lao)+'</span></button><button type="button" data-sa-detail="'+h(unit.target||'')+'" aria-label="查看 '+h(unit.lao)+' 的详情及录音">详情 ›</button>'+(label?'<small>'+h(label)+'</small>':'')+'</span>';}
+function saRenderContent(a){
+ const h=learningEsc;return '<p class="sa-source">AI 整理／待核对 · '+(a.savedAt?h(new Date(a.savedAt).toLocaleDateString()):'导入预览')+'</p>'+(a.translation?'<details><summary>全文译文（解析附注，不替换原译文）</summary><p>'+h(a.translation)+'</p></details>':'')+(a.notes?'<p class="sa-note">'+h(a.notes)+'</p>':'')+a.segments.map((s,i)=>'<details class="sa-segment"><summary>第 '+(i+1)+' 段 · <span lang="lo">'+h(s.lao)+'</span></summary>'+saUnitHtml(s,'分句点读／录音')+'<p>'+h(s.chinese)+'</p><h4>单词／短语 · 本句用法</h4><div class="sa-words">'+s.words.map(w=>saUnitHtml(w,[w.meaning,w.role].filter(Boolean).join(' · '))).join('')+'</div>'+saGrammarHtml(s.grammar)+'</details>').join('')+(a.patterns.length?'<details><summary>重点句型</summary>'+saGrammarHtml(a.patterns)+'</details>':'')+(a.quiz.length?'<details class="sa-quiz"><summary>语法小测验 · '+a.quiz.length+' 题</summary>'+a.quiz.map((q,i)=>'<fieldset><legend>'+h(q.question)+'</legend><select aria-label="第 '+(i+1)+' 题答案" data-sa-quiz="'+i+'"><option value="">请选择</option>'+q.options.map((x,n)=>'<option value="'+n+'">'+h(x)+'</option>').join('')+'</select><p class="sa-quiz-result" role="status"></p></fieldset>').join('')+'</details>':'');
+}
+async function saOpenNested(id,button){
+ if(learningHasWork()||recorder)throw Error('请先保存解析、编辑内容或完成录音。');
+ if(!id)throw Error('请先保存解析，再打开点读资料。');
+ const parent=letterDetailCapture(button);stopPracticeAudio();await learningOpenDetail(id);
+ if(parent&&learningDetail===id){letterDetailParents.push(parent);letterDetailBackButton();}
+}
+async function saPlay(id){
+ if(learningHasWork()||recorder)throw Error('请先保存正在编辑的内容或完成录音。');
+ if(!id)throw Error('请先保存解析。');
+ const {m,w,snap}=await learningResolve(id);if(m.deleted)throw Error('资料已删除或尚未同步。');
+ const manual=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(manual){await learningPlayBlob(manual.blob,manual.start||0,manual.end??null);return;}
+ if(m.audioNeedsReview)throw Error('音频需要核对，请打开详情。');
+ for(const ref of (m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).slice().reverse()){const blob=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted)?.blob;if(blob){await learningPlayBlob(blob,ref.start||0,ref.end??null);return;}}
+ const text=w?.word||m.textLao,blob=await learningCachedSpeech(text);if(blob){await learningPlayBlob(blob);return;}
+ throw Error('“'+text+'”暂无可用的已保存参考音。请点“详情”录制参考发音，或主动生成默认音；不会拿整句录音代替单词。');
+}
+function saMakeWrites(data,parent,snap,words,links){
+ const existing=parent.sentenceAnalysis,units=[],findOld=(type,text,meaning)=>{const rows=type==='segment'?(existing?.segments||[]):saWords(existing||{segments:[]});return rows.find(r=>r.lao===text&&(type==='segment'||r.meaning===meaning));};
+ function unit(type,text,meaning,note){
+  const old=findOld(type,text,meaning),prior=snap.learningMaterials.find(m=>m.id===old?.target&&!m.deleted&&m.analysisOwner===parent.id&&m.textLao===text);
+  const id=prior?.id||'analysis-unit:'+learningUid();
+  // Reusing a unit never destroys its audio, flags, edits or review records.
+  if(!prior)units.push({...learningBlank(id,'reading_drill',text),translationZh:meaning,note,source:'句子解析 · AI 整理／待核对',analysisOwner:parent.id,analysisUnitType:type});
+  return id;
+ }
+ const mapping=new Map();for(const w of saWords(data)){const key=JSON.stringify([w.lao,w.meaning]),ref=links.get(key);if(ref){const word=learningFindWord(ref,words);if(!word||saTextKey(word.word)!==saTextKey(w.lao))throw Error('关联单词已变化，请重新预览。');mapping.set(key,'word:'+word.syncId);}else mapping.set(key,unit('word',w.lao,w.meaning,w.role));}
+ const analysis={...data,savedAt:Date.now(),segments:data.segments.map(s=>({...s,target:unit('segment',s.lao,s.chinese,s.grammar.map(g=>g.pattern+'\n'+g.explanation).join('\n\n')),words:s.words.map(w=>({...w,target:mapping.get(JSON.stringify([w.lao,w.meaning]))}))}))};
+ return [...units,{...parent,sentenceAnalysis:analysis,updatedAt:Date.now()}];
+}
+const saOriginalDetail=learningOpenDetail;
+learningOpenDetail=async function(id){
+ await saOriginalDetail(id);if(learningDetail!==id)return;
+ const {m,w}=await learningResolve(id);if(learningDetail!==id||w||m.deleted||m.analysisOwner||!['sentence','dialogue','reading_drill'].includes(m.contentType))return;
+ const detail=learningDialog.querySelector('.learn-detail');if(!detail)return;
+ const host=document.createElement('section');host.className='sentence-analysis';host.dataset.saParent=m.id;
+ const h=learningEsc,a=m.sentenceAnalysis;
+ host.innerHTML='<h3>句子解析</h3><p class="sa-help">单击老挝语点读，双击或点“详情”查看／录音，可返回上一级。缺音不会自动生成。</p><div class="sa-content">'+(a?saRenderContent(a):'<p>还没有解析。下载本句 AI 模板，让 AI 按格式分析后粘贴或导入。</p>')+'</div><div class="sa-actions"><button type="button" data-sa-action="prompt">下载本句 AI 提示词</button><button type="button" data-sa-action="template">下载 JSON 模板</button><button type="button" data-sa-action="edit">'+(a?'更新／编辑解析':'添加解析')+'</button></div><div class="sa-editor" hidden><label>粘贴 AI 返回的 JSON（也可选文件）<textarea rows="10" spellcheck="false" aria-label="句子解析 JSON"></textarea></label><input type="file" accept=".json,.txt,application/json,text/plain" aria-label="选择句子解析文件"><div class="sa-actions"><button type="button" data-sa-action="preview">预览并核对</button><button type="button" data-sa-action="cancel">取消编辑</button></div><div class="sa-preview"></div><button type="button" data-sa-action="save" hidden>确认保存解析</button></div><p class="sa-status" role="status"></p>';
+ const audio=detail.querySelector('.learn-audio-bottom');if(audio)audio.before(host);else detail.append(host);
+ const status=host.querySelector('.sa-status'),editor=host.querySelector('.sa-editor'),area=host.querySelector('textarea'),save=host.querySelector('[data-sa-action="save"]');let preview=null,timer=null;
+ const fail=e=>{status.textContent=e.message;};
+ const dirty=()=>{preview=null;save.hidden=true;host.querySelector('.sa-preview').replaceChildren();learningDraft={kind:'sentence-analysis',dirty:true};};
+ area.oninput=dirty;
+ host.querySelector('input[type="file"]').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>1048576)throw Error('解析文件不能超过 1 MiB。');area.value=await file.text();dirty();}catch(error){fail(error);}};
+ host.onchange=e=>{if(e.target.matches('[data-sa-quiz]')){const q=a?.quiz[Number(e.target.dataset.saQuiz)],v=e.target.value;if(q)e.target.nextElementSibling.textContent=v===''?'':(Number(v)===q.answer?'回答正确。':'正确答案：'+q.options[q.answer]+'。')+' '+q.explanation;}};
+ host.ondblclick=e=>{const b=e.target.closest('[data-sa-play]');if(!b)return;clearTimeout(timer);e.preventDefault();void saOpenNested(b.dataset.saPlay,b).catch(fail);};
+ host.onclick=async e=>{
+  const b=e.target.closest('button');if(!b||!host.contains(b))return;
+  try{
+   if(b.dataset.saPlay!==undefined){clearTimeout(timer);if(e.detail>1)return;timer=setTimeout(()=>{if(b.isConnected)void saPlay(b.dataset.saPlay).then(()=>{status.textContent='正在播放已保存参考音。';}).catch(fail);},350);return;}
+   if(b.dataset.saDetail!==undefined){clearTimeout(timer);await saOpenNested(b.dataset.saDetail,b);return;}
+   const action=b.dataset.saAction;if(!action)return;
+   if(action==='prompt'){saDownload('本句-AI解析提示词.txt',saPrompt(m.textLao));return;}
+   if(action==='template'){saDownload('句子解析模板.json',JSON.stringify(saTemplate(m.textLao),null,2));return;}
+   if(action==='edit'){if(learningHasWork()||recorder)throw Error('请先完成其他编辑或录音。');editor.hidden=false;area.value=JSON.stringify(a?saValidate(a,m.textLao):saTemplate(m.textLao),null,2);area.focus();return;}
+   if(action==='cancel'){editor.hidden=true;preview=null;save.hidden=true;learningDraft=null;status.textContent='已取消编辑，已保存资料不变。';return;}
+   if(action==='preview'){
+    if(learningRecorder||learningBusy||learningPendingRecording||recorder)throw Error('请先完成录音或保存。');
+    if(area.value.length>1048576)throw Error('解析内容过长。');
+    const raw=area.value.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const data=saValidate(JSON.parse(raw),m.textLao);
+    const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]),parent=snap.learningMaterials.find(x=>x.id===m.id&&!x.deleted);
+    if(!parent||saTextKey(parent.textLao)!==saTextKey(data.original))throw Error('原句已变化，请重新打开详情。');
+    const tokens=saWords(data);preview={data,snap,words,parent,tokens};
+    host.querySelector('.sa-preview').innerHTML='<h4>确认更新的是当前句子</h4><p lang="lo">'+h(parent.textLao)+'</p><p>'+data.segments.length+' 个分段 · '+tokens.length+' 个不同的词义卡片。只保存解析附注；原句、原译文、录音和学习记录不变。更新会替换旧解析说明，原点读录音保留。</p><h4>词条关联：按本句词义选择，不会自动改词典</h4>'+tokens.map((token,i)=>{const candidates=words.filter(w=>saTextKey(w.word)===saTextKey(token.lao)),old=saWords(parent.sentenceAnalysis||{segments:[]}).find(w=>w.lao===token.lao&&w.meaning===token.meaning);return '<label class="sa-link"><span lang="lo">'+h(token.lao)+'</span><span>'+h(token.meaning)+'</span><select data-sa-link="'+i+'"><option value="">独立解析卡（不新增词典，可录音）</option>'+candidates.map(w=>'<option value="'+h(w.syncId)+'" '+(old?.target==='word:'+w.syncId?'selected':'')+'>'+h(w.meaning||'无释义')+'</option>').join('')+'</select></label>';}).join('')+'<details><summary>预览解析正文</summary>'+saRenderContent(data)+'</details>';
+    save.hidden=false;learningDraft={kind:'sentence-analysis',dirty:true};status.textContent='请核对原文和词义关联，再确认保存。';return;
+   }
+   if(action==='save'){
+    if(!preview)throw Error('请先预览。');if(learningBusy||learningRecorder||learningPendingRecording||recorder)throw Error('请先完成录音或保存。');
+    learningBusy=true;save.disabled=true;
+    try{const links=new Map(preview.tokens.map((w,i)=>[JSON.stringify([w.lao,w.meaning]),host.querySelector('[data-sa-link="'+i+'"]').value]));const currentWords=await allEntries();const records=saMakeWrites(preview.data,preview.parent,preview.snap,currentWords,links);await learningWrite({learningMaterials:records},preview.snap);learningDraft=null;await learningOpenDetail(id);const message=learningDialog.querySelector('.sa-status');if(message)message.textContent='解析已保存。可通过原有云端同步／导出备份带到其他设备；单词暂无参考音时请进入详情补录。';}finally{learningBusy=false;save.disabled=false;}
+   }
+  }catch(error){fail(error);}
+ };
+};
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

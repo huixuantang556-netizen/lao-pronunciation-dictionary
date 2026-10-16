@@ -3347,6 +3347,15 @@ function batchCourseContent(snap){
  return {sentences,dialogues};
 }
 function batchModeButtons(){return '<nav class="batch-modes"><button data-batch-mode="words">词汇</button><button data-batch-mode="sentences">句子</button><button data-batch-mode="dialogues">完整对话</button></nav>';}
+function batchSentenceReady(word,m,snap,cache){
+ if(!m||m.deleted||m.audioNeedsReview)return false;
+ if(cache.get(word.word)?.blob?.size)return true;
+ return (m.audioSources||[]).some(ref=>{
+  if(!learningIsReference(ref)||ref.needsReview)return false;
+  const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
+  return Boolean(asset?.blob?.size)&&Number.isFinite(ref.start??0)&&(ref.start??0)>=0&&(ref.end==null||Number.isFinite(ref.end)&&ref.end>(ref.start??0));
+ });
+}
 function batchContentInventory(snap,cacheRows){
  const content=batchCourseContent(snap),cache=new Map(cacheRows.filter(r=>r.blob?.size).flatMap(r=>{try{return [[JSON.parse(r.key)[1],r]];}catch(_){return [];}}));
  const materials=new Map(snap.learningMaterials.map(m=>[m.id,m])),byText=new Map(),covered=new Set(),states=new Map();
@@ -3372,7 +3381,7 @@ function batchContentInventory(snap,cacheRows){
   if(!full){const run=runs.find(r=>r.texts.some(text=>d.words.some(w=>w.word===text)));if(run){const words=run.texts.map(text=>content.sentences.find(w=>w.word===text));savedBatch={...run,words:words.every(Boolean)?words:null};}}
   states.set(d.id,{full,savedBatch,blocked:!full&&refs.length>0});
  }
- for(const d of content.dialogues){const state=states.get(d.id);state.missing=d.words.filter(w=>!covered.has(w.word)&&!byText.has(w.word));state.selectable=!state.full&&!state.blocked&&state.missing.length===d.words.length;}
+ for(const d of content.dialogues){const state=states.get(d.id);state.completed=d.words.length>0&&d.words.every(w=>batchSentenceReady(w,materials.get(w.id),snap,cache));state.missing=d.words.filter(w=>!covered.has(w.word)&&!byText.has(w.word));state.selectable=!state.full&&!state.blocked&&state.missing.length===d.words.length;}
  return {content,states,missing:w=>!covered.has(w.word)&&!byText.has(w.word)};
 }
 async function batchFreshInventory(){return batchContentInventory(await learningSnapshot(),await cloudCacheRows());}
@@ -3409,17 +3418,17 @@ async function batchOpenContent(mode){
  const unique=all.filter(r=>{const key=mode==='dialogues'?JSON.stringify(r.words.map(w=>w.word)):r.word;if(seen.has(key))return false;seen.add(key);return true;});
  const rows=mode==='dialogues'?unique:unique.filter(inventory.missing),selectable=r=>mode!=='dialogues'||inventory.states.get(r.id).selectable;
  let page=0,visible=[];const selected=new Set(),h=learningEsc;
- batchDialog.innerHTML='<h2>批量生成 · 音频切分</h2>'+batchModeButtons()+'<p>'+(mode==='dialogues'?'只勾选完全缺音频的对话。已有整段使用“打开／切分”，不发起生成请求；部分单句已有音频时，只补齐缺句。每页 30 组，每批最多 5,000 字符。':'每页 30 句，可跨页、跨课程多选，不限 30 句（每批最多 5,000 字符）。隐藏已有音频／缓存或待核对、待同步的句子，已跳过 '+(all.length-rows.length)+' 项。')+' 完全相同的朗读内容只列一次；有整段音频但尚未保存单句的内容不会重复生成，请在完整对话中打开已有音频切分。'+'</p><input id="batchContentSearch" type="search" placeholder="搜索课程、对话、老挝语或中文"><div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+'<p><button id="batchContentSelect">全选本页</button><button id="batchContentUnselect">取消本页</button><button id="batchContentClear">清空已选</button><button id="batchContentGo">准备合成与切分</button></p>'+'<p><button data-batch-mode="words">返回词汇／恢复切分草稿</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ batchDialog.innerHTML='<h2>批量生成 · 音频切分</h2><small style="color:#647d78">切分状态版 1016.2</small>'+batchModeButtons()+'<p>'+(mode==='dialogues'?'已完成的对话默认隐藏，可勾选“显示已完成”重新打开。只勾选完全缺音频的对话。已有整段使用“打开／切分”，不发起生成请求；部分单句已有音频时，只补齐缺句。每页 30 组，每批最多 5,000 字符。':'每页 30 句，可跨页、跨课程多选，不限 30 句（每批最多 5,000 字符）。隐藏已有音频／缓存或待核对、待同步的句子，已跳过 '+(all.length-rows.length)+' 项。')+' 完全相同的朗读内容只列一次；有整段音频但尚未保存单句的内容不会重复生成，请在完整对话中打开已有音频切分。'+'</p><input id="batchContentSearch" type="search" placeholder="搜索课程、对话、老挝语或中文">'+(mode==='dialogues'?'<label style="display:block;margin:12px 0"><input type="checkbox" id="batchShowCompleted" style="width:auto">显示已完成（'+rows.filter(r=>inventory.states.get(r.id).completed).length+' 组）</label>':'')+'<div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+'<p><button id="batchContentSelect">全选本页</button><button id="batchContentUnselect">取消本页</button><button id="batchContentClear">清空已选</button><button id="batchContentGo">准备合成与切分</button></p>'+'<p><button data-batch-mode="words">返回词汇／恢复切分草稿</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
- const draw=()=>{const q=$('#batchContentSearch').value.toLowerCase(),filtered=rows.filter(r=>[r.title,r.word,r.meaning,r.category,...(r.words||[]).flatMap(w=>[w.word,w.meaning])].join(' ').toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/30));page=Math.min(page,pages-1);visible=filtered.slice(page*30,page*30+30);
+ const draw=()=>{const q=$('#batchContentSearch').value.toLowerCase(),filtered=rows.filter(r=>(mode!=='dialogues'||$('#batchShowCompleted')?.checked||!inventory.states.get(r.id).completed)).filter(r=>[r.title,r.word,r.meaning,r.category,...(r.words||[]).flatMap(w=>[w.word,w.meaning])].join(' ').toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/30));page=Math.min(page,pages-1);visible=filtered.slice(page*30,page*30+30);
  $('#batchContentList').innerHTML=visible.map(r=>{
   const state=mode==='dialogues'?inventory.states.get(r.id):null,label=h(r.title||r.word)+(state?' · '+r.words.length+' 句':' · '+h(r.meaning));
   if(!state||state.selectable)return '<label style="display:block;margin:10px 0"><input type="checkbox" style="width:auto" data-batch-sentence="'+h(r.id)+'" '+(selected.has(r.id)?'checked':'')+'>'+label+(state?' · 待生成':'<small style="display:block">'+h(r.category)+'</small>')+'</label>';
-  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><span>'+label+'</span><small>'+(state.full?'已有整段原音':state.savedBatch?'已有批次原音待切分':state.blocked?'原音待核对／同步':state.missing.length?'部分单句已有音频':'单句音频已齐全')+'</small>'+(state.full||state.savedBatch?'<button style="padding:5px 10px;font-size:13px" data-batch-saved="'+h(r.id)+'">打开／切分</button>':'<button style="padding:5px 10px;font-size:13px" data-batch-detail="'+h(r.id)+'">查看详情</button>')+(!state.full&&!state.blocked&&state.missing.length?'<button style="padding:5px 10px;font-size:13px" data-batch-missing="'+h(r.id)+'">仅补缺句（'+state.missing.length+'）</button>':'')+'</div>';
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><span>'+label+'</span><small'+(state.completed?' style="color:#087f70;background:#e6f4ee;border-radius:999px;padding:5px 10px;font-weight:600"':'')+'>'+(state.completed?'✓ 已完成切分':state.full?'待切分 · 已有整段原音':state.savedBatch?'已有批次原音待切分':state.blocked?'原音待核对／同步':state.missing.length?'部分单句已有音频':'单句音频待核对／同步')+'</small>'+(state.full||state.savedBatch?'<button style="padding:5px 10px;font-size:13px" data-batch-saved="'+h(r.id)+'">'+(state.completed?'查看／重新切分':'继续切分')+'</button>':'<button style="padding:5px 10px;font-size:13px" data-batch-detail="'+h(r.id)+'">查看详情</button>')+(!state.full&&!state.blocked&&state.missing.length?'<button style="padding:5px 10px;font-size:13px" data-batch-missing="'+h(r.id)+'">仅补缺句（'+state.missing.length+'）</button>':'')+'</div>';
  }).join('')||'<p>没有匹配内容</p>';
  $('#batchContentCount').textContent='第 '+(page+1)+' / '+pages+' 页 · 共 '+filtered.length+' 项 · 已选 '+selected.size;
  $('#batchContentPrev').disabled=page===0;$('#batchContentNext').disabled=page>=pages-1;$('#batchContentSelect').disabled=!visible.some(selectable);$('#batchContentGo').disabled=!selected.size;};
- $('#batchContentSearch').oninput=()=>{page=0;draw();};$('#batchContentPrev').onclick=()=>{page--;draw();};$('#batchContentNext').onclick=()=>{page++;draw();};
+ if(mode==='dialogues')$('#batchShowCompleted').onchange=()=>{page=0;draw();};$('#batchContentSearch').oninput=()=>{page=0;draw();};$('#batchContentPrev').onclick=()=>{page--;draw();};$('#batchContentNext').onclick=()=>{page++;draw();};
  $('#batchContentList').onchange=e=>{const id=e.target.dataset.batchSentence;if(!id||!rows.some(r=>r.id===id&&selectable(r)))return;if(e.target.checked)selected.add(id);else selected.delete(id);draw();};
  $('#batchContentSelect').onclick=()=>{visible.filter(selectable).forEach(r=>selected.add(r.id));draw();};
  $('#batchContentUnselect').onclick=()=>{visible.forEach(r=>selected.delete(r.id));draw();};

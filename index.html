@@ -5638,6 +5638,13 @@ function sabPreview(value,snap){
   return {item,parent,data,same};
  }catch(error){return {item,error:error.message};}});
 }
+function sabReviewControls(root,save){
+ const boxes=()=>[...root.querySelectorAll('[data-sab-save]')];
+ const update=()=>{const all=boxes(),count=all.filter(b=>b.checked).length;root.querySelector('[data-sab-review-count]').textContent='已勾选 '+count+' / '+all.length+' 项';save.disabled=!count;};
+ root.querySelector('[data-sab-review-all]').onclick=()=>{if(learningBusy)return;boxes().forEach(b=>b.checked=true);update();};
+ root.querySelector('[data-sab-review-none]').onclick=()=>{if(learningBusy)return;boxes().forEach(b=>b.checked=false);update();};
+ root.onchange=update;update();
+}
 let sabExportURL=null;
 function sabShowExport(text,count){
  if(sabExportURL)URL.revokeObjectURL(sabExportURL);
@@ -5661,12 +5668,12 @@ async function sabOpen(){
  const invalidate=()=>{preview=null;$('#sabSave').hidden=true;$('#sabResults').innerHTML='';learningDraft={kind:'analysis-batch',dirty:true};};$('#sabText').oninput=invalidate;
  $('#sabFile').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>5*1024*1024)throw Error('文件不能超过5 MiB');$('#sabText').value=await file.text();invalidate();}catch(e){fail(e);}};
  $('#sabPreview').onclick=async()=>{try{invalidate();const raw=$('#sabText').value;if(raw.length>5*1024*1024)throw Error('内容过长');expected=await learningSnapshot();entries=await allEntries();preview=sabPreview(JSON.parse(raw),expected);
-  $('#sabResults').innerHTML=preview.map((p,i)=>'<section data-sab-result="'+i+'"><h4>'+h(p.parent?.textLao||p.item.original||'无原文')+'</h4>'+(p.error?'<p>'+h(p.error)+'</p>':p.same?'<p>分析相同，跳过重复保存。</p>':'<label><input type="checkbox" data-sab-save="'+i+'" style="width:auto">我已核对，'+(p.parent.sentenceAnalysis?'替换已有解析':'保存新增解析')+'</label><details><summary>查看词汇、语法及关联（不自动新增词典）</summary>'+saRenderContent(p.data)+saWords(p.data).map((t,j)=>saLinkPreview(t,j,p.parent,entries).replace(/<option value="@new"[^>]*>[^<]*<\/option>/g,'')).join('')+'</details>')+'</section>').join('');$('#sabSave').hidden=!preview.some(p=>!p.error&&!p.same);$('#learningDialogStatus').textContent='请展开核对并勾选要保存的句子。错误和重复项不会写入。';
+  $('#sabResults').innerHTML='<div style="position:sticky;top:0;background:#f3faf6;padding:12px;z-index:1;border-radius:10px"><button type="button" data-sab-review-all>一键勾选全部可保存项</button><button type="button" data-sab-review-none>取消全部勾选</button><p data-sab-review-count role="status"></p><small>表示你已核对本批内容（含替换已有解析）；不会自动保存或代选有歧义的词义。</small></div>'+preview.map((p,i)=>'<section data-sab-result="'+i+'"><h4>'+h(p.parent?.textLao||p.item.original||'无原文')+'</h4>'+(p.error?'<p>'+h(p.error)+'</p>':p.same?'<p>分析相同，跳过重复保存。</p>':'<label><input type="checkbox" data-sab-save="'+i+'" style="width:auto">我已核对，'+(p.parent.sentenceAnalysis?'替换已有解析':'保存新增解析')+'</label><details><summary>查看词汇、语法及关联（不自动新增词典）</summary>'+saRenderContent(p.data)+saWords(p.data).map((t,j)=>saLinkPreview(t,j,p.parent,entries).replace(/<option value="@new"[^>]*>[^<]*<\/option>/g,'')).join('')+'</details>')+'</section>').join('');$('#sabSave').hidden=!preview.some(p=>!p.error&&!p.same);sabReviewControls($('#sabResults'),$('#sabSave'));$('#learningDialogStatus').textContent='请展开核对并勾选要保存的句子。错误和重复项不会写入。';
  }catch(e){fail(e);}};
  $('#sabSave').onclick=async()=>{if(learningBusy||!preview)return;learningBusy=true;try{
   const ids=[...learningDialog.querySelectorAll('[data-sab-save]:checked')].map(b=>Number(b.dataset.sabSave));if(!ids.length)throw Error('请先核对并勾选句子');const materials=[];
   for(const i of ids){const p=preview[i];if(!p||p.error||p.same)throw Error('预览已失效');const section=learningDialog.querySelector('[data-sab-result="'+i+'"]'),links=new Map();saWords(p.data).forEach((t,j)=>{const v=section.querySelector('[data-sa-link="'+j+'"]').value;if(v==='@choose'||v==='@new')throw Error('请确认同名词的对应词义');links.set(JSON.stringify([t.lao,t.meaning]),v);});const rows=saMakeWrites(p.data,p.parent,expected,entries,links);rows.at(-1).linkedWordSyncIds=[...new Set([...(p.parent.linkedWordSyncIds||[]),...[...links.values()].filter(Boolean)])];materials.push(...rows);}
-  await saCommitDictionary({entries:[],materials},expected,entries);learningDraft=null;$('#sabSave').hidden=true;preview=null;$('#learningDialogStatus').textContent='已保存 '+ids.length+' 句解析，原文、词典和录音保留。关闭后打开句子详情体验词句联动。';
+  await saCommitDictionary({entries:[],materials},expected,entries);learningDraft=null;$('#sabSave').hidden=true;$('#sabResults').querySelectorAll('button,input,select').forEach(b=>b.disabled=true);preview=null;$('#learningDialogStatus').textContent='已保存 '+ids.length+' 句解析，原文、词典和录音保留。关闭后打开句子详情体验词句联动。';
  }catch(e){fail(e);}finally{learningBusy=false;}};draw();
 }
 document.addEventListener('click',e=>{if(e.target.closest('[data-analysis-batch]'))void sabOpen().catch(learningError);});

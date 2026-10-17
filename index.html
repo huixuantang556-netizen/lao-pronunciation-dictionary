@@ -2981,7 +2981,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
  const sectionHtml=s=>'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
- return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p>'+(learningSettings?'<button data-learn="course-edit">修改课程名称／简介</button><button data-learn="v2-organize">分类改名／批量移除／编辑内容</button>':'')+'<button data-course-test="course">本章检测</button>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
+ return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p>'+(learningSettings?'<button data-learn="course-edit">修改课程名称／简介</button><button data-learn="v2-organize">分类改名／批量移除／编辑内容</button>':'')+'<button data-course-test="course">本章检测</button><button data-analysis-batch>批量语法分析</button>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
  (grouped?grouped.nav+(grouped.sections.length?grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
@@ -5618,6 +5618,48 @@ learningOpenDetail=async function(id){
  panel.ondblclick=e=>{const b=e.target.closest('[data-wsl-token]');if(!b)return;clearTimeout(timer);e.preventDefault();void saOpenNested(ranges[Number(b.dataset.wslToken)].token.target,b).catch(e=>status.textContent=e.message);};
  panel.onkeydown=e=>{const b=e.target.closest('[data-wsl-token]');if(b&&e.key==='Enter'&&e.shiftKey){e.preventDefault();clearTimeout(timer);void saOpenNested(ranges[Number(b.dataset.wslToken)].token.target,b).catch(e=>status.textContent=e.message);}};
 };
+</script>
+<script data-learning-bundle="analysis-batch">
+/* File-based batch annotations. No AI requests or automatic dictionary insertion. */
+function sabRows(snap){
+ const labels=new Map(batchCourseContent(snap).sentences.map(r=>[r.id,r.category]));
+ return snap.learningMaterials.filter(m=>!m.deleted&&!m.analysisOwner&&['sentence','dialogue'].includes(m.contentType)&&m.textLao?.trim()).map(m=>({m,label:labels.get(m.id)||m.source||'已收录句子／完整对话'}));
+}
+function sabTask(rows){return {format:'lao-analysis-batch-v1',instructions:'请填写每项 analysis，返回整个 JSON 文件。保留 format、materialId、original、baseSavedAt，不增删或调换身份字段。analysis 必须符合 lao-sentence-analysis-v1。原文、空白和标点不得改写。只列必要独立词和少量固定短语，词义为本句含义；不确定处标待核对。不要编造 ID、IPA、录音、教材出处，不新增例句。grammar/patterns 使用 pattern 和 explanation。quiz 可为空。words 每项必须为 {lao:原文词语,meaning:本句词义,role:词性或作用,kind:word/phrase/name/unknown,isName:布尔值}；人名 isName=true。每个词必须原样出现在所属分段。segments 每项为 {lao:原文分段,chinese:中文,words:数组,grammar:数组}，分段顺序拼接必须覆盖完整原文。grammar 和 patterns 每项为 {pattern:句型,explanation:中文解释}。quiz 如填写则每项为 {question:题目,options:字符串数组,answer:从0开始的正确序号,explanation:说明}。所有键名和字符串用双引号，输出合法JSON。不要返回 Markdown 表格。已有分析仅按需要修正。',items:rows.map(({m,label})=>({materialId:m.id,original:m.textLao,context:label,baseSavedAt:m.sentenceAnalysis?.savedAt||0,analysis:m.sentenceAnalysis?saValidate(m.sentenceAnalysis,m.textLao):saTemplate(m.textLao)}))};}
+function sabPreview(value,snap){
+ if(value?.format!=='lao-analysis-batch-v1'||!Array.isArray(value.items)||!value.items.length||value.items.length>100)throw Error('请导入本程序导出的批量格式，1～100项。');
+ const seen=new Set();return value.items.map(item=>{try{
+  if(typeof item.materialId!=='string'||seen.has(item.materialId))throw Error('句子 ID 缺失或重复');seen.add(item.materialId);
+  const parent=snap.learningMaterials.find(m=>m.id===item.materialId&&!m.deleted&&!m.analysisOwner);if(!parent||!['sentence','dialogue'].includes(parent.contentType))throw Error('当前账户找不到对应句子');
+  if(item.original!==parent.textLao||item.analysis?.original!==parent.textLao)throw Error('原句被改动，请重新导出；不会按相似文字猜匹配');
+  if(item.baseSavedAt!==(parent.sentenceAnalysis?.savedAt||0))throw Error('此句解析已更新，请重新导出，避免覆盖新修改');
+  const data=saValidate(item.analysis,parent.textLao);if(!data.segments.some(s=>s.words.length||s.grammar.length)&&!data.patterns.length)throw Error('仍是空模板，请先让 AI 填写词汇或语法');
+  const same=parent.sentenceAnalysis&&JSON.stringify(saValidate(parent.sentenceAnalysis,parent.textLao))===JSON.stringify(data);
+  return {item,parent,data,same};
+ }catch(error){return {item,error:error.message};}});
+}
+async function sabOpen(){
+ if(learningHasWork()||recorder)throw Error('请先结束录音或编辑');stopPracticeAudio();
+ const snap=await learningSnapshot(),rows=sabRows(snap),h=learningEsc,selected=new Set();let page=0,visible=[];
+ learningModal('批量语法分析 · 文件导出／导入','<p>勾选句子或完整对话，导出一个任务 JSON 交给 AI。返回后在这里导入并预览，不需要逐句上传。最多100项，建议每批5～20项。不会调用 AI 或音频生成。</p><input id="sabSearch" placeholder="搜索原文、中文、课程或对话"><label><input type="checkbox" id="sabMissing" checked style="width:auto">只显示未分析</label><div id="sabRows"></div><p><button id="sabPrev">上一页</button><span id="sabCount"></span><button id="sabNext">下一页</button></p><button id="sabAll">勾选本页</button><button id="sabClear">清空已选</button><button id="sabExport">导出勾选任务 JSON</button><hr><h3>导入 AI 返回的整批结果</h3><input id="sabFile" type="file" accept=".json,application/json"><textarea id="sabText" rows="5" placeholder="也可以粘贴整批 JSON"></textarea><button id="sabPreview">预览并核对</button><div id="sabResults"></div><button id="sabSave" hidden>确认保存勾选解析</button>');
+ const draw=()=>{const q=$('#sabSearch').value.toLowerCase(),filtered=rows.filter(r=>(!$('#sabMissing').checked||!r.m.sentenceAnalysis)&&[r.m.textLao,r.m.translationZh,r.label].join(' ').toLowerCase().includes(q));page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));visible=filtered.slice(page*20,page*20+20);$('#sabRows').innerHTML=visible.map(r=>'<label style="display:block;margin:12px 0"><input type="checkbox" data-sab-id="'+h(r.m.id)+'" style="width:auto" '+(selected.has(r.m.id)?'checked':'')+'><span lang="lo">'+h(r.m.textLao)+'</span> · '+h(r.m.translationZh||'')+'<small style="display:block">'+h(r.label)+' · '+(r.m.sentenceAnalysis?'已有分析':'未分析')+'</small></label>').join('')||'<p>没有匹配的句子。</p>';$('#sabCount').textContent='第 '+(page+1)+' 页 · 共 '+filtered.length+' 项 · 已选 '+selected.size;$('#sabPrev').disabled=!page;$('#sabNext').disabled=(page+1)*20>=filtered.length;$('#sabExport').disabled=!selected.size;};
+ $('#sabSearch').oninput=()=>{page=0;draw();};$('#sabMissing').onchange=()=>{page=0;draw();};$('#sabPrev').onclick=()=>{page--;draw();};$('#sabNext').onclick=()=>{page++;draw();};$('#sabRows').onchange=e=>{const id=e.target.dataset.sabId;if(!id)return;if(e.target.checked)selected.add(id);else selected.delete(id);draw();};$('#sabAll').onclick=()=>{visible.forEach(r=>selected.add(r.m.id));draw();};$('#sabClear').onclick=()=>{selected.clear();draw();};
+ const fail=e=>$('#learningDialogStatus').textContent=e.message;
+ $('#sabExport').onclick=async()=>{try{if(selected.size>100)throw Error('每批最多100项，请减少勾选');const fresh=sabRows(await learningSnapshot()).filter(r=>selected.has(r.m.id));if(fresh.length!==selected.size)throw Error('部分句子已变化，请重新打开列表');saDownload('批量语法分析任务.json',JSON.stringify(sabTask(fresh),null,2));$('#learningDialogStatus').textContent='把任务 JSON 交给 AI，要求按 instructions 填写 analysis，返回整个 JSON 后在下方导入。';}catch(e){fail(e);}};
+ let preview=null,expected=null,entries=null;
+ const invalidate=()=>{preview=null;$('#sabSave').hidden=true;$('#sabResults').innerHTML='';learningDraft={kind:'analysis-batch',dirty:true};};$('#sabText').oninput=invalidate;
+ $('#sabFile').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>5*1024*1024)throw Error('文件不能超过5 MiB');$('#sabText').value=await file.text();invalidate();}catch(e){fail(e);}};
+ $('#sabPreview').onclick=async()=>{try{invalidate();const raw=$('#sabText').value;if(raw.length>5*1024*1024)throw Error('内容过长');expected=await learningSnapshot();entries=await allEntries();preview=sabPreview(JSON.parse(raw),expected);
+  $('#sabResults').innerHTML=preview.map((p,i)=>'<section data-sab-result="'+i+'"><h4>'+h(p.parent?.textLao||p.item.original||'无原文')+'</h4>'+(p.error?'<p>'+h(p.error)+'</p>':p.same?'<p>分析相同，跳过重复保存。</p>':'<label><input type="checkbox" data-sab-save="'+i+'" style="width:auto">我已核对，'+(p.parent.sentenceAnalysis?'替换已有解析':'保存新增解析')+'</label><details><summary>查看词汇、语法及关联（不自动新增词典）</summary>'+saRenderContent(p.data)+saWords(p.data).map((t,j)=>saLinkPreview(t,j,p.parent,entries).replace(/<option value="@new"[^>]*>[^<]*<\/option>/g,'')).join('')+'</details>')+'</section>').join('');$('#sabSave').hidden=!preview.some(p=>!p.error&&!p.same);$('#learningDialogStatus').textContent='请展开核对并勾选要保存的句子。错误和重复项不会写入。';
+ }catch(e){fail(e);}};
+ $('#sabSave').onclick=async()=>{if(learningBusy||!preview)return;learningBusy=true;try{
+  const ids=[...learningDialog.querySelectorAll('[data-sab-save]:checked')].map(b=>Number(b.dataset.sabSave));if(!ids.length)throw Error('请先核对并勾选句子');const materials=[];
+  for(const i of ids){const p=preview[i];if(!p||p.error||p.same)throw Error('预览已失效');const section=learningDialog.querySelector('[data-sab-result="'+i+'"]'),links=new Map();saWords(p.data).forEach((t,j)=>{const v=section.querySelector('[data-sa-link="'+j+'"]').value;if(v==='@choose'||v==='@new')throw Error('请确认同名词的对应词义');links.set(JSON.stringify([t.lao,t.meaning]),v);});const rows=saMakeWrites(p.data,p.parent,expected,entries,links);rows.at(-1).linkedWordSyncIds=[...new Set([...(p.parent.linkedWordSyncIds||[]),...[...links.values()].filter(Boolean)])];materials.push(...rows);}
+  await saCommitDictionary({entries:[],materials},expected,entries);learningDraft=null;$('#sabSave').hidden=true;preview=null;$('#learningDialogStatus').textContent='已保存 '+ids.length+' 句解析，原文、词典和录音保留。关闭后打开句子详情体验词句联动。';
+ }catch(e){fail(e);}finally{learningBusy=false;}};draw();
+}
+document.addEventListener('click',e=>{if(e.target.closest('[data-analysis-batch]'))void sabOpen().catch(learningError);});
+const sabLaunch=document.createElement('button');sabLaunch.textContent='批量语法分析';sabLaunch.onclick=()=>sabOpen().catch(learningError);$('#dictionaryBatchTools').prepend(sabLaunch);
 </script>
 <script src="./offline.js"></script>
 </body>

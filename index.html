@@ -5925,19 +5925,25 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-chapter-rewrite
 .pa-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 12px;font-size:14px}.pa-facts dt{color:#637a72}.pa-facts dd{margin:0;white-space:pre-wrap}
 .pa-pending{color:#855113;background:#fff6df;padding:8px;border-radius:8px}.pa-muted{font-size:12px;color:#637a72}
 .pa-separator{white-space:pre-wrap}.pa-review-toolbar{position:sticky;top:0;padding:10px;background:#f1f9f5;z-index:2;border-radius:10px}
+.pa-word-card{margin-top:16px}.pa-word-card>summary{cursor:pointer;color:#176d5d;line-height:1.6;padding:10px 0;font-weight:600}.pa-word-card>summary:focus-visible{outline:2px solid #087f70;outline-offset:3px}
 @media(max-width:600px){.pa-section{padding:10px}.pa-facts{grid-template-columns:88px minmax(0,1fr);gap:8px;font-size:14px}.pa-toolbar button{min-height:44px}.pa-syllable{padding:9px}}
 </style>
 <script data-learning-bundle="phonetic-core">
 /* Additive phonetic annotations. The user's textbook remains the rule authority. */
 const paFormat='lao-pronunciation-analysis-v1',paBatchFormat='lao-pronunciation-batch-v1';
-function paRules(){
+function paLegacyRules(){
  const classes=Object.fromEntries(['middle','low','high'].map(k=>[k,pronunciationConcepts[k][1].split(/\s+/).filter(Boolean)]));
  const compounds=Object.fromEntries(['middle','low','high'].map(k=>[k,window.learningAlphabetRows().filter(row=>row[0]===({middle:'中辅音',low:'低辅音',high:'高辅音'})[k]&&row[1]==='复合辅音').flatMap(row=>row[2].flatMap(form=>form.split('|').filter(Boolean)))]));
  const vowels=[];for(const row of window.learningAlphabetRows())if(['短元音','长元音'].includes(row[1]))for(const form of row[2])for(const f of form.split('|').filter(Boolean))vowels.push({base:f.replaceAll('x','◌'),length:row[1]==='短元音'?'short':'long'});
  for(const v of CodaLesson.vowels)vowels.push({base:v.baseVowel,length:v.vowelLength,closed:v.closedVowel.replace(/◌$/u,'')});
  return JSON.parse(JSON.stringify({format:'lao-textbook-phonetic-rules-v1',names:['短调','一声','二声','三声','四声','中降调'],initialClasses:classes,compoundInitials:compounds,codas:CodaLesson.codas.map(({letter,sound,type})=>({letter,sound,type})),vowels,deadTones:CodaLesson.deadTones,liveTones:CodaLesson.liveTones,vowelChart:typeof liveVowelRows==='undefined'?[]:liveVowelRows,specialVowels:CodaLesson.specialVowels.map(v=>v.baseVowel),notes:'按当前教材命名，不等同于普通话声调。无尾短元音在本教材称死音节；有尾辅音与死活性质分别记录。表格为空的格子不补猜。前置ຫ、复合辅音、特殊元音及借词未具备完整自动判定规则，须标记待核对。规则匹配不证明实际读音已经核实。'}));
 }
-const paDigest=rules=>cloudHash(new Blob([cloudStable(rules)]));
+function paRules(){
+ return {...paLegacyRules(),format:'lao-textbook-phonetic-rules-v2',specialRhymes:[{base:'ໃ◌',final:'j'},{base:'ໄ◌',final:'j'},{base:'ເ◌ົາ',final:'w'},{base:'◌ຳ',final:'m'}],toneClusters:['ຄວ','ກວ','ຂວ'],references:['https://seasite.niu.edu/lao/LaoLanguage/IntroAlphabet/tonemarks/tonechart.htm','https://seasite.niu.edu/lao/LaoLanguage/LaoAlphabet/LaoVowelSounds.htm','https://www.loc.gov/catdir/cpso/romanization/lao.pdf'],notes:'沿用教材中文声调名。特殊韵母含j/w/m活韵尾，不按普通短元音死音节处理；其元音类别与长度分开记录。仅对列明且类别与教材表一致的复辅音启用声调推导，实际读音另行核对。声调可推导不等于IPA或方言读音已经确认。未覆盖的结构保留待核对。'};
+}
+let paLegacyRuleDigest='';
+async function paDigest(rules){if(!paLegacyRuleDigest)paLegacyRuleDigest=await cloudHash(new Blob([cloudStable(paLegacyRules())]));return cloudHash(new Blob([cloudStable(rules)]));}
+function paCompatibleDigest(saved,current){return saved===current||!!paLegacyRuleDigest&&saved===paLegacyRuleDigest;}
 function paText(v,label,max=3000){if(typeof v!=='string'||v.length>max)throw Error(label+'必须为不超过'+max+'字符的文字');return v;}
 function paKnownClass(initial,rules){return Object.keys(rules.initialClasses).find(k=>rules.initialClasses[k].includes(initial));}
 function paValidateAnalysis(value,original,rules=paRules()){
@@ -5954,7 +5960,7 @@ function paValidateAnalysis(value,original,rules=paRules()){
   const onset={written:paText(u.onset?.written,'首辅音',20),sound:paText(u.onset?.sound||'','实际发音辅音',40),mode:u.onset?.mode,toneClass:u.onset?.toneClass};
   if(!onset.written||!text.includes(onset.written)||!['normal','ho-leading','cluster','unknown'].includes(onset.mode)||!['middle','low','high','unknown'].includes(onset.toneClass))throw Error('首辅音、结构或决定声调的类别无效：'+text);
   const vowel={base:paText(u.vowel?.base,'基本元音形式',80),written:paText(u.vowel?.written,'实际元音形式',80),length:u.vowel?.length};
-  if(!['short','long','unknown'].includes(vowel.length))throw Error('元音长短应为 short、long 或 unknown');
+  if(!['short','long','unknown','not-applicable'].includes(vowel.length))throw Error('元音长短应为 short、long、unknown 或 not-applicable');
   const coda={written:paText(u.coda?.written??'','尾辅音',10),sound:paText(u.coda?.sound||'','尾音',40)};
   if(coda.written&&(!text.endsWith(coda.written)||coda.written===onset.written&&text.indexOf(onset.written)===text.lastIndexOf(coda.written)))throw Error('尾辅音与原音节不符：'+text);
   const marks=text.match(/[່້໊໋]/gu)||[];if(marks.length>1)throw Error('同一音节出现多个声调符号，请检查分音节：'+text);
@@ -5963,30 +5969,39 @@ function paValidateAnalysis(value,original,rules=paRules()){
   if(!['live','dead','unknown'].includes(u.life))throw Error('死活性质须为 live、dead 或 unknown');
   let written=text;if(coda.written)written=written.slice(0,-coda.written.length);written=written.replace(onset.written,'◌').replace(/[່້໊໋]/gu,'');
   if(written!==vowel.written)throw Error('实际元音形式应去除尾辅音和声调符号、用◌代替首辅音：'+text+' → '+written);
-  const warnings=[],knownClass=paKnownClass(onset.written,rules),cod=rules.codas.find(c=>c.letter===coda.written),knownVowels=rules.vowels.filter(v=>v.base===vowel.base),special=rules.specialVowels.includes(vowel.base);
+  const warnings=[],soundWarnings=[],knownClass=paKnownClass(onset.written,rules),cod=rules.codas.find(c=>c.letter===coda.written),knownVowels=rules.vowels.filter(v=>v.base===vowel.base),special=rules.specialVowels.includes(vowel.base),rhyme=rules.specialRhymes?.find(v=>v.base===vowel.base);
+  vowel.category=special?'special':'regular';
+  if(vowel.length==='not-applicable'&&!rhyme)throw Error('只有已登记的特殊韵母可使用不适用长短配对');
+  if(rhyme&&coda.written)throw Error('此特殊韵母已内含韵尾，不能另填书写尾辅音：'+text);
+  if(rhyme&&vowel.length==='unknown')vowel.length='not-applicable';
   const compoundClass=Object.keys(rules.compoundInitials).find(k=>rules.compoundInitials[k].includes(onset.written));
   if(compoundClass&&onset.toneClass!=='unknown'&&compoundClass!==onset.toneClass)throw Error('复合辅音类别与现有字母表不符：'+onset.written);
   if(onset.mode==='normal'&&knownClass&&onset.toneClass!=='unknown'&&knownClass!==onset.toneClass)throw Error('辅音类别与教材不符：'+onset.written);
   if(onset.mode==='normal'&&knownClass&&onset.sound&&onset.sound!==onset.written)throw Error('普通首辅音的实际辅音请填写原字母，IPA另填：'+text);
-  if(!onset.sound)warnings.push('实际发音辅音尚未填写');
-  if(onset.mode!=='normal'||!knownClass||onset.toneClass==='unknown')warnings.push('复合／前置辅音或类别尚不能自动核实');
-  if(knownVowels.length&&vowel.length!=='unknown'&&!knownVowels.some(v=>v.length===vowel.length))throw Error('基本元音的长短与教材不符：'+vowel.base);
-  if(!knownVowels.length||vowel.length==='unknown')warnings.push('元音基本形式或长短待核对');
+  if(!onset.sound)soundWarnings.push('实际发音辅音尚未填写');
+  const toneClass=onset.mode==='normal'?knownClass:onset.mode==='cluster'&&rules.toneClusters?.includes(onset.written)?compoundClass:null;
+  if(!toneClass||onset.toneClass==='unknown')warnings.push('决定声调的辅音类别或结构尚不能自动核实');
+  if(onset.mode!=='normal')soundWarnings.push('复合／前置辅音的实际读音需结合录音核对');
+  if(!rhyme&&knownVowels.length&&vowel.length!=='unknown'&&!knownVowels.some(v=>v.length===vowel.length))throw Error('基本元音的长短与教材不符：'+vowel.base);
+  if(!rhyme&&(!knownVowels.length||vowel.length==='unknown'))warnings.push('元音基本形式或长短待核对');
   if(vowel.base!==vowel.written&&!knownVowels.some(v=>v.closed===vowel.written)&&!rules.vowelChart.some(row=>row[0]===vowel.base&&row[2]===vowel.written))warnings.push('元音书写变化未在当前表中确认');
-  if(special)warnings.push('特殊元音的韵尾归类需人工核对');
+  if(special&&!rhyme)warnings.push('特殊元音的韵尾归类需人工核对');
   if(coda.written&&!cod)warnings.push('尾辅音尚未登记在规则表');
   if(cod&&coda.sound!==cod.sound)throw Error('尾辅音读音与教材不一致：'+coda.written);
-  const life=coda.written?cod?.type:vowel.length==='short'?'dead':vowel.length==='long'?'live':null;
+  const life=rhyme?'live':coda.written?cod?.type:vowel.length==='short'?'dead':vowel.length==='long'?'live':null;
   if(life&&u.life!=='unknown'&&u.life!==life)throw Error('死活性质与所填元音／尾辅音矛盾：'+text);
-  if(u.life==='unknown')warnings.push('死活性质待核对');
-  const kind=coda.written?(cod?.type==='dead'?'dead':cod?.type==='live'?'live':null):'nocoda';let ruleTone='',ruleKey='';
-  const ordinary=onset.mode==='normal'&&knownClass===onset.toneClass&&knownVowels.length&&vowel.length!=='unknown'&&!special&&life&&u.life===life&&!warnings.length;
-  if(ordinary&&kind){if((kind==='dead'||kind==='nocoda'&&vowel.length==='short')&&toneMark!=='none')warnings.push('此类音节带声调符号的情况未覆盖');else if(!['none','່','້'].includes(toneMark))warnings.push('此声调符号未纳入现有推导表');else{ruleTone=kind==='dead'?rules.deadTones[onset.toneClass]?.[vowel.length]:kind==='nocoda'&&vowel.length==='short'?'短调':rules.liveTones[onset.toneClass]?.[toneMark]||'';ruleKey=[kind,onset.toneClass,vowel.length,toneMark].join('|');}}
-  const tone=paText(u.tone||'','教材声调',40);if(tone&&!rules.names.includes(tone))throw Error('请沿用教材的声调名称：'+text);
+  const resolvedLife=u.life==='unknown'&&rhyme?'live':u.life;
+  if(resolvedLife==='unknown')warnings.push('死活性质待核对');
+  const kind=rhyme?'live':coda.written?(cod?.type==='dead'?'dead':cod?.type==='live'?'live':null):'nocoda';let ruleTone='',ruleKey='';
+  const ordinary=toneClass===onset.toneClass&&(rhyme||knownVowels.length&&vowel.length!=='unknown'&&!special)&&life&&resolvedLife===life&&!warnings.length;
+  if(ordinary&&kind){if((kind==='dead'||kind==='nocoda'&&vowel.length==='short')&&toneMark!=='none')warnings.push('此类音节带声调符号的情况未覆盖');else if(!['none','່','້'].includes(toneMark))warnings.push('此声调符号未纳入现有推导表');else{ruleTone=kind==='dead'?rules.deadTones[onset.toneClass]?.[vowel.length]:kind==='nocoda'&&vowel.length==='short'?'短调':rules.liveTones[onset.toneClass]?.[toneMark]||'';ruleKey=[kind,onset.toneClass,rhyme?'long':vowel.length,toneMark].join('|');}}
+  let tone=paText(u.tone||'','教材声调',40);if(tone&&!rules.names.includes(tone))throw Error('请沿用教材的声调名称：'+text);
   if(ruleTone&&tone&&tone!==ruleTone)throw Error('声调与所填教材条件矛盾：'+text+'，应为'+ruleTone+'，收到'+tone);
+  if(!tone&&ruleTone)tone=ruleTone;
   if(!tone)warnings.push('最终声调尚未填写');
   if(!String(u.explanation||'').trim())throw Error('每个音节需要简短中文拼读说明：'+text);
-  return {kind:'syllable',text,onset,vowel,coda,shape,life:u.life,toneMark,tone,ipa:paText(u.ipa||'','IPA',150),explanation:paText(u.explanation||'','拼读说明',3000),needsReview:u.needsReview===true||warnings.length>0,ruleTone,ruleKey,warnings};
+  const analysisNeedsReview=typeof u.analysisNeedsReview==='boolean'?u.analysisNeedsReview:u.needsReview===true;
+  return {kind:'syllable',text,onset,vowel,coda,shape,life:resolvedLife,embeddedFinal:rhyme?.final||'',toneMark,tone,ipa:paText(u.ipa||'','IPA',150),explanation:paText(u.explanation||'','拼读说明',3000),analysisNeedsReview,toneNeedsReview:!ruleTone,soundNeedsReview:soundWarnings.length>0,needsReview:analysisNeedsReview||warnings.length>0||soundWarnings.length>0||!ruleTone,ruleTone,ruleKey,warnings:[...warnings,...soundWarnings]};
  });
  if(at!==original.length)throw Error('音节、空格和标点须按顺序完整覆盖分段原文');
  return {format:paFormat,original,notes,units};
@@ -6004,7 +6019,7 @@ function paBasis(target){
  if(!w&&!m.analysisOwner&&!['reading_drill','word'].includes(m.contentType))throw Error('请先完成句子的语法分段，再生成逐段发音分析');
  return {mode:'word',original:text,segments:[{index:0,original:text,chinese:w?.meaning||m.translationZh||'',words:[]}]};
 }
-function paCurrent(target,digest){try{return target.m.pronunciationAnalysis?.ruleDigest===digest&&target.m.pronunciationAnalysis?.basisKey===cloudStable(paBasis(target));}catch(_){return false;}}
+function paCurrent(target,digest){try{return paCompatibleDigest(target.m.pronunciationAnalysis?.ruleDigest,digest)&&target.m.pronunciationAnalysis?.basisKey===cloudStable(paBasis(target));}catch(_){return false;}}
 function paReadingKey(a){return cloudStable(a.units.map(u=>u.kind==='syllable'?{kind:u.kind,text:u.text,onset:u.onset,vowel:u.vowel,coda:u.coda,shape:u.shape,life:u.life,toneMark:u.toneMark,tone:u.tone,ipa:u.ipa||''}:{kind:u.kind,text:u.text}));}
 function paSingleReading(analyses){return analyses.length&&analyses.every(a=>paReadingKey(a)===paReadingKey(analyses[0]))?analyses[0]:null;}
 function paSlice(analysis,text){
@@ -6013,9 +6028,10 @@ function paSlice(analysis,text){
  return paSingleReading(found);
 }
 function paReusable(snap,text,digest){
- const exact=snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted&&m.ruleDigest===digest&&m.textLao===text).sort((a,b)=>b.updatedAt-a.updatedAt);
- if(exact.length)return paSingleReading(exact.map(m=>m.phoneticAnalysis));
- const parts=snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted&&m.ruleDigest===digest&&m.textLao.includes(text)).map(m=>paSlice(m.phoneticAnalysis,text)).filter(Boolean);
+ const validated=m=>{try{return paValidateAnalysis(m.phoneticAnalysis,m.textLao);}catch(_){return null;}};
+ const exact=snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted&&paCompatibleDigest(m.ruleDigest,digest)&&m.textLao===text).sort((a,b)=>b.updatedAt-a.updatedAt);
+ if(exact.length)return paSingleReading(exact.map(validated).filter(Boolean));
+ const parts=snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted&&paCompatibleDigest(m.ruleDigest,digest)&&m.textLao.includes(text)).map(validated).filter(Boolean).map(a=>paSlice(a,text)).filter(Boolean);
  return paSingleReading(parts);
 }
 function paTemplate(text){return {format:paFormat,original:text,notes:'',units:[]};}
@@ -6024,7 +6040,7 @@ async function paTask(ids,snap,entries){
  for(const id of ids){const t=paResolve(id,snap,entries),basis=paBasis(t);items.push({materialId:t.m.id,original:t.text,basisDigest:await paDigest(basis),baseSavedAt:t.m.pronunciationAnalysis?.savedAt||0,segments:basis.segments.map(s=>({...s,analysis:paReusable(snap,s.original,digest)||paTemplate(s.original)}))});}
  const knownTexts=new Set(items.flatMap(item=>[item.original,...item.segments.flatMap(s=>[s.original,...s.words.map(w=>w.lao)])]));
  const knownWordStructures=entries.filter(w=>knownTexts.has(w.word)&&['initialClass','baseVowel','vowelLength','textbookTone','targetSyllable'].some(k=>w[k])).map(w=>({word:w.word,scopeNote:w.targetSyllable?'已有字段只用于指定音节：'+w.targetSyllable:'原字段没有完整逐音节范围，仅供参考，不可套到整词',...Object.fromEntries(['initial','initialClass','baseVowel','closedVowel','vowelLength','codaLetter','codaSound','codaType','syllableType','targetSyllable','toneMark','textbookTone','source'].filter(k=>w[k]!==undefined).map(k=>[k,w[k]]))}));
- return {format:paBatchFormat,ruleDigest:digest,rules,knownWordStructures,instructions:'按已有语法分段做逐音节语音分析，只填写各segments.analysis，返回整个JSON。不得改动身份、原句、分段、index、中文、words、basisDigest、baseSavedAt、ruleDigest或rules。不是生成音频，也不是重新分析语法。复用已填的可靠分析；knownWordStructures是原词库中的参考字段，注意它可能只针对targetSyllable，不可套到整词。多音节逐个分析，原文中的空格和标点要用separator原样保留。无法可靠分音节用unresolved并写原因，不要猜测。声调遵循所附教材名称与规则，规则未覆盖处标needsReview=true；IPA不可靠时留空。不要新增词典词或用JSON正确代替语言正确。',unitTemplate:{kind:'syllable',text:'原音节',onset:{written:'原文首辅音或复合辅音',sound:'实际发音辅音，用老挝字母填写；无法确认留空并标待核对',mode:'normal / ho-leading / cluster / unknown',toneClass:'middle / low / high / unknown'},vowel:{base:'元音基本形式，用◌表示辅音位置',written:'原音节去掉尾辅音及声调符号后，用◌替换首辅音；前后元音均保留',length:'short / long / unknown'},coda:{written:'尾辅音，无则空串',sound:'依rules.codas填写，无则空串'},shape:'no-coda / closed',life:'live / dead / unknown',toneMark:'none / ່ / ້ / ໊ / ໋',tone:'短调 / 一声 / 二声 / 三声 / 四声 / 中降调；未知留空',ipa:'',explanation:'中文推导解释；待核对须说明',needsReview:true},separatorTemplate:{kind:'separator',text:'原文空白或标点'},unresolvedTemplate:{kind:'unresolved',text:'无法判断的原文片段',explanation:'需要核对的具体原因'},items};
+ return {format:paBatchFormat,ruleDigest:digest,rules,knownWordStructures,instructions:'按已有语法分段做逐音节语音分析，只填写各segments.analysis，返回整个JSON。不得改动身份、原句、分段、index、中文、words、basisDigest、baseSavedAt、ruleDigest或rules。不是生成音频，也不是重新分析语法。复用已填的可靠分析；knownWordStructures是原词库中的参考字段，注意它可能只针对targetSyllable，不可套到整词。多音节逐个分析，原文中的空格和标点要用separator原样保留。无法可靠分音节用unresolved并写原因，不要猜测。声调遵循所附教材名称与规则，规则未覆盖处标needsReview=true；特殊韵母请依据rules.specialRhymes记录活性；元音类别与长度分开，特殊韵母不套普通短元音死音节规则。已列明复辅音可推导教材声调，实际读音仍可待核对。声调推导与实际核音是独立状态；程序派生的ruleTone、toneNeedsReview、soundNeedsReview、embeddedFinal不要由AI自行编造。IPA不可靠时留空。不要新增词典词或用JSON正确代替语言正确。',unitTemplate:{kind:'syllable',text:'原音节',onset:{written:'原文首辅音或复合辅音',sound:'实际发音辅音，用老挝字母填写；无法确认留空并标待核对',mode:'normal / ho-leading / cluster / unknown',toneClass:'middle / low / high / unknown'},vowel:{base:'元音基本形式，用◌表示辅音位置',written:'原音节去掉尾辅音及声调符号后，用◌替换首辅音；前后元音均保留',length:'short / long / not-applicable / unknown'},coda:{written:'尾辅音，无则空串',sound:'依rules.codas填写，无则空串'},shape:'no-coda / closed',life:'live / dead / unknown',toneMark:'none / ່ / ້ / ໊ / ໋',tone:'短调 / 一声 / 二声 / 三声 / 四声 / 中降调；未知留空',ipa:'',explanation:'中文推导解释；待核对须说明',needsReview:true},separatorTemplate:{kind:'separator',text:'原文空白或标点'},unresolvedTemplate:{kind:'unresolved',text:'无法判断的原文片段',explanation:'需要核对的具体原因'},items};
 }
 async function paPreview(root,snap,entries){
  if(root?.format!==paBatchFormat||!Array.isArray(root.items)||!root.items.length||root.items.length>100)throw Error('请导入本程序导出的发音分析任务，最多100项');
@@ -6060,13 +6076,14 @@ function paValidateLinks(snap){const map=new Map(snap.learningMaterials.map(m=>[
 </script>
 <script data-learning-bundle="phonetic-analysis">
 /* File-based analysis at existing grammar boundaries; never requests AI or audio. */
+function paReviewLabel(u){return (u.toneNeedsReview?' · 声调推导待核对':'')+(u.soundNeedsReview?' · 实际读音待核对':'')+(u.analysisNeedsReview&&!u.toneNeedsReview&&!u.soundNeedsReview?' · 分析待核对':'');}
 function paAnalysisHtml(raw){
- const h=learningEsc,labels={middle:'中辅音',low:'低辅音',high:'高辅音',unknown:'待核对',short:'短元音',long:'长元音',normal:'普通首辅音','ho-leading':'前置 ຫ / 合体形式',cluster:'复合辅音','no-coda':'无书写尾辅音',closed:'有尾辅音',live:'活',dead:'死'};
+ const h=learningEsc,labels={middle:'中辅音',low:'低辅音',high:'高辅音',unknown:'待核对','not-applicable':'不按普通长短配对',short:'短元音',long:'长元音',normal:'普通首辅音','ho-leading':'前置 ຫ / 合体形式',cluster:'复合辅音','no-coda':'无书写尾辅音',closed:'有尾辅音',live:'活',dead:'死'};
  let a;try{a=paValidateAnalysis(raw,raw.original);}catch(e){return '<p class="pa-pending">保存的发音资料需要重新检查：'+h(e.message)+'</p>';}
  return '<div class="pa-section"><p class="pa-muted">逐音节拼读 · AI分析初稿，结合教材与实际发音核对。</p>'+(a.notes?'<p>'+h(a.notes)+'</p>':'')+a.units.map(u=>{
   if(u.kind==='separator')return '<span class="pa-separator">'+h(u.text)+'</span>';
   if(u.kind==='unresolved')return '<p class="pa-pending"><span lang="lo">'+h(u.text)+'</span> · 待核对：'+h(u.explanation)+'</p>';
-return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> · '+h(u.tone||'声调未定')+(u.needsReview?' · 待核对':'')+'</summary><dl class="pa-facts"><dt>首辅音</dt><dd lang="lo">'+h(u.onset.written)+'</dd><dt>实际发音辅音</dt><dd>'+h(u.onset.sound||'未填写')+' · '+h(labels[u.onset.mode])+'</dd><dt>声调类别</dt><dd>'+h(labels[u.onset.toneClass])+'</dd><dt>元音原型</dt><dd lang="lo">'+h(u.vowel.base)+'</dd><dt>本词书写</dt><dd lang="lo">'+h(u.vowel.written)+'</dd><dt>元音长度</dt><dd>'+h(labels[u.vowel.length])+'</dd><dt>尾辅音</dt><dd>'+h(u.coda.written||'无')+(u.coda.sound?' /'+h(u.coda.sound)+'/':'')+'</dd><dt>音节结构</dt><dd>'+h(u.shape==='closed'?(u.life==='dead'?'死闭音节':u.life==='live'?'活闭音节':'闭音节，死活待核对'):u.vowel.length==='short'?'死音节（本教材：短元音直接结尾）':u.vowel.length==='long'?'开音节（本教材：长元音直接结尾）':'无尾辅音，类型待核对')+' · '+h(labels[u.life])+'性质</dd><dt>声调符号</dt><dd>'+h(u.toneMark==='none'?'无':u.toneMark)+'</dd><dt>教材推导</dt><dd>'+h(u.ruleTone||'当前规则不能可靠推导')+'</dd>'+(u.ipa?'<dt>IPA（AI初稿）</dt><dd>'+h(u.ipa)+'</dd>':'')+'</dl><p>'+h(u.explanation)+'</p>'+(u.warnings.length?'<p class="pa-pending">'+h(u.warnings.join('；'))+'</p>':'')+(u.ruleKey?'<button type="button" data-pa-rule="'+h(u.ruleKey)+'">查看已有教材声调规则</button>':'')+'</details>';
+return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> · '+h(u.tone||'声调未定')+paReviewLabel(u)+'</summary><dl class="pa-facts"><dt>首辅音</dt><dd lang="lo">'+h(u.onset.written)+'</dd><dt>实际发音辅音</dt><dd>'+h(u.onset.sound||'未填写')+' · '+h(labels[u.onset.mode])+'</dd><dt>声调类别</dt><dd>'+h(labels[u.onset.toneClass])+'</dd><dt>元音原型</dt><dd lang="lo">'+h(u.vowel.base)+'</dd><dt>本词书写</dt><dd lang="lo">'+h(u.vowel.written)+'</dd><dt>元音类别</dt><dd>'+h(u.vowel.category==='special'?'特殊韵母':'普通元音')+'</dd><dt>元音长度</dt><dd>'+h(labels[u.vowel.length])+'</dd><dt>尾辅音</dt><dd>'+h(u.coda.written||'无')+(u.coda.sound?' /'+h(u.coda.sound)+'/':'')+'</dd><dt>内含韵尾</dt><dd>'+h(u.embeddedFinal?'/'+u.embeddedFinal+'/':'无')+'</dd><dt>音节结构</dt><dd>'+h(u.embeddedFinal?'无独立书写尾辅音，韵母内含活韵尾':u.shape==='closed'?(u.life==='dead'?'死闭音节':u.life==='live'?'活闭音节':'闭音节，死活待核对'):u.vowel.length==='short'?'死音节（本教材：短元音直接结尾）':u.vowel.length==='long'?'开音节（本教材：长元音直接结尾）':'无尾辅音，类型待核对')+' · '+h(labels[u.life])+'性质</dd><dt>声调符号</dt><dd>'+h(u.toneMark==='none'?'无':u.toneMark)+'</dd><dt>教材推导</dt><dd>'+h(u.ruleTone||'当前规则不能可靠推导')+'</dd>'+(u.ipa?'<dt>IPA（AI初稿）</dt><dd>'+h(u.ipa)+'</dd>':'')+'</dl><p>'+h(u.explanation)+'</p>'+(u.warnings.length?'<p class="pa-pending">'+h(u.warnings.join('；'))+'</p>':'')+(u.ruleKey?'<button type="button" data-pa-rule="'+h(u.ruleKey)+'">查看已有教材声调规则</button>':'')+'</details>';
  }).join('')+'</div>';
 }
 function paProfile(snap,id){return snap.learningMaterials.find(m=>m.id===id&&!m.deleted&&m.phoneticProfile);}
@@ -6075,7 +6092,10 @@ async function paWordCard(card,parent,token,snap){
  try{const digest=await paDigest(paRules());if(!card.isConnected||card.paRun!==run)return;
   let analysis=null;try{if(paCurrent({m:parent,text:parent.textLao},digest)){const matches=parent.pronunciationAnalysis.segments.flatMap(s=>s.words).filter(w=>w.lao===token.lao&&w.meaning===token.meaning&&w.target===(token.target||'')),ids=[...new Set(matches.map(w=>w.profileId))];if(ids.length===1)analysis=paProfile(snap,ids[0])?.phoneticAnalysis;}}catch(_){}
   if(!analysis)analysis=paReusable(snap,token.lao,digest);
-  const section=document.createElement('section');section.className='pa-word-card';section.innerHTML='<h4>语音分析</h4>'+(analysis?paAnalysisHtml(analysis):'<p class="pa-muted">暂没有可唯一对应的发音分析。可先按语法分段导出分析，再在这里查看；不同读法不自动混合。</p>');card.append(section);
+  const section=document.createElement('details');section.className='pa-word-card';section.innerHTML='<summary>语音分析 · 展开并播放本词录音</summary><div class="pa-toolbar"><button type="button" data-wsl-play="'+learningEsc(token.target||'')+'" '+(token.target?'':'disabled')+'>▶ 播放本词录音</button><button type="button" data-pa-correct="'+learningEsc(token.target||'')+'" '+(token.target?'':'disabled')+'>纠正本词发音／录音管理</button></div>'+(analysis?paAnalysisHtml(analysis):'<p class="pa-muted">暂没有可唯一对应的发音分析。可先按语法分段导出分析，再在这里查看；不同读法不自动混合。</p>');
+  const status=document.createElement('p');status.className='pa-muted';status.setAttribute('role','status');section.append(status);
+  section.ontoggle=async event=>{if(event.target!==section||!section.open||!card.isConnected||card.paRun!==run)return;try{if(!token.target)throw Error('本词尚无已保存的关联资料，请先保存句子解析。');status.textContent='正在播放本词已有录音…';await saPlay(token.target);if(card.paRun===run)status.textContent='已播放本词已有录音；可进入录音管理纠正默认发音。';}catch(error){if(card.paRun===run)status.textContent=error.message;}};
+  card.append(section);
  }catch(_){}
 }
 const paPreviousDetail=learningOpenDetail;
@@ -6093,7 +6113,7 @@ learningOpenDetail=async function(id){
   host.prepend(section);segments.forEach((node,i)=>{const p=current&&paProfile(snap,annotation.segments[i]?.profileId),wrap=document.createElement('section');wrap.innerHTML='<h4>本段发音分析</h4>'+(p?paAnalysisHtml(p.phoneticAnalysis):'<p class="pa-muted">本段尚无可用发音分析。点击上方导出按钮可一次分析全部分段。</p>');node.append(wrap);});
  }else{
   let analyses=current?annotation.segments.map(s=>paProfile(snap,s.profileId)?.phoneticAnalysis).filter(Boolean):[];
-if(!analyses.length&&!annotation){const candidates=snap.learningMaterials.filter(p=>p.phoneticProfile&&!p.deleted&&p.ruleDigest===digest&&p.textLao===basis.original).sort((a,b)=>b.updatedAt-a.updatedAt),profiles=candidates.filter((p,i)=>candidates.findIndex(x=>paReadingKey(x.phoneticAnalysis)===paReadingKey(p.phoneticAnalysis))===i);analyses=profiles.slice(0,5).map(p=>p.phoneticAnalysis);if(!analyses.length){const found=paReusable(snap,basis.original,digest);if(found)analyses=[found];}if(profiles.length>1)section.insertAdjacentHTML('beforeend','<p class="pa-pending">已记录不同分析，以下按读法分别展示，需结合语境选择。</p>');}
+if(!analyses.length&&!annotation){const candidates=snap.learningMaterials.filter(p=>p.phoneticProfile&&!p.deleted&&paCompatibleDigest(p.ruleDigest,digest)&&p.textLao===basis.original).sort((a,b)=>b.updatedAt-a.updatedAt),profiles=candidates.filter((p,i)=>candidates.findIndex(x=>paReadingKey(x.phoneticAnalysis)===paReadingKey(p.phoneticAnalysis))===i);analyses=profiles.slice(0,5).map(p=>p.phoneticAnalysis);if(!analyses.length){const found=paReusable(snap,basis.original,digest);if(found)analyses=[found];}if(profiles.length>1)section.insertAdjacentHTML('beforeend','<p class="pa-pending">已记录不同分析，以下按读法分别展示，需结合语境选择。</p>');}
   section.insertAdjacentHTML('beforeend',analyses.length?analyses.map(paAnalysisHtml).join(''):'<p class="pa-muted">尚未保存本词的发音结构分析。</p>');
   const audio=detail.querySelector('.learn-audio-bottom');if(audio)audio.before(section);else detail.append(section);
  }
@@ -6120,9 +6140,11 @@ async function paOpen(onlyIds=null){
  $('#paSave').onclick=async()=>{if(learningBusy||!preview)return;learningBusy=true;$('#paSave').disabled=true;try{const picked=[...learningDialog.querySelectorAll('[data-pa-save]:checked')].map(b=>preview[Number(b.dataset.paSave)]);if(!picked.length||picked.some(p=>!p||p.error))throw Error('请先勾选已核对的项目');const plan=await paPlan(picked,expected);await saCommitDictionary(plan,expected,words);preview=null;learningDraft=null;$('#paResults').querySelectorAll('input,button').forEach(b=>b.disabled=true);$('#learningDialogStatus').textContent='已保存'+picked.length+'项发音分析。重新打开句子详情，展开每个语法分段即可查看；原语法和录音保留。';}catch(e){fail(e);reviewUpdate();}finally{learningBusy=false;}};
  draw();
 }
+async function paCorrectWord(id,button){await saOpenNested(id,button);if(learningDetail===id)learningDialog.querySelector('.learn-audio-bottom')?.scrollIntoView?.({block:'start',behavior:'smooth'});}
 document.addEventListener('click',async e=>{
- const b=e.target.closest('[data-pa-target],[data-phonetic-batch],[data-pa-rule]');if(!b)return;
+ const b=e.target.closest('[data-pa-target],[data-phonetic-batch],[data-pa-rule],[data-pa-correct]');if(!b)return;
  try{if(b.hasAttribute('data-phonetic-batch')){await paOpen();return;}if(b.dataset.paTarget){await paOpen([b.dataset.paTarget]);return;}
+  if(b.dataset.paCorrect){await paCorrectWord(b.dataset.paCorrect,b);return;}
   if(learningHasWork()||recorder)throw Error('请先保存或取消当前编辑，再打开原规则页');
   const key=b.dataset.paRule;if(!/^(dead|live|nocoda)\|(middle|low|high)\|(short|long)\|(none|່|້)$/.test(key))throw Error('教材规则编号无效');
   const id=learningDetail,origin=activeView;learningDialog.close();await showView('pronunciation');pronunciationOpenTone(key);

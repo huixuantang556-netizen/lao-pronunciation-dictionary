@@ -823,6 +823,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       try {
         const backup=JSON.parse(await file.text());
         if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
+        if(backup?.format==='lao-phonetic-repair-v1'){const applied=await importPhoneticRepair(backup);if(!applied)$('#backupStatus').textContent='已取消发音修复，未修改本机资料。';return;}
         if(backup?.format==='lao-dictionary-text-export-v1')throw new Error('这是不含音频的全部资料审查文件，不能作为完整备份恢复。请保留原录音，使用核对后的专用修复文件。');
         if(backup?.format==='lao-tag-review')throw new Error('这是导出的标签整理词表，请选择“词典标签更新-2026-10-08.json”，而不是标签整理词表。');
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
@@ -5981,12 +5982,13 @@ function paLegacyRules(){
  for(const v of CodaLesson.vowels)vowels.push({base:v.baseVowel,length:v.vowelLength,closed:v.closedVowel.replace(/◌$/u,'')});
  return JSON.parse(JSON.stringify({format:'lao-textbook-phonetic-rules-v1',names:['短调','一声','二声','三声','四声','中降调'],initialClasses:classes,compoundInitials:compounds,codas:CodaLesson.codas.map(({letter,sound,type})=>({letter,sound,type})),vowels,deadTones:CodaLesson.deadTones,liveTones:CodaLesson.liveTones,vowelChart:typeof liveVowelRows==='undefined'?[]:liveVowelRows,specialVowels:CodaLesson.specialVowels.map(v=>v.baseVowel),notes:'按当前教材命名，不等同于普通话声调。无尾短元音在本教材称死音节；有尾辅音与死活性质分别记录。表格为空的格子不补猜。前置ຫ、复合辅音、特殊元音及借词未具备完整自动判定规则，须标记待核对。规则匹配不证明实际读音已经核实。'}));
 }
-function paRules(){
+function paRulesV2(){
  return {...paLegacyRules(),format:'lao-textbook-phonetic-rules-v2',specialRhymes:[{base:'ໃ◌',final:'j'},{base:'ໄ◌',final:'j'},{base:'ເ◌ົາ',final:'w'},{base:'◌ຳ',final:'m'}],toneClusters:['ຄວ','ກວ','ຂວ'],references:['https://seasite.niu.edu/lao/LaoLanguage/IntroAlphabet/tonemarks/tonechart.htm','https://seasite.niu.edu/lao/LaoLanguage/LaoAlphabet/LaoVowelSounds.htm','https://www.loc.gov/catdir/cpso/romanization/lao.pdf'],notes:'沿用教材中文声调名。特殊韵母含j/w/m活韵尾，不按普通短元音死音节处理；其元音类别与长度分开记录。仅对列明且类别与教材表一致的复辅音启用声调推导，实际读音另行核对。声调可推导不等于IPA或方言读音已经确认。未覆盖的结构保留待核对。'};
 }
-let paLegacyRuleDigest='';
-async function paDigest(rules){if(!paLegacyRuleDigest)paLegacyRuleDigest=await cloudHash(new Blob([cloudStable(paLegacyRules())]));return cloudHash(new Blob([cloudStable(rules)]));}
-function paCompatibleDigest(saved,current){return saved===current||!!paLegacyRuleDigest&&saved===paLegacyRuleDigest;}
+function paRules(){return {...paRulesV2(),format:'lao-textbook-phonetic-rules-v3',hoLeading:{'ຫງ':'ງ','ຫຍ':'ຍ','ຫນ':'ນ','ໜ':'ນ','ຫມ':'ມ','ໝ':'ມ','ຫຼ':'ລ','ຫລ':'ລ','ຫວ':'ວ'},notes:paRulesV2().notes+' 已列明的前置ຫ及合体写法按高辅音类别推导，ຫ不单独发音；只确认标准拼读结构，不代表已核实实际录音或方言。',references:[...paRulesV2().references,'https://r12a.github.io/scripts/laoo/lo.html#highclass']};}
+let paLegacyRuleDigest='',paV2RuleDigest='';
+async function paDigest(rules){if(!paLegacyRuleDigest)paLegacyRuleDigest=await cloudHash(new Blob([cloudStable(paLegacyRules())]));if(!paV2RuleDigest)paV2RuleDigest=await cloudHash(new Blob([cloudStable(paRulesV2())]));return cloudHash(new Blob([cloudStable(rules)]));}
+function paCompatibleDigest(saved,current){return saved===current||!!paLegacyRuleDigest&&saved===paLegacyRuleDigest||!!paV2RuleDigest&&saved===paV2RuleDigest;}
 function paText(v,label,max=3000){if(typeof v!=='string'||v.length>max)throw Error(label+'必须为不超过'+max+'字符的文字');return v;}
 function paKnownClass(initial,rules){return Object.keys(rules.initialClasses).find(k=>rules.initialClasses[k].includes(initial));}
 function paValidateAnalysis(value,original,rules=paRules()){
@@ -6022,9 +6024,11 @@ function paValidateAnalysis(value,original,rules=paRules()){
   if(onset.mode==='normal'&&knownClass&&onset.toneClass!=='unknown'&&knownClass!==onset.toneClass)throw Error('辅音类别与教材不符：'+onset.written);
   if(onset.mode==='normal'&&knownClass&&onset.sound&&onset.sound!==onset.written)throw Error('普通首辅音的实际辅音请填写原字母，IPA另填：'+text);
   if(!onset.sound)soundWarnings.push('实际发音辅音尚未填写');
-  const toneClass=onset.mode==='normal'?knownClass:onset.mode==='cluster'&&rules.toneClusters?.includes(onset.written)?compoundClass:null;
+  const leadingSound=onset.mode==='ho-leading'?rules.hoLeading?.[onset.written]:null;
+  if(leadingSound&&onset.sound&&onset.sound!==leadingSound)throw Error('前置ຫ的实际辅音与已核对规则不符：'+text);
+  const toneClass=onset.mode==='normal'?knownClass:leadingSound&&compoundClass==='high'?'high':onset.mode==='cluster'&&rules.toneClusters?.includes(onset.written)?compoundClass:null;
   if(!toneClass||onset.toneClass==='unknown')warnings.push('决定声调的辅音类别或结构尚不能自动核实');
-  if(onset.mode!=='normal')soundWarnings.push('复合／前置辅音的实际读音需结合录音核对');
+  if(onset.mode!=='normal'&&!leadingSound)soundWarnings.push('复合／前置辅音的实际读音需结合录音核对');
   if(!rhyme&&knownVowels.length&&vowel.length!=='unknown'&&!knownVowels.some(v=>v.length===vowel.length))throw Error('基本元音的长短与教材不符：'+vowel.base);
   if(!rhyme&&(!knownVowels.length||vowel.length==='unknown'))warnings.push('元音基本形式或长短待核对');
   if(vowel.base!==vowel.written&&!knownVowels.some(v=>v.closed===vowel.written)&&!rules.vowelChart.some(row=>row[0]===vowel.base&&row[2]===vowel.written))warnings.push('元音书写变化未在当前表中确认');
@@ -6207,6 +6211,50 @@ function paAuditRecords(materials,entries,digest){
  const wordTargets=new Map();for(const w of entries)if(w.word&&w.syncId){if(!wordTargets.has(w.word))wordTargets.set(w.word,[]);const targets=wordTargets.get(w.word);if(targets.length<100)targets.push({id:'word:'+w.syncId,text:w.word,meaning:w.meaning||''});}
  const counts={};for(const p of issues){p.targets=p.owners.length?p.owners:wordTargets.get(p.text)||[];for(const flag of p.flags)counts[flag]=(counts[flag]||0)+1;}
  return {issues,counts,savedCards,profiles:profiles.size};
+}
+</script>
+<script data-learning-bundle="phonetic-repair">
+/* Whitelisted phonetic-only patch; never replace dictionary, grammar or audio data. */
+function paRepairBase(m){if(!m)return null;return Object.fromEntries(['id','contentType','textLao','linkedWordSyncIds','sentenceAnalysis','analysisOwner','phoneticProfile','phoneticAnalysis','pronunciationAnalysis','ruleDigest','deleted'].filter(k=>m[k]!==undefined).map(k=>[k,m[k]]));}
+function paRepairEntryBase(w){return {syncId:w.syncId,word:w.word,meaning:w.meaning||'',syncAliases:w.syncAliases||[]};}
+async function paRepairPlan(root,snap,entries,progress=()=>{}){
+ if(root?.format!=='lao-phonetic-repair-v1'||!Array.isArray(root.operations)||root.operations.length>20000||!Array.isArray(root.sourceEntries)||root.sourceEntries.length>50000)throw Error('发音修复文件格式或数量无效');
+ const rules=paRules(),digest=await paDigest(rules);if(root.ruleDigest!==digest)throw Error('修复文件的教材规则版本与程序不同，请先更新程序');
+ const words=new Map(entries.map(w=>[w.syncId,w]));for(const ref of root.sourceEntries){const w=words.get(ref.syncId);if(!w||await paDigest(paRepairEntryBase(w))!==ref.hash)throw Error('词典“'+(w?.word||ref.syncId)+'”自导出后已变化，请重新导出后修复');}
+ const byId=new Map(snap.learningMaterials.map(m=>[m.id,m])),writes=new Map(),seen=new Set(),lookup=paLookup(snap,entries);let created=0,annotated=0,archived=0;
+ for(let i=0;i<root.operations.length;i++){
+  const op=root.operations[i];if(typeof op.id!=='string'||seen.has(op.id))throw Error('修复编号重复或无效');seen.add(op.id);const old=byId.get(op.id);
+  if((old?await paDigest(paRepairBase(old)):null)!==op.baseHash)throw Error('分析“'+(old?.textLao||op.id)+'”自导出后已变化，停止整批保存');
+  let next;
+  if(op.kind==='profile'){
+   if(old||op.baseHash!==null||!op.id.startsWith('phonetic-profile:'))throw Error('新增分析编号冲突');const a=paValidateAnalysis(op.analysis,op.analysis?.original,rules),id='phonetic-profile:'+await paDigest({ruleDigest:digest,analysis:a});if(id!==op.id)throw Error('新分析的内容校验不一致');
+   next={...learningBlank(op.id,'reading_drill',a.original),analysisOwner:'phonetic-cache',phoneticProfile:true,phoneticAnalysis:a,ruleDigest:digest,repairMethod:'orthographic-review-v3',updatedAt:Date.now()};created++;
+  }else if(op.kind==='annotate'){
+   if(old?.phoneticProfile||old?.deleted)throw Error('不能给已删除或缓存记录写入词卡分析');let target=old;
+   if(!target){const w=words.get(op.wordSyncId);if(!w||op.id!=='word:'+w.syncId||paResolve(op.id,snap,entries,lookup).m.id!==op.id)throw Error('缺少对应的现有词条，或已新增另一份关联词卡');target=learningWordMaterial(w);}
+   const resolved=old?paResolve(op.id,snap,entries,lookup):{m:target,w:words.get(op.wordSyncId),text:words.get(op.wordSyncId).word},basis=paBasis(resolved),a=op.annotation;
+   if(a?.format!=='lao-segment-pronunciation-v1'||a.ruleDigest!==digest||a.original!==resolved.text||a.basisKey!==cloudStable(basis))throw Error('修复分析与当前原文、语法分段不一致');
+   if(a.segments?.length!==basis.segments.length)throw Error('修复分析分段数量不一致');for(let j=0;j<basis.segments.length;j++){const s=a.segments[j],b=basis.segments[j];if(s.index!==j||s.original!==b.original||s.chinese!==b.chinese)throw Error('修复分段身份不一致');for(const w of s.words||[])if(!b.words.some(v=>v.lao===w.lao&&v.meaning===w.meaning&&v.role===w.role&&v.target===w.target))throw Error('不能通过发音修复改写原语法词义或词典关联');}
+   next={...target,pronunciationAnalysis:a,updatedAt:Date.now()};annotated++;
+  }else if(op.kind==='archive'){
+   if(!old?.phoneticProfile||old.deleted||!op.redirectTo||op.redirectTo===op.id||old.audioSources?.length||snap.learningPlacements.some(p=>p.materialId===op.id))throw Error('不能归档该记录或存在音频／课程关联');
+   next={...old,deleted:true,repairRedirectTo:op.redirectTo,repairReason:'重复或经复核的历史版本，关联已迁移；保留原记录以便恢复',updatedAt:Date.now()};archived++;
+  }else throw Error('修复操作类型无效');
+  if(new Blob([JSON.stringify(next)]).size>240000)throw Error('单项修复资料过大');writes.set(op.id,next);
+  if(i%50===0){progress('已校验 '+(i+1)+' / '+root.operations.length+' 项修复操作');await new Promise(resolve=>setTimeout(resolve,0));}
+ }
+ const after={...snap,learningMaterials:[...byId.values()].map(m=>writes.get(m.id)||m).concat([...writes.values()].filter(m=>!byId.has(m.id)))},profiles=new Map(after.learningMaterials.map(m=>[m.id,m]));paValidateLinks(after);
+ for(const m of after.learningMaterials)if(!m.deleted)for(const s of m.pronunciationAnalysis?.segments||[])for(const ref of [{profileId:s.profileId,original:s.original},...s.words.map(w=>({profileId:w.profileId,original:w.lao}))]){const p=profiles.get(ref.profileId);if(!p?.phoneticProfile||p.deleted||p.textLao!==ref.original)throw Error('修复后存在失效的发音关联，未保存');}
+ for(const op of root.operations)if(op.kind==='archive'){const target=profiles.get(op.redirectTo),old=profiles.get(op.id);if(!target?.phoneticProfile||target.deleted||target.textLao!==old.textLao)throw Error('归档后的替代分析缺失或原文不一致');}
+ return {plan:{entries:[],materials:[...writes.values()]},after,counts:{created,annotated,archived}};
+}
+async function importPhoneticRepair(root){
+ if(learningHasWork()||recorder||learningBusy)throw Error('请先完成编辑或录音');const dialog=document.createElement('dialog');dialog.innerHTML='<h2>发音分析专项修复</h2><p data-repair-status role="status">正在核对当前数据和所有关联，不会改动录音…</p><div data-repair-summary></div><label><input data-repair-confirm type="checkbox" style="width:auto">我已保存完整备份，理解规则分析不等于听音验证，确认应用整批修复。</label><p><button data-repair-save disabled>确认应用</button><button data-repair-cancel>取消</button></p>';document.body.append(dialog);dialog.showModal();
+ const status=dialog.querySelector('[data-repair-status]'),save=dialog.querySelector('[data-repair-save]'),check=dialog.querySelector('[data-repair-confirm]');let prepared,snap,entries,applying=false,applied=false;
+ try{[snap,entries]=await Promise.all([learningSnapshot(),allEntries()]);prepared=await paRepairPlan(root,snap,entries,message=>status.textContent=message);if(!dialog.open)return false;const n=prepared.counts;dialog.querySelector('[data-repair-summary]').textContent='新增标准化分析 '+n.created+' 份；补全／更新词句关联 '+n.annotated+' 张；归档重复或历史版本 '+n.archived+' 份。归档前已迁移发音引用。词典内容、语法和全部录音保留。';status.textContent='校验通过，尚未保存。若导出后相关词条或分析已变化，整批修复会停止。';
+  await new Promise(resolve=>{const finish=()=>{dialog.close();resolve();};check.onchange=()=>save.disabled=!check.checked;dialog.querySelector('[data-repair-cancel]').onclick=()=>{if(!applying)finish();};dialog.oncancel=e=>{e.preventDefault();if(!applying)finish();};save.onclick=async()=>{if(!check.checked||applying)return;applying=true;save.disabled=true;try{await saCommitDictionary(prepared.plan,snap,entries);}catch(error){status.textContent='未能完成保存：'+error.message;applying=false;save.disabled=!check.checked;return;}applied=true;status.textContent='修复已保存；原录音、词义及语法未改动。';const output=document.querySelector('#backupStatus');if(output)output.textContent=status.textContent;try{if(typeof render==='function')await render();}catch(_){if(output)output.textContent='发音修复已保存，请刷新页面查看。';}finish();};});
+  return applied;
+ }catch(error){dialog.close();throw error;}finally{dialog.remove();}
 }
 </script>
 <script data-learning-bundle="phonetic-analysis">

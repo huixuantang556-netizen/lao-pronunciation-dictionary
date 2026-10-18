@@ -1127,6 +1127,65 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){loadNoteImages(item);removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
     (async()=>{try{await openDB();await migrateLegacyAudio();await seed();const classroomImport=await importCodaClassroom();await migrateSyncIds();await render();await choosePractice({resume:true});await restoreCurrentPage();if(classroomImport.added||classroomImport.linked)$('#codaStatus').textContent=`课堂例词已保存：新增 ${classroomImport.added} 条，关联已有 ${classroomImport.linked} 条。可点击云端同步上传。`;}catch(e){alert('无法打开本地词典数据库：'+e.message)}})();
     // Cloud sync core: three-way merge, immutable audio and conditional writes.
+/* Bounded text batches; never upsert over another device's revision. */
+const cloudBatchCapabilities=new WeakMap();
+function cloudTextBatches(rows){
+ const batches=[];let batch=[],size=2;
+ for(const row of rows){const bytes=new Blob([JSON.stringify(row)]).size+1;if(batch.length&&(batch.length>=100||size+bytes>786432)){batches.push(batch);batch=[];size=2;}batch.push(row);size+=bytes;}
+ if(batch.length)batches.push(batch);return batches;
+}
+async function cloudSyncPool(rows,limit,work){
+ let next=0,failure=null;
+ await Promise.all(Array.from({length:Math.min(limit,rows.length)},async()=>{while(!failure&&next<rows.length){const row=rows[next++];try{await work(row);}catch(error){failure=failure||error;}}}));
+ // In-flight writes have settled before unlocking the UI, even on failure.
+ if(failure)throw failure;
+}
+async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
+ if(!rows.length)return;
+ if(!['lao_dictionary_records','lao_learning_records'].includes(table))throw Error('同步表无效。');
+ const learning=table==='lao_learning_records',label=learning?'学习资料':'词典',headers={Prefer:'return=representation',...(learning?{'x-learning-schema':'2'}:{})};
+ const key=r=>JSON.stringify([r.kind,r.id]),byKey=new Map(rows.map(r=>[key(r),r]));if(byKey.size!==rows.length)throw Error('本次同步有重复记录，已停止。');
+ let rpc=false;
+ if(rows.length>1){
+  let capabilities=cloudBatchCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudBatchCapabilities.set(api,capabilities);}
+  if(!capabilities.has(table)){
+   status('正在检查批量同步接口…');
+   try{const probe=await api('/rest/v1/rpc/lao_sync_batch_v1',{method:'POST',body:{target_table:table,changes:[]},extraHeaders:headers});if(!Array.isArray(probe)||probe.length)throw Error('批量同步接口返回格式异常。');capabilities.set(table,true);}
+   catch(error){if(error.status!==404)throw error;capabilities.set(table,false);}
+  }
+  rpc=capabilities.get(table);
+ }
+ // New records can use the existing bulk-insert endpoint without a server upgrade.
+ // Existing records retain per-record revision conditions in compatibility mode.
+ const batches=rpc?cloudTextBatches(rows):[...cloudTextBatches(rows.filter(r=>r.revision===null)),...cloudTextBatches(rows.filter(r=>r.revision!==null))];
+ let completed=0;
+ const validate=(result,expected)=>{
+  if(!Array.isArray(result)||result.length!==expected.length)throw Error('其他设备修改了资料或批次返回不完整；已停止，请重新同步。');
+  const wanted=new Map(expected.map(r=>[key(r),r])),seen=new Set();
+  for(const value of result){const k=JSON.stringify([value.record_kind,value.record_id]),r=wanted.get(k);
+   if(!r||seen.has(k)||value.owner_id!==uid||!Number.isSafeInteger(value.revision)||value.revision!==(r.revision===null?1:r.revision+1)||!cloudSame(value.payload,r.payload)||(!learning&&value.deleted!==r.deleted))throw Error('云端更新返回身份、版本或内容不符；已停止，请保留本机资料。');seen.add(k);
+  }
+  for(const value of result)wanted.get(JSON.stringify([value.record_kind,value.record_id])).result=value;
+ };
+ for(let i=0;i<batches.length;i++){
+  const batch=batches[i],message='正在'+(rpc?'批量同步':'兼容加速同步')+label+' · 第 '+(i+1)+' / '+batches.length+' 批';
+  status(message,{done:completed,total:rows.length});
+  await cloudSyncPool(batch,2,prepare);
+  if(rpc){
+   const changes=batch.map(r=>({record_kind:r.kind,record_id:r.id,payload:r.payload,expected_revision:r.revision,...(!learning?{deleted:r.deleted}:{})}));
+   const result=await api('/rest/v1/rpc/lao_sync_batch_v1',{method:'POST',body:{target_table:table,changes},extraHeaders:headers});validate(result,batch);completed+=batch.length;status(message,{done:completed,total:rows.length});
+  }else if(batch[0].revision===null){
+   const body=batch.map(r=>({owner_id:uid,record_kind:r.kind,record_id:r.id,payload:r.payload,...(!learning?{deleted:r.deleted}:{})}));
+   const result=await api('/rest/v1/'+table,{method:'POST',body:body.length===1?body[0]:body,extraHeaders:headers});validate(result,batch);completed+=batch.length;status(message,{done:completed,total:rows.length});
+  }else{
+   await cloudSyncPool(batch,4,async r=>{
+    const body={payload:r.payload,...(!learning?{deleted:r.deleted}:{})};
+    const result=await api('/rest/v1/'+table+'?owner_id=eq.'+uid+'&record_kind=eq.'+r.kind+'&record_id=eq.'+encodeURIComponent(r.id)+'&revision=eq.'+r.revision,{method:'PATCH',body,extraHeaders:headers});validate(result,[r]);completed++;status(message,{done:completed,total:rows.length});
+   });
+  }
+ }
+}
+
     function validateNoteImages(value) {
       if(value===undefined)return [];
       if(!Array.isArray(value)||value.length>3||value.some(x=>typeof x!=='string'||x.length>60000||!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(x)))throw new Error('备注图片格式无效或过大（最多 3 张压缩图片）。');
@@ -1259,13 +1318,13 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       box.style.cssText='padding:12px 14px;margin:10px 0;border:1px solid #c8ded6;border-radius:12px;background:#f4faf7';
       bar.style.cssText='display:block;width:100%;height:8px;accent-color:#087f70';bar.setAttribute('aria-label','当前同步阶段进度');
       detail.style.cssText='margin:8px 0 0;font-size:13px;color:#627d76;line-height:1.6;overflow-wrap:anywhere';box.append(bar,detail);node.after(box);
-      let started=0,last=0,timer=null,count=0,pending='',phase='',counts=null;
+      let started=0,last=0,timer=null,count=0,pending='',phase='',counts=null;const requests=new Map();let requestId=0;
       const paint=()=>{const now=Date.now(),elapsed=Math.floor((now-started)/1000),idle=Math.floor((now-last)/1000);
         detail.textContent=(counts?'本阶段 '+counts.done+' / '+counts.total+' 项 · ':'')+'已用时 '+elapsed+' 秒 · 已完成网络请求 '+count+' 次'+(pending?' · '+pending:'')+(typeof navigator!=='undefined'&&navigator.onLine===false?' · 当前设备已离线，请恢复网络。':'')+(idle>=15&&!/等待你/.test(phase)?' · '+idle+' 秒无新进展；可能在等待网络或处理大文件，尚不能判断卡死。':'');
       };
       return {start(){started=last=Date.now();count=0;pending='';counts=null;box.hidden=false;bar.removeAttribute('value');clearInterval(timer);timer=setInterval(paint,1000);paint();},
         update(message,progress){phase=message;counts=progress&&Number.isFinite(progress.total)?progress:null;last=Date.now();if(counts&&counts.total>0){bar.max=counts.total;bar.value=counts.done;}else bar.removeAttribute('value');paint();},
-        async request(api,path,options){pending=path.startsWith('/storage/')?(options?.method==='POST'?'正在上传音频':'正在读取音频'):(options?.method&&options.method!=='GET'?'正在提交资料':'正在读取云端资料');if(options?.rawBody?.size)pending+='（'+(options.rawBody.size/1048576).toFixed(2)+' MB）';paint();try{const result=await api(path,options);count++;last=Date.now();return result;}finally{pending='';paint();}},
+        async request(api,path,options){let text=path.startsWith('/storage/')?(options?.method==='POST'?'正在上传音频':'正在读取音频'):(options?.method&&options.method!=='GET'?'正在提交资料':'正在读取云端资料');if(options?.rawBody?.size)text+='（'+(options.rawBody.size/1048576).toFixed(2)+' MB）';const id=++requestId;requests.set(id,text);const refresh=()=>{pending=requests.size>1?'正在并行处理 '+requests.size+' 个请求':requests.values().next().value||'';paint();};refresh();try{const result=await api(path,options);count++;last=Date.now();return result;}finally{requests.delete(id);refresh();}},
         finish(){clearInterval(timer);timer=null;pending='';paint();bar.hidden=true;},
         reset(){bar.hidden=false;}
       };
@@ -1384,25 +1443,21 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
             else {const payload=p.target.payload,audio=await audioPayload(payload.audio?await loadAudio(payload.audio):null);const value={...cloudEntryData(payload.entry),...audio};if(old)value.id=old.id;changes.push({value});}
           }else if(!p.target.deleted)audioChanges.push({key:p.target.payload.cacheKey,blob:await loadAudio(p.target.payload.audio)});
         }
-        let uploaded=0;
-        for(const p of plan.filter(x=>x.action==='local')){
-          status('正在上传词典与音频',{done:uploaded,total:uploads});
+        const pending=plan.filter(x=>x.action==='local'),preparedAudio=new Map();
+        const uploadAudio=async p=>{
           const a=p.target.payload.audio;
           if(!p.target.deleted&&a){
             validateAudio(a);const blob=blobs.get(a.path);if(!blob)throw new Error('本机音频缺失。');
-            try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}
-            catch(error){if(![400,409].includes(error.status))throw error;const existing=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(existing.size!==a.size||await cloudHash(existing)!==a.sha)throw new Error('已有云端音频与本机不符，未覆盖。');}
+            if(cloudSame(p.row?.payload?.audio,a))return;
+            if(!preparedAudio.has(a.path))preparedAudio.set(a.path,(async()=>{try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}
+            catch(error){if(![400,409].includes(error.status))throw error;const existing=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(existing.size!==a.size||await cloudHash(existing)!==a.sha)throw new Error('已有云端音频与本机不符，未覆盖。');}})());
+            await preparedAudio.get(a.path);
           }
-          const colon=p.key.indexOf(':'),kind=p.key.slice(0,colon),id=p.key.slice(colon+1);
-          // A top-level eq filter takes the literal value; extra quotes become part of the ID.
-          const encodedId=encodeURIComponent(id);
-          const body={payload:p.target.payload,deleted:p.target.deleted};
-          const result=p.row?await api('/rest/v1/lao_dictionary_records?owner_id=eq.'+uid+'&record_kind=eq.'+kind+'&record_id=eq.'+encodedId+'&revision=eq.'+p.row.revision,{method:'PATCH',body,extraHeaders:{Prefer:'return=representation'}}):await api('/rest/v1/lao_dictionary_records',{method:'POST',body:{owner_id:uid,record_kind:kind,record_id:id,...body},extraHeaders:{Prefer:'return=representation'}});
-          if(Array.isArray(result)&&result.length===0)throw new Error('更新未匹配到记录：可能其他设备已修改版本，或记录不可访问。请重新同步；若反复出现，请保留数据并联系排查。');
-          if(!Array.isArray(result)||result.length!==1||result[0].owner_id!==uid||result[0].record_id!==id||result[0].record_kind!==kind||!Number.isSafeInteger(result[0].revision))throw new Error('云端更新返回格式或记录身份不符，已停止；请保留本机数据并联系排查。');
-          p.row=result[0];
-          status('正在上传词典与音频',{done:++uploaded,total:uploads});
-        }
+        };
+        const pendingById=new Map(pending.map(p=>[p.key,p]));
+        const batchRows=pending.map(p=>{const colon=p.key.indexOf(':');return {kind:p.key.slice(0,colon),id:p.key.slice(colon+1),payload:p.target.payload,deleted:p.target.deleted,revision:p.row?.revision??null};});
+        await cloudBatchWrite(uid,api,'lao_dictionary_records',batchRows,status,r=>uploadAudio(pendingById.get(r.kind+':'+r.id)));
+        batchRows.forEach(r=>pendingById.get(r.kind+':'+r.id).row=r.result);
         status('正在保存本机词典与同步检查点…');
         // Downloads may complete after another local tab edits: refuse overwriting that tab's entries.
         const cacheFingerprint=async rows=>cloudStable(await Promise.all(rows.map(async row=>[row.key,await cloudHash(row.blob)])));
@@ -1507,7 +1562,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
           const data=await response.json().catch(()=>null);
           if(!response.ok){
             const code=data?.error_code||data?.code;
-            const message=code==='invalid_credentials'?'邮箱或密码不正确。':code==='email_not_confirmed'?'这个账号的邮箱尚未确认，请在 Supabase 用户页面检查。':response.status===401?'登录凭证无效或已过期，请退出后重新登录。':response.status===403?'云端拒绝访问，请检查数据表与存储权限。':response.status===429?'请求过于频繁，请稍后重试。':'云端请求失败（'+response.status+'），请把此提示发给我排查。';
+            const message=code==='40001'||code==='23505'?'其他设备已修改资料或存在同编号记录，请重新同步核对；本批次未覆盖云端新版本。':code==='invalid_credentials'?'邮箱或密码不正确。':code==='email_not_confirmed'?'这个账号的邮箱尚未确认，请在 Supabase 用户页面检查。':response.status===401?'登录凭证无效或已过期，请退出后重新登录。':response.status===403?'云端拒绝访问，请检查数据表与存储权限。':response.status===429?'请求过于频繁，请稍后重试。':'云端请求失败（'+response.status+'），请把此提示发给我排查。';
             const error=new Error(message);error.status=response.status;throw error;
           }
           return data;
@@ -2778,17 +2833,18 @@ async function learningCloudSync(uid,api,status){
   const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,assets));conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
   const validateAudio=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('学习音频索引无效。');};
   const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));
-  let checked=0;const uploadTotal=plan.filter(p=>p.action==='local'&&p.target).length;let uploaded=0;
+  let checked=0;
   for(const p of plan){status('正在校验资料／下载缺少的教材音频',{done:checked++,total:plan.length});if(checked%50===0)await new Promise(resolve=>setTimeout(resolve,0));if(!p.target)continue;let value={...p.target.payload};if(value.id!==p.id)throw new Error('材料编号不一致。');if(p.kind==='learningAudio'){
    const a=value.audio;validateAudio(a);let blob=assets.get(a.path);if(!blob){blob=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(blob.size!==a.size||await cloudHash(blob)!==a.sha)throw new Error('教材音频下载校验失败，未修改本机。');blob=new Blob([blob],{type:a.mime});assets.set(a.path,blob);}delete value.audio;value.blob=blob;
   }learningValidateRecord(p.kind,value);merged[p.kind].push(value);}
   learningValidateLinks(merged);
-  for(const p of plan){if(p.action!=='local'||!p.target)continue;status('正在上传学习资料与教材音频',{done:uploaded,total:uploadTotal});
-   if(p.kind==='learningAudio'){const a=p.target.payload.audio,blob=assets.get(a.path);try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}catch(e){if(![400,409].includes(e.status))throw e;const old=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(old.size!==a.size||await cloudHash(old)!==a.sha)throw new Error('云端已有音频校验不一致。');}}
-   const body={payload:p.target.payload},result=p.row?await api('/rest/v1/lao_learning_records?owner_id=eq.'+uid+'&record_kind=eq.'+p.kind+'&record_id=eq.'+encodeURIComponent(p.id)+'&revision=eq.'+p.row.revision,{method:'PATCH',body,extraHeaders:{Prefer:'return=representation','x-learning-schema':'2'}}):await api('/rest/v1/lao_learning_records',{method:'POST',body:{owner_id:uid,record_kind:p.kind,record_id:p.id,...body},extraHeaders:{Prefer:'return=representation','x-learning-schema':'2'}});
-   if(!Array.isArray(result)||result.length!==1||result[0].owner_id!==uid||result[0].record_kind!==p.kind||result[0].record_id!==p.id||!Number.isSafeInteger(result[0].revision)||!cloudSame(result[0].payload,p.target.payload))throw new Error('其他设备修改了学习材料或云端权限不足，请重新同步。');
-   status('正在上传学习资料与教材音频',{done:++uploaded,total:uploadTotal});
-  }
+  const pending=plan.filter(p=>p.action==='local'&&p.target),pendingById=new Map(pending.map(p=>[p.key,p])),preparedAudio=new Map();
+  const rows=pending.map(p=>({kind:p.kind,id:p.id,payload:p.target.payload,revision:p.row?.revision??null}));
+  await cloudBatchWrite(uid,api,'lao_learning_records',rows,status,async row=>{
+   if(row.kind!=='learningAudio')return;const p=pendingById.get(row.kind+':'+row.id),a=row.payload.audio,blob=assets.get(a.path);if(cloudSame(p.row?.payload?.audio,a))return;
+   if(!preparedAudio.has(a.path))preparedAudio.set(a.path,(async()=>{try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}catch(e){if(![400,409].includes(e.status))throw e;const old=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(old.size!==a.size||await cloudHash(old)!==a.sha)throw new Error('云端已有音频校验不一致。');}})());
+   await preparedAudio.get(a.path);
+  });
   status('正在保存本机学习资料与同步检查点…');
   const checkpoint=Object.fromEntries(plan.filter(p=>p.target).map(p=>[p.key,p.target]));
   const database=await openDB(),t=database.transaction([...learningStores,'cloud_meta'],'readwrite'),done=transactionDone(t);let remaining=learningStores.length;

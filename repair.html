@@ -4,15 +4,19 @@
 <button id="update">检查修复版</button><button id="activate" hidden>启用新版并打开词典</button><p id="status" role="status"></p><a href="./">返回词典</a>
 <script>
 document.querySelector('#update').onclick=async()=>{
- const status=document.querySelector('#status');status.textContent='正在检查…';
+ const status=document.querySelector('#status'),button=document.querySelector('#update'),activate=document.querySelector('#activate');status.textContent='正在联网核对发布版本…';button.disabled=true;activate.hidden=true;let timeout;
  try{
+ const abort=new AbortController();timeout=setTimeout(()=>abort.abort(),12000);const response=await fetch('./version.json?check='+Date.now(),{cache:'no-store',signal:abort.signal});clearTimeout(timeout);if(!response.ok)throw Error('缺少版本清单，请完整上传全部程序文件');const latest=(await response.json()).version;if(!/^[0-9a-f]{16}$/.test(latest||''))throw Error('发布版本清单无效');
  const registration=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});
  await registration.update();
  const worker=registration.installing;
- if(worker)await new Promise((resolve,reject)=>{const check=()=>{if(worker.state==='installed'||worker.state==='activated')resolve();else if(worker.state==='redundant')reject(new Error('下载失败，请重试'));};worker.addEventListener('statechange',check);check();});
- status.textContent=registration.waiting?'新版已下载。请先保存其他页面的编辑或录音，再点击“启用新版并打开词典”；无需关闭其他页面，不清除本机资料。':'检查完成，可返回词典。';
- const activate=document.querySelector('#activate');activate.hidden=!registration.waiting;
+ if(worker)await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{worker.removeEventListener('statechange',check);reject(Error('仍在下载，尚未核实成功，请稍后再试'));},30000),check=()=>{if(['installed','activated','redundant'].includes(worker.state)){clearTimeout(timer);worker.removeEventListener('statechange',check);worker.state==='redundant'?reject(Error('下载失败或部署不完整，请重试')):resolve();}};worker.addEventListener('statechange',check);check();});
+ const target=registration.waiting||registration.active;const version=await new Promise(resolve=>{if(!target){resolve('');return;}const channel=new MessageChannel(),timer=setTimeout(()=>{channel.port1.close();resolve('');},1500);channel.port1.onmessage=e=>{clearTimeout(timer);channel.port1.close();resolve(e.data?.version||'');};target.postMessage({type:'GET_APP_VERSION'},[channel.port2]);});
+ if(version!==latest)throw Error('程序版本尚未与线上一致，请确认全部文件上传完成后重试；不会清除资料');
+ status.textContent=registration.waiting?'已核实新版 '+latest+' 已下载。请先保存其他页面的编辑或录音，再点击启用；无需关闭其他页面，不清除本机资料。':'已核实程序 '+latest+' 已启用，点击下方按钮重新打开词典。';
+ activate.hidden=false;activate.textContent=registration.waiting?'启用新版并打开词典':'打开已启用新版';
  activate.onclick=()=>{if(!confirm('请确认其他页面的编辑或录音已经保存。其他页面不会被强制刷新。继续启用新版？'))return;navigator.serviceWorker.addEventListener('controllerchange',()=>location.href='./',{once:true});if(registration.waiting)registration.waiting.postMessage({type:'ACTIVATE_SAVED_UPDATE'});else location.href='./';};
- }catch(error){status.textContent='更新失败：'+error.message;}
+ }catch(error){status.textContent='尚未核实更新成功：'+(error.name==='AbortError'?'联网检查超时，请重试':error.message);}
+ finally{clearTimeout(timeout);button.disabled=false;}
 };
 </script></body></html>

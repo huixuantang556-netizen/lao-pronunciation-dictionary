@@ -1322,11 +1322,11 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
       const paint=()=>{const now=Date.now(),elapsed=Math.floor((now-started)/1000),idle=Math.floor((now-last)/1000);
         detail.textContent=(counts?'本阶段 '+counts.done+' / '+counts.total+' 项 · ':'')+'已用时 '+elapsed+' 秒 · 已完成网络请求 '+count+' 次'+(pending?' · '+pending:'')+(typeof navigator!=='undefined'&&navigator.onLine===false?' · 当前设备已离线，请恢复网络。':'')+(idle>=15&&!/等待你/.test(phase)?' · '+idle+' 秒无新进展；可能在等待网络或处理大文件，尚不能判断卡死。':'');
       };
-      return {start(){started=last=Date.now();count=0;pending='';counts=null;box.hidden=false;bar.removeAttribute('value');clearInterval(timer);timer=setInterval(paint,1000);paint();},
+      return {start(){started=last=Date.now();count=0;pending='';counts=null;box.hidden=false;box.setAttribute('aria-busy','true');bar.hidden=false;bar.style.display='block';bar.removeAttribute('value');clearInterval(timer);timer=setInterval(paint,1000);paint();},
         update(message,progress){phase=message;counts=progress&&Number.isFinite(progress.total)?progress:null;last=Date.now();if(counts&&counts.total>0){bar.max=counts.total;bar.value=counts.done;}else bar.removeAttribute('value');paint();},
         async request(api,path,options){let text=path.startsWith('/storage/')?(options?.method==='POST'?'正在上传音频':'正在读取音频'):(options?.method&&options.method!=='GET'?'正在提交资料':'正在读取云端资料');if(options?.rawBody?.size)text+='（'+(options.rawBody.size/1048576).toFixed(2)+' MB）';const id=++requestId;requests.set(id,text);const refresh=()=>{pending=requests.size>1?'正在并行处理 '+requests.size+' 个请求':requests.values().next().value||'';paint();};refresh();try{const result=await api(path,options);count++;last=Date.now();return result;}finally{requests.delete(id);refresh();}},
-        finish(){clearInterval(timer);timer=null;pending='';paint();bar.hidden=true;},
-        reset(){bar.hidden=false;}
+        finish(){clearInterval(timer);timer=null;pending='';paint();bar.max=1;bar.value=0;bar.hidden=true;bar.style.display='none';box.setAttribute('aria-busy','false');},
+        reset(){bar.hidden=false;bar.style.display='block';}
       };
     }
     async function runCloudSync(uid,api,status) {

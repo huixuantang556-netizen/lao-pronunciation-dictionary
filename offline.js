@@ -12,7 +12,7 @@
     <p>iPhone：在 Safari 中打开 HTTPS 安装地址，选择分享 → 添加到主屏幕。其他设备可使用浏览器的安装应用功能。</p>
     <p>本试用包仅包含程序；公共单词卡和语音包尚未接入。参考发音保留在原始备份中，没有删除。请勿清除原浏览器数据。</p>
     <p>离线可播放已保存音频；首次生成 AI 发音、登录与同步仍需联网。保持定期备份，卸载或清除网站数据可能删除本机资料。</p>`;
-  document.querySelector('#localDataNotice').after(panel);
+  if(typeof window.appMoveOfflinePanel==='function')window.appMoveOfflinePanel(panel);else document.querySelector('#localDataNotice').after(panel);
   const status = panel.querySelector('[data-offline-status]');
   const storage = panel.querySelector('[data-storage]');
   const install = panel.querySelector('[data-install]');

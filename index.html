@@ -616,7 +616,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     const addEntry=item=>withStore('readwrite',store=>request(store.add(item)));
     const putEntry=item=>withStore('readwrite',store=>request(store.put(item)));
     const deleteEntry=id=>withStore('readwrite',store=>request(store.delete(id)));
-    async function allEntries() { return (await withStore('readonly',store=>request(store.getAll()))).sort((a,b)=>b.updatedAt-a.updatedAt); }
+    async function allEntries() { const read=async()=>(await withStore('readonly',store=>request(store.getAll()))).sort((a,b)=>b.updatedAt-a.updatedAt),scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;return scope?(scope.entries||(scope.entries=read())):read(); }
     function audioDataBuffer(value) { if(value instanceof ArrayBuffer)return value; if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength); return null; }
     function audioBlobFor(item) { if(typeof item?.audioDataUrl==='string'&&item.audioDataUrl){try{return dataURLToBlob(item.audioDataUrl);}catch(_){return null;}} const buffer=audioDataBuffer(item?.audioData); if(buffer)return new Blob([buffer],{type:item.audioType||'audio/webm'}); return item?.audio instanceof Blob?item.audio:null; }
     function hasAudio(item) { return Boolean(audioBlobFor(item)); }
@@ -2259,8 +2259,9 @@ const learningUid=()=>crypto.randomUUID();
 // UI lists may be sorted by updatedAt; record identity/content, not list order, determines concurrency.
 function learningSameRecords(a,b){const ordered=rows=>[...rows].sort((x,y)=>(typeof x.id+':'+x.id).localeCompare(typeof y.id+':'+y.id));return Array.isArray(a)&&Array.isArray(b)&&cloudSame(ordered(a),ordered(b));}
 function learningHasWork(){return Boolean(learningBusy||learningRecorder||learningPendingRecording||learningDraft?.dirty);}
-async function learningRows(store){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(store,'readonly'),r=t.objectStore(store).getAll();t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(t.error);});}
-async function learningSnapshot(){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(learningStores,'readonly'),out={};for(const s of learningStores){const r=t.objectStore(s).getAll();r.onsuccess=()=>out[s]=r.result;}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
+async function learningRows(store){if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate&&learningStores.includes(store))return (await learningSnapshot())[store];const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(store,'readonly'),r=t.objectStore(store).getAll();t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(t.error);});}
+async function learningSnapshot(){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return learningReadSnapshot();return scope.snapshot||(scope.snapshot=learningReadSnapshot());}
+async function learningReadSnapshot(){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(learningStores,'readonly'),out={};for(const s of learningStores){const r=t.objectStore(s).getAll();r.onsuccess=()=>out[s]=r.result;}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
 async function learningWrite(rows,expected=null){
  for(const kind of Object.keys(rows))for(const row of rows[kind])learningValidateRecord(kind,row);
  const d=await openDB(),names=Object.keys(rows),t=d.transaction(names,'readwrite'),done=transactionDone(t);let failure;
@@ -2372,7 +2373,8 @@ async function learningGlyph(form,details=false){
  if(!details&&matches.length<=1){if(matches.length){const w=matches[0],snap=await learningSnapshot(),m=snap.learningMaterials.find(m=>m.contentType==='word'&&m.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref))),ref=m?.audioSources.filter(learningIsReference).at(-1);if(ref){const asset=snap.learningAudio.find(a=>a.id===ref.assetId);if(!asset)throw new Error('教材原音尚未同步到本机。');await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);}else await learningWordSpeech(w);}else{const text=form.split('|')[0],blob=await learningCachedSpeech(text)||await defaultSpeech(text);await learningPlayBlob(blob);}return;}
  const examples=typeof letterExamplesHtml==='function'?await letterExamplesHtml(form):'';learningModal(form.replaceAll('x','◌')+' · 词典资料',(matches.length?matches.map(w=>'<section><h3 lang="lo">'+learningEsc(w.word)+'</h3><p>'+learningEsc(w.ipa||'')+' '+learningEsc(w.meaning||'')+'</p><p>'+learningEsc(w.note||'暂无备注')+'</p>'+noteImagesMarkup(w.noteImages)+'<button data-learn="word-audio" data-word="'+w.id+'">▶ 已有发音</button><button data-learn="word-detail" data-word="'+w.id+'">完整资料</button></section>').join(''):'<p>词库中还没有对应资料。可以在“老语字母”中添加此字母的词条及录音。</p>')+examples);
 }
-async function learningResolve(id){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);let m=snap.learningMaterials.find(x=>x.id===id);if(!m&&id.startsWith('word:')){const w=learningFindWord(id.slice(5),words);if(w)m=snap.learningMaterials.find(x=>x.contentType==='word'&&x.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref)))||learningWordMaterial(w);}if(!m)throw new Error('这条学习材料不存在。');return {m,snap,words,w:m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null};}
+async function learningResolve(id){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return learningReadResolved(id);scope.resolved||=new Map();if(!scope.resolved.has(id))scope.resolved.set(id,learningReadResolved(id));return scope.resolved.get(id);}
+async function learningReadResolved(id){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);let m=snap.learningMaterials.find(x=>x.id===id);if(!m&&id.startsWith('word:')){const w=learningFindWord(id.slice(5),words);if(w)m=snap.learningMaterials.find(x=>x.contentType==='word'&&x.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref)))||learningWordMaterial(w);}if(!m)throw new Error('这条学习材料不存在。');return {m,snap,words,w:m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null};}
 async function learningPlayBlob(blob,start=0,end=null){
  stopPracticeAudio();const generation=playbackGeneration;practiceAudioUrl=URL.createObjectURL(blob);const a=practiceAudio=new Audio(practiceAudioUrl);
  try{await new Promise((resolve,reject)=>{a.onloadedmetadata=resolve;a.onerror=()=>reject(new Error('这段音频无法解码，请换用 MP3、M4A 或 WAV。'));});if(generation!==playbackGeneration)return;if(start>=a.duration)throw new Error('片段开始时间超出音轨长度。');a.currentTime=start;if(end!==null)a.ontimeupdate=()=>{if(a.currentTime>=end&&practiceAudio===a)stopPracticeAudio();};a.onended=()=>{if(practiceAudio===a)stopPracticeAudio();};await a.play();}catch(e){if(generation===playbackGeneration)stopPracticeAudio();throw e;}
@@ -2404,10 +2406,11 @@ async function learningPlay(id,source='reference',index=null){
 }
 async function learningDefaultSpeech(m,text){const saved=await learningCachedSpeech(text);if(saved){await learningPlayBlob(saved);return;}const blob=await defaultSpeech(text);await learningPlayBlob(blob);if(m.contentType!=='word'&&await codaCachedSpeech(text)){const snap=await learningSnapshot(),current=snap.learningMaterials.find(x=>x.id===m.id)||m;if(!current.audioSources.some(a=>a.source==='gemini'&&a.text===text))await learningWrite({learningMaterials:[{...current,audioSources:[...current.audioSources,{source:'gemini',text}],updatedAt:Date.now()}]},snap);}}
 async function learningRelatedHtml(word){const rows=await learningRows('learningMaterials'),keys=syncKeys(word);const related=rows.filter(m=>!m.deleted&&!m.analysisOwner&&m.contentType==='sentence'&&m.linkedWordSyncIds.some(id=>keys.includes(id))).filter((m,i,a)=>a.findIndex(x=>x.textLao===m.textLao&&x.translationZh===m.translationZh)===i).slice(0,5);return related.length?'<section class="learn-related"><h3>相关例句</h3>'+related.map(m=>'<button data-learn="detail" data-id="'+learningEsc(m.id)+'"><span lang="lo">'+learningEsc(m.textLao)+'</span><small>'+learningEsc(m.translationZh)+'</small></button>').join('')+'</section>':'';}
+async function learningDefaultAudioKeys(){return withDefaultAudioStore('readonly',store=>{const keys=[],cursor=store.openKeyCursor();cursor.onsuccess=()=>{const row=cursor.result;if(row){keys.push(row.key);row.continue();}};return keys;});}
 async function learningWordAudioManagerHtml(m,w,snap){
  const rows=[],assets=new Map(snap.learningAudio.map(a=>[a.id,a]));
  if(hasAudio(w))rows.push({kind:'legacy',key:'legacy',label:'词典个人录音',note:m.wordAudioNotes?.legacy||''});
- const cache=await cloudCacheRows(),defaultKeys=cache.filter(r=>{try{return JSON.parse(r.key)[1]===(w?.word||m.textLao);}catch(_){return false;}});
+ const defaultKeys=(await learningDefaultAudioKeys()).filter(key=>{try{return JSON.parse(key)[1]===(w?.word||m.textLao);}catch(_){return false;}});
  if(defaultKeys.length)rows.push({kind:'default',key:'default',label:'Gemini／默认发音',note:m.wordAudioNotes?.default||(m.audioSources||[]).find(a=>a.source==='gemini'&&a.text===(w?.word||m.textLao))?.note||''});
  (m.audioSources||[]).forEach((a,i)=>{const asset=assets.get(a.assetId);if(a.source==='gemini'?defaultKeys.length&&a.text===(w?.word||m.textLao):Boolean(asset?.blob)){if(a.source==='gemini'){if(!rows.some(r=>r.kind==='default'))rows.push({kind:'default',key:'default',label:'Gemini／默认发音',note:a.note||m.wordAudioNotes?.default||''});}else rows.push({kind:'reference',key:String(i),label:(a.source==='textbook'?'教材原音':a.role==='reference'?'手录参考发音':'我的跟读')+' · '+(asset?.name||'录音')+((a.start||a.end!=null)?'（'+(a.start||0)+'–'+(a.end??'结尾')+' 秒）':''),note:a.note||''});}});
  if(!rows.length)return '<h3>已有音频</h3><p class="tag-hint">当前没有已保存的音频。</p>';
@@ -6313,11 +6316,11 @@ function ssSetManagement(dialog,open){
 function ssOpenManagement(dialog,part=''){if(!ssSetManagement(dialog,true))return;const target=part==='audio'?dialog.querySelector('.ss-audio-tools'):part==='analysis'?dialog.querySelector('.ss-analysis-tools'):dialog.querySelector('.ss-management');if(target){if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView?.({block:'start',behavior:'smooth'});}}
 function ssCompose(detail,resolved,id){
  if(detail.dataset.ssLayout)return;detail.dataset.ssLayout='true';detail.dataset.ssWord=String(!!resolved.w);detail.classList.add('ss-detail');
- const {m,w}=resolved,a=m.sentenceAnalysis,trusted=!!a&&saTextKey(a.original)===saTextKey(m.textLao),existing=detail.querySelector('.sentence-analysis'),host=existing||ssElement('section','ss-root'),panel=trusted?detail.querySelector('.wsl-panel'):null,meaning=detail.querySelector('.learn-meaning'),ipa=detail.querySelector('.ipa'),audio=detail.querySelector('.learn-audio-bottom'),record=detail.querySelector('#learningRecord'),draft=detail.querySelector('#learningRecordingDraft'),raw=existing?.querySelector('.sa-content'),paTools=detail.querySelector('.pa-analysis-tools'),quiz=trusted?raw?.querySelector('.sa-quiz'):null;
+ const {m,w}=resolved,a=m.sentenceAnalysis,trusted=!!a&&saTextKey(a.original)===saTextKey(m.textLao),existing=detail.querySelector('.sentence-analysis'),host=existing||ssElement('section','ss-root'),panel=trusted?detail.querySelector('.wsl-panel'):null,meaning=detail.querySelector('.learn-meaning'),ipa=detail.querySelector('.ipa'),audio=detail.querySelector('.learn-audio-bottom'),record=detail.querySelector('#learningRecord'),reference=detail.querySelector('#learningReferenceRecord'),draft=detail.querySelector('#learningRecordingDraft'),raw=existing?.querySelector('.sa-content'),paTools=detail.querySelector('.pa-analysis-tools'),quiz=trusted?raw?.querySelector('.sa-quiz'):null;
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssGroup('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
- actions.append(play);if(record)actions.append(record);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ actions.append(play);if(record)actions.append(record);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -6346,7 +6349,7 @@ function ssCompose(detail,resolved,id){
  if(existing)manager.append(parseTools);
  if(paTools){paTools.classList.add('ss-phonetic-tools');const heading=paTools.querySelector('h3');if(heading)heading.textContent='发音分析管理';for(const n of [...paTools.children]){if(n.classList.contains('pa-muted'))n.remove();else if(n.classList.contains('pa-pending'))main.append(n);}manager.append(paTools);}
  if(audio){audioTools.append(audio);manager.append(audioTools);}
- const removed=new Set([host,panel,meaning,ipa,audio,record,draft,warning,related,paTools]);
+ const removed=new Set([host,panel,meaning,ipa,audio,record,reference,draft,warning,related,paTools]);
  for(const n of originalDetailChildren){if(removed.has(n)||main.contains(n)||manager.contains(n))continue;if(n.classList.contains('learn-detail-play')){n.remove();continue;}if(n.tagName==='P'&&!n.textContent.trim()){n.remove();continue;}metadata.append(n);}
  if(related&&w&&related.isConnected&&!main.contains(related)&&related.querySelector('button'))metadata.append(related);
  if(metadata.children.length>1)manager.append(metadata);
@@ -6354,8 +6357,9 @@ function ssCompose(detail,resolved,id){
  if(learningSettings)ssSetManagement(learningDialog,true);
 }
 const ssPreviousDetail=learningOpenDetail;
-let ssDetailRenderGate=null,ssDetailRequest=0,ssDetailQueue=Promise.resolve();
+let ssDetailRenderGate=null,ssDetailRequest=0,ssDetailQueue=Promise.resolve(),ssDetailActiveId=null,ssDetailActivePromise=null;
 learningOpenDetail=function(id){
+ if(ssDetailActivePromise&&ssDetailActiveId===id)return ssDetailActivePromise;
  const request=++ssDetailRequest;learningDialog.setAttribute('data-ss-building','true');learningDialog.setAttribute('aria-busy','true');
  const build=async()=>{
   if(request!==ssDetailRequest)return;
@@ -6364,7 +6368,7 @@ learningOpenDetail=function(id){
   }catch(error){if(request===ssDetailRequest){ssDetailRenderGate=null;learningModal('词句暂时无法打开','<p>'+learningEsc(error.message)+'</p>');}throw error;
   }finally{if(request===ssDetailRequest){ssDetailRenderGate=null;learningDialog.removeAttribute('data-ss-building');learningDialog.removeAttribute('aria-busy');if(!learningDialog.open)learningDialog.showModal();}}
  };
- const result=ssDetailQueue.catch(()=>{}).then(build);ssDetailQueue=result;return result;
+ const result=ssDetailQueue.catch(()=>{}).then(build);ssDetailQueue=result;ssDetailActiveId=id;ssDetailActivePromise=result;const clear=()=>{if(ssDetailActivePromise===result){ssDetailActiveId=null;ssDetailActivePromise=null;}};result.then(clear,clear);return result;
 };
 </script>
 <script data-learning-bundle="pending-review">

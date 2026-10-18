@@ -447,14 +447,14 @@ async function importCodaClassroom(){
     }
     let navigationTouched=false;
     function rememberCurrentPage(){
-      try{if(['dictionary','practice','alphabet','learning','pronunciation','coda'].includes(activeView))sessionStorage.setItem(workspaceName('lao-current-page-v1'),JSON.stringify({view:activeView,y:window.scrollY||0}));}catch(_){}
+      try{const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;if(['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(view))sessionStorage.setItem(workspaceName('lao-current-page-v1'),JSON.stringify({view,y:window.scrollY||0}));}catch(_){}
     }
     async function restoreCurrentPage(){
       if(navigationTouched)return;
       let saved;try{saved=JSON.parse(sessionStorage.getItem(workspaceName('lao-current-page-v1')));}catch(_){return;}
-      if(!saved||!['dictionary','practice','alphabet','learning','pronunciation','coda'].includes(saved.view))return;
+      if(!saved||!['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(saved.view))return;
       await showView(saved.view);
-      requestAnimationFrame(()=>{if(activeView===saved.view)window.scrollTo({top:Number.isFinite(saved.y)?Math.max(0,saved.y):0,behavior:'instant'});});
+      requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study')window.scrollTo({top:Number.isFinite(saved.y)?Math.max(0,saved.y):0,behavior:'instant'});});
     }
     window.addEventListener('pagehide',()=>{rememberCurrentPage();if(typeof persistPractice==='function')persistPractice();});
     function showView(view) {
@@ -1071,7 +1071,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     }
     $('#alphabetCodaLink').onclick=()=>openCodaFrom('alphabet','vowels');
     $('#codaReturn').onclick=()=>showView(codaParentView);
-    $('#viewNav').onclick=e=>{const button=e.target.closest('[data-view]');if(button)showView(button.dataset.view);};
+    $('#viewNav').onclick=e=>{const button=e.target.closest('[data-view]');if(!button)return;if(button.dataset.view==='learning'&&typeof scOpenLearningHome==='function'){void scOpenLearningHome().catch(learningError);return;}showView(button.dataset.view);};
     $('#entryForm').addEventListener('reset',()=>{$('#form-title').textContent='添加词条';});
     $('#ttsEndpoint').value=ttsSettings.endpoint||'';
     $('#ttsToken').value=ttsSettings.token||'';
@@ -6232,7 +6232,8 @@ async function scOpenCourse(id,{test=false}={}){
  if(test){if(course.schemaVersion!==2)throw Error('此旧课程暂不支持整章检测，可使用原有练习入口');await courseCheckOpen('course');return;}
  if(location?.materialId){const button=[...learningPanel.querySelectorAll('[data-id]')].find(b=>b.dataset.id===location.materialId);button?.closest('.learn-card')?.scrollIntoView?.({block:'center',behavior:'smooth'});}
 }
-async function scOpen(){scGuard();learningRoute='study';learningSettings=false;await showView('learning');}
+async function scOpen(){scGuard();await showView('study');}
+async function scOpenLearningHome(){scGuard();learningResetMulti();learningSettings=false;learningRoute='home';await showView('learning');}
 function scDate(at){return at?new Date(at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'旧版未记录具体时间';}
 function scCourseLabel(c){return [c.textbookName,c.chapterName,c.title].filter(Boolean).join(' · ');}
 function scCourseCard(c,plan,location){const h=learningEsc;return '<article class="sc-course"><div><small>'+h([c.textbookName,c.chapterName].filter(Boolean).join(' · '))+'</small><h3>'+h(c.title)+'</h3>'+(location?'<p>'+h(location.label)+' · '+h(scDate(location.at))+'</p>':'')+'</div><div class="sc-actions"><button type="button" data-sc-action="resume" data-id="'+h(c.id)+'">'+(location?'继续学习':'打开章节')+'</button><button type="button" data-sc-action="pin" data-id="'+h(c.id)+'" aria-pressed="'+plan.pinned.includes(c.id)+'">'+(plan.pinned.includes(c.id)?'取消固定':'固定章节')+'</button></div></article>';}
@@ -6256,7 +6257,6 @@ renderLearning=async function(...args){
  const content=$('#learningContent');if(!content||content.querySelector('[data-sc-shortcut]'))return;
  const plan=scPlan(snap),tools=document.createElement('div');tools.className='sc-lesson-tools';tools.dataset.scShortcut='true';
  if(route==='lesson'){const c=learningCourses(snap).find(c=>c.id===courseId);if(c){if(!scRemember(c,snap))$('#learningStatus').textContent='本机浏览器存储不可用，上次位置未能保存。目标和固定章节可继续使用。';tools.innerHTML='<button type="button" data-study-open>← 学习中心</button><button type="button" data-sc-action="set-goal" data-id="'+learningEsc(c.id)+'">设为学习目标</button><button type="button" data-sc-action="pin" data-id="'+learningEsc(c.id)+'" aria-pressed="'+plan.pinned.includes(c.id)+'">'+(plan.pinned.includes(c.id)?'已固定 · 取消固定':'固定到学习中心')+'</button>';content.prepend(tools);}}
- else if(route==='home'||route==='teaching'||route==='communication'){tools.innerHTML='<button type="button" data-study-open>学习中心 · 目标／继续上次</button>';content.prepend(tools);}
 };
 const scNav=document.createElement('button');scNav.type='button';scNav.textContent='学习中心';scNav.dataset.studyOpen='true';scNav.setAttribute('aria-controls','learningPanel');$('#viewNav [data-view="dictionary"]').before(scNav);
 document.addEventListener('click',async e=>{
@@ -6276,7 +6276,15 @@ learningPanel.addEventListener('click',async e=>{
  const course={...learningLesson};try{const snap=await learningSnapshot();if(activeView!=='learning'||learningRoute!=='lesson'||learningLesson.id!==course.id)return;const present=snap.learningPlacements.some(p=>p.lessonId===course.id&&p.materialId===b.dataset.id&&!p.deleted);if(present)scRemember(course,snap,b.dataset.id);}catch(_){}
 });
 const scPreviousShowView=showView;
-showView=function(view,...args){if(activeView==='learning'&&learningRoute==='study'&&learningDraft?.kind==='study-plan'&&learningDraft.dirty&&view!=='learning'){learningError(Error('请先保存学习目标或点“取消修改”，再切换页面'));return;}const result=scPreviousShowView(view,...args);scNav.setAttribute('aria-pressed',String(activeView==='learning'&&learningRoute==='study'));return result;};
+showView=function(view,...args){
+ if(activeView==='learning'&&learningRoute==='study'&&learningDraft?.kind==='study-plan'&&learningDraft.dirty&&view!=='study'){learningError(Error('请先保存学习目标或点“取消修改”，再切换页面'));return;}
+ if(view==='study'){learningRoute='study';learningSettings=false;}
+ else if(view==='learning'&&learningRoute==='study'){learningRoute='home';learningSettings=false;}
+ const result=scPreviousShowView(view==='study'?'learning':view,...args),isStudy=activeView==='learning'&&learningRoute==='study';
+ scNav.setAttribute('aria-pressed',String(isStudy));if(isStudy)scNav.setAttribute('aria-current','page');else scNav.removeAttribute('aria-current');
+ const learningNav=$('#viewNav [data-view="learning"]');if(learningNav){if(activeView==='learning'&&!isStudy)learningNav.setAttribute('aria-current','page');else learningNav.removeAttribute('aria-current');}
+ return result;
+};
 </script>
 <style data-learning-style="sentence-study-layout">
 #learningDialog .ss-detail{padding-top:0;position:static}#learningDialog:has(.ss-detail)>header h2{font-size:17px;margin:0 0 8px;color:var(--muted)}#learningDialog .ss-sentence-view{border:0;padding:0;margin:0}#learningDialog .ss-reading{margin:0}#learningDialog .ss-original,#learningDialog .ss-reading .wsl-sentence{font-size:28px;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}#learningDialog .ss-reading .wsl-panel{border:0;border-radius:0;background:transparent;padding:0;margin:0}#learningDialog .ss-main-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}#learningDialog .ss-main-actions button{font-size:14px;padding:8px 12px;min-height:40px}#learningDialog .ss-main-actions .ss-manage-toggle{margin-left:auto;background:transparent;border:0;color:var(--muted)}#learningDialog .ss-reading .learn-meaning,#learningDialog .ss-reading .wsl-translation{font-size:17px;line-height:1.7;margin:12px 0;min-height:0}#learningDialog .ss-reading .wsl-hint{font-size:12px;color:var(--muted);margin:8px 0}#learningDialog .ss-reading .wsl-card{padding:12px;margin:10px 0;background:var(--soft);border-radius:10px}#learningDialog .ss-reading .wsl-card>strong{font-size:23px}#learningDialog .ss-reading .wsl-meaning{font-size:16px;margin:6px 0}#learningDialog .ss-reading .wsl-role{font-size:12px;color:var(--muted)}#learningDialog .wsl-word-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}#learningDialog .ss-reading .wsl-examples,#learningDialog .ss-reading .pa-word-card{margin:10px 0;padding:8px 0;border:0;border-top:1px solid var(--line);border-radius:0}#learningDialog .ss-reading .pa-word-card>summary{font-size:14px;font-weight:500}#learningDialog .ss-grammar{margin:18px 0}#learningDialog .ss-grammar h3{font-size:17px;margin:0 0 8px}#learningDialog .ss-grammar-item{padding:8px 0}#learningDialog .ss-grammar-item strong{font-size:16px;color:var(--brand);font-weight:550;white-space:pre-wrap;overflow-wrap:anywhere}#learningDialog .ss-grammar-item p{font-size:15px;line-height:1.8;margin:6px 0}#learningDialog .ss-reading>details{padding:10px 0;margin:12px 0;border:0;border-top:1px solid var(--line);border-radius:0}#learningDialog .ss-reading summary{font-size:14px}#learningDialog .ss-reading .pa-section>.pa-muted{display:none}#learningDialog .ss-play-status:empty,#learningDialog .ss-reading .wsl-status:empty{display:none}#learningDialog .ss-play-status,#learningDialog .ss-empty-analysis,#learningDialog .ss-management-note{font-size:13px;color:var(--muted);margin:8px 0}#learningDialog .ss-management{border-top:1px solid var(--line);margin-top:18px;padding-top:12px}#learningDialog .ss-management h3{font-size:17px}#learningDialog .ss-management .pa-analysis-tools{padding:12px;margin:14px 0}#learningDialog .ss-management .learn-audio-bottom{border:0;padding:0;margin:10px 0}#learningDialog .ss-management .sa-actions{margin:8px 0}#learningDialog .ss-management .ss-raw-analysis{font-size:14px}#learningDialog .ss-reading #learningRecordingDraft{display:flex;flex-wrap:wrap;gap:8px}#learningDialog .ss-reading #learningRecordingDraft:has(button:disabled):not(:has(button:not(:disabled))){display:none}#learningDialog .ss-detail [hidden]{display:none!important}#learningDialog .ss-detail .learn-audio-warning,#learningDialog .ss-stale-warning{font-size:13px;background:#fff6df;color:#855113;padding:8px;border-radius:8px}#learningDialog .ss-other-meaning button{display:block}#learningDialog .ss-management .ss-metadata{font-size:13px}#learningDialog .ss-word-examples .letter-examples{margin:0}#learningDialog .ss-word-examples .letter-examples>p{margin:8px 0}

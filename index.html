@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="a899ecddc101235f">
+  <meta name="lao-app-build" content="14f84957bf32e6f2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7128,10 +7128,26 @@ async function lcOpenChooser(button){
  const draw=()=>{const rows=lcChoiceRows(options,courses,$('#lcCourseSearch').value,current);$('#lcCourseCount').textContent='共 '+rows.length+' 个章节／课程';$('#lcCourseRows').innerHTML=rows.map(c=>'<button type="button" data-lc-course="'+h(c.id)+'" '+(c.current?'aria-current="true"':'')+'><span><strong>'+h(c.title)+'</strong>'+(c.meta?'<small>'+h(c.meta)+'</small>':'')+'</span><span class="lc-choice-mark" aria-hidden="true">'+(c.current?'✓':'›')+'</span></button>').join('')||'<p class="lc-choice-empty">没有匹配的章节，请换个关键词。</p>';};
  let opening=false;$('#lcCourseSearch').oninput=draw;$('#lcCourseRows').onclick=async e=>{const row=e.target.closest('[data-lc-course]');if(!row||opening)return;opening=true;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');await learningAuthorAction('course-open',{dataset:{id:row.dataset.lcCourse}});learningDialog.close();}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{opening=false;}};draw();
 }
-document.addEventListener('click',e=>{const button=e.target.closest('[data-course-choose]');if(button)lcOpenChooser(button).catch(learningError);});
+function lcScenePickerHtml(select,current=''){return '<span class="lc-scene-picker">'+select+'<button type="button" class="lc-picker-button" data-scene-choose aria-haspopup="dialog"><span>'+learningEsc(current||'全部场景')+'</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button></span>';}
+function lcSceneRows(options,query='',current=''){const q=query.normalize('NFKC').trim().toLocaleLowerCase(),seen=new Set();return options.filter(o=>{if(seen.has(o.value))return false;seen.add(o.value);return !o.value||!q||o.text.normalize('NFKC').toLocaleLowerCase().includes(q);}).map(o=>({...o,current:o.value===current}));}
+async function lcOpenSceneChooser(button){
+ if(learningBusy||learningHasWork()||recorder)throw Error('请先保存编辑或结束录音，再选择场景');
+ const select=button.closest('.lc-scene-picker')?.querySelector('#communicationScene');if(!select)return;
+ const options=[...select.options].map(o=>({value:o.value,text:o.textContent})),current=select.value,h=learningEsc;
+ learningModal('选择适用场景','<div class="lc-chooser"><label class="lc-search-label">搜索场景<input id="lcSceneSearch" type="search" placeholder="搜索打招呼、餐厅等场景" autocomplete="off"></label><p id="lcSceneCount" role="status"></p><div id="lcSceneRows" class="lc-choice-list"></div></div>');
+ const draw=()=>{const rows=lcSceneRows(options,$('#lcSceneSearch').value,current);$('#lcSceneCount').textContent='找到 '+rows.filter(o=>o.value).length+' 个场景 · 可随时选择全部场景';$('#lcSceneRows').innerHTML=rows.map(o=>'<button type="button" data-lc-scene="'+h(o.value)+'" '+(o.current?'aria-current="true"':'')+'><span><strong>'+h(o.text)+'</strong></span><span class="lc-choice-mark" aria-hidden="true">'+(o.current?'✓':'›')+'</span></button>').join('');};
+ let choosing=false;$('#lcSceneSearch').oninput=draw;$('#lcSceneRows').onclick=async e=>{const row=e.target.closest('[data-lc-scene]');if(!row||choosing)return;choosing=true;const previous=communicationScene;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');const value=row.dataset.lcScene,snap=await learningSnapshot();if(value&&!learningCourses(snap).some(c=>c.library==='communication'&&c.sceneMetadata?.scenes?.includes(value)))throw Error('场景已变更，请重新打开选择');communicationScene=value;await renderLearning();learningDialog.close();}catch(error){communicationScene=previous;$('#learningDialogStatus').textContent=error.message;}finally{choosing=false;}};draw();
+}
+if(typeof communicationHtml==='function'){const lcOriginalCommunicationHtml=communicationHtml;communicationHtml=function(...args){return lcOriginalCommunicationHtml(...args).replace(/<select id="communicationScene">[\s\S]*?<\/select>/,select=>lcScenePickerHtml(select,communicationScene));};}
+function lcDescriptionPreview(text,limit=60){const value=String(text||'').replace(/\s+/gu,' ').trim(),segments=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(value)].map(s=>s.segment):Array.from(value);return segments.length>limit?segments.slice(0,limit).join('')+'…':value;}
+const lcDescriptionCache=new WeakMap();
+function lcDecorateDescriptions(){for(const p of $('#learningContent')?.querySelectorAll?.('.learn-course-grid .learn-lesson p')||[]){const old=lcDescriptionCache.get(p);if(old&&p.textContent===old.preview)continue;const full=p.textContent,preview=lcDescriptionPreview(full);lcDescriptionCache.set(p,{full,preview});p.title=full;if(p.textContent!==preview)p.textContent=preview;}}
+if(typeof renderLearning==='function'){const lcOriginalRenderLearning=renderLearning;renderLearning=async function(...args){await lcOriginalRenderLearning(...args);lcDecorateDescriptions();};}
+lcDecorateDescriptions();if(typeof MutationObserver!=='undefined'&&$('#learningContent'))new MutationObserver(lcDecorateDescriptions).observe($('#learningContent'),{childList:true,subtree:true});
+document.addEventListener('click',e=>{const scene=e.target.closest('[data-scene-choose]');if(scene){lcOpenSceneChooser(scene).catch(learningError);return;}const button=e.target.closest('[data-course-choose]');if(button)lcOpenChooser(button).catch(learningError);});
 </script>
 <style data-learning-bundle="mobile-catalog">
-/* Scoped rules win over old compact-app grid assumptions without hiding content. */
+/* Scoped mobile layout and shortened directory previews; original course data stays intact. */
 #learningContent .study-center .rr-summary{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px;min-width:0;max-width:100%;height:auto;min-height:0;padding:16px!important;background:#f5f8f1;box-sizing:border-box}
 #learningContent .study-center .rr-summary>div{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
 #learningContent .study-center .rr-summary h3{font-size:16px;font-weight:600;line-height:1.5;margin:0 0 6px}
@@ -7140,14 +7156,16 @@ document.addEventListener('click',e=>{const button=e.target.closest('[data-cours
 #learningContent .study-center .rr-summary>.rr-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #learningContent .study-center .rr-summary .rr-actions button{flex:0 1 auto;min-width:0;min-height:44px;height:auto;box-sizing:border-box;font-size:13px;font-weight:500;line-height:1.4;padding:9px 13px;margin:0;white-space:normal;border-radius:10px}
 .lc-course-picker{display:block;min-width:0;max-width:100%;flex:1 1 240px}.lc-course-picker>[data-course-jump]{width:100%;margin:0;font-size:16px;font-weight:400}.lc-picker-button{display:none}
+.lc-scene-picker{display:block;flex:1;min-width:0;max-width:100%}#learningPanel .comm-home>label .lc-scene-picker>select{width:100%}
 #learningPanel .learn-course-grid{gap:12px;align-items:start}
-#learningPanel .learn-course-tile{border:1px solid #dce6df;border-radius:13px;background:var(--paper,#fff);box-shadow:none;overflow:hidden;min-width:0}
+#learningPanel .learn-course-tile{border:1px solid #d5e3dc;border-radius:13px;background:linear-gradient(115deg,#edf6f0,#f7faf6);box-shadow:none;overflow:hidden;min-width:0}
+#learningPanel .comm-home .learn-course-tile{background:linear-gradient(115deg,#faf3e8,#fdfaf4);border-color:#e8dfd0}
 #learningPanel .learn-course-tile>.learn-lesson,#learningPanel .learn-course-grid>.learn-lesson{position:relative;background:none;border:0;border-radius:0;box-shadow:none;margin:0;padding:15px 32px 15px 15px;min-width:0;width:100%;text-align:left;line-height:1.6;box-sizing:border-box}
-#learningPanel .learn-course-grid>.learn-lesson{border:1px solid #dce6df;border-radius:13px;background:var(--paper,#fff)}
+#learningPanel .learn-course-grid>.learn-lesson{border:1px solid #e8dfd0;border-radius:13px;background:#faf3e8}
 #learningPanel .learn-course-tile>.learn-lesson::after{content:'›';position:absolute;right:13px;top:17px;font-size:22px;font-weight:400;color:#91a59b}
-#learningPanel .learn-course-grid .learn-lesson small{display:block;color:#788a81;font-size:11px;font-weight:400;line-height:1.6;margin:0 0 5px;white-space:normal;overflow-wrap:anywhere}
+#learningPanel .learn-course-grid .learn-lesson small{display:block;color:#607266;font-size:11px;font-weight:400;line-height:1.6;margin:0 0 5px;white-space:normal;overflow-wrap:anywhere}
 #learningPanel .learn-course-grid .learn-lesson h3{font-size:17px;font-weight:600;line-height:1.6;letter-spacing:0;margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
-#learningPanel .learn-course-grid .learn-lesson p{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13px;font-weight:400;line-height:1.75;color:#718178;white-space:normal;overflow-wrap:anywhere;margin:0}
+#learningPanel .learn-course-grid .learn-lesson p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;max-height:3.5em;font-size:13px;font-weight:400;line-height:1.75;color:#596f62;white-space:normal;overflow-wrap:anywhere;margin:0}
 #learningPanel .learn-course-tile>.comm-more{border:0;border-top:1px solid #edf0eb;border-radius:0;padding:0;margin:0;background:transparent;box-shadow:none}
 #learningPanel .learn-course-tile>.comm-more>summary{padding:8px 14px;min-height:40px;box-sizing:border-box;font-size:12px;font-weight:400;line-height:1.7;color:#788a81;cursor:pointer}
 #learningPanel .learn-course-tile>.comm-more>button{font-size:12px;font-weight:400;min-height:40px;margin:6px 0 9px 10px;padding:7px 10px}
@@ -7176,11 +7194,11 @@ document.addEventListener('click',e=>{const button=e.target.closest('[data-cours
  #learningContent .study-center .rr-summary h3{font-size:15px}#learningContent .study-center .rr-summary p{font-size:12px}#learningContent .study-center .rr-summary small{font-size:11px}
  #learningContent .study-center .rr-summary>.rr-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
  #learningContent .study-center .rr-summary .rr-actions button{width:100%;font-size:12px;padding:8px 5px;min-height:44px;box-shadow:none}
- #learningPanel .lc-course-picker>[data-course-jump]{display:none}#learningPanel .lc-picker-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;margin:0;border:1px solid #dce6df;border-radius:10px;background:var(--paper,#fff);box-shadow:none;font-size:14px;font-weight:400;line-height:1.6;text-align:left}
+ #learningPanel .lc-course-picker>[data-course-jump],#learningPanel .lc-scene-picker>#communicationScene{display:none}#learningPanel .lc-picker-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;margin:0;border:1px solid #dce6df;border-radius:10px;background:var(--paper,#fff);box-shadow:none;font-size:14px;font-weight:400;line-height:1.6;text-align:left}
  #learningPanel .lc-picker-button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}#learningPanel .lc-picker-button svg{width:16px;height:16px;flex:none;fill:none;stroke:#718178;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
  #learningPanel .learn-catalog-controls>.lc-course-picker{flex-basis:100%}#learningPanel .learn-quick-nav>.lc-course-picker{flex-basis:calc(100% - 80px)}
  #learningPanel .learn-course-grid{grid-template-columns:minmax(0,1fr);gap:10px}
- #learningPanel .learn-course-grid .learn-lesson h3{font-size:16px;font-weight:600}#learningPanel .learn-course-grid .learn-lesson small{font-size:11px}#learningPanel .learn-course-grid .learn-lesson p{font-size:12px;line-height:1.8}
+ #learningPanel .learn-course-grid .learn-lesson h3{font-size:16px;font-weight:600}#learningPanel .learn-course-grid .learn-lesson small{font-size:11px}#learningPanel .learn-course-grid .learn-lesson p{font-size:12px;line-height:1.8;max-height:3.6em}
  #learningPanel .learn-course-tile>.learn-lesson{padding:13px 30px 13px 13px}#learningPanel .comm-home>h2,#learningPanel #learningContent>h2{font-size:20px;line-height:1.5;font-weight:650;margin:10px 0 12px}
  #learningPanel .comm-home>.comm-manage{margin-bottom:8px}#learningPanel .comm-home>label{margin:6px 0 12px}
 }

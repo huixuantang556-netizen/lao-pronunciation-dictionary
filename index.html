@@ -6021,10 +6021,16 @@ function paValidateAnalysis(value,original,rules=paRules()){
  if(at!==original.length)throw Error('音节、空格和标点须按顺序完整覆盖分段原文');
  return {format:paFormat,original,notes,units};
 }
-function paResolve(id,snap,entries){
- let m=snap.learningMaterials.find(m=>m.id===id&&!m.deleted),w;
- if(m?.contentType==='word')w=learningFindWord(m.linkedWordSyncIds[0],entries);
- if(!m&&id.startsWith('word:')){w=learningFindWord(id.slice(5),entries);if(w)m=snap.learningMaterials.find(row=>!row.deleted&&row.contentType==='word'&&row.linkedWordSyncIds?.some(ref=>learningFindWord(ref,entries)===w))||learningWordMaterial(w);}
+function paLookup(snap,entries){
+ const materials=new Map(),words=new Map(),linked=new Map();
+ for(const w of entries)for(const ref of [w.syncId,...(Array.isArray(w.syncAliases)?w.syncAliases:[])])if(typeof ref==='string'&&ref.trim()&&!words.has(ref.trim()))words.set(ref.trim(),w);
+ for(const m of snap.learningMaterials){if(m.deleted)continue;if(!materials.has(m.id))materials.set(m.id,m);if(m.contentType==='word')for(const ref of m.linkedWordSyncIds||[]){const w=words.get(ref);if(w&&!linked.has(w))linked.set(w,m);}}
+ return {materials,words,linked};
+}
+function paResolve(id,snap,entries,lookup=paLookup(snap,entries)){
+ let m=lookup.materials.get(id),w;
+ if(m?.contentType==='word')w=lookup.words.get(m.linkedWordSyncIds?.[0]);
+ if(!m&&id.startsWith('word:')){w=lookup.words.get(id.slice(5));if(w)m=lookup.linked.get(w)||learningWordMaterial(w);}
  if(!m||m.phoneticProfile||m.contentType==='word'&&!w)throw Error('找不到当前词句，请先完成词典与资料同步');
  return {m,w,text:w?.word||m.textLao};
 }
@@ -6036,7 +6042,7 @@ function paBasis(target){
 }
 function paCurrent(target,digest){try{return paCompatibleDigest(target.m.pronunciationAnalysis?.ruleDigest,digest)&&target.m.pronunciationAnalysis?.basisKey===cloudStable(paBasis(target));}catch(_){return false;}}
 function paCandidates(snap,entries,sentences=[]){
- const rows=new Map(),add=(id,label)=>{try{const target=paResolve(id,snap,entries),basis=paBasis(target);if(target.text?.trim()&&!rows.has(target.m.id))rows.set(target.m.id,{id:target.m.id,...target,label,kind:basis.mode==='word'?'words':'sentences'});}catch(_){}};
+ const lookup=paLookup(snap,entries),rows=new Map(),add=(id,label)=>{try{const target=paResolve(id,snap,entries,lookup);if(rows.has(target.m.id))return;const basis=paBasis(target);if(target.text?.trim())rows.set(target.m.id,{id:target.m.id,...target,label,kind:basis.mode==='word'?'words':'sentences'});}catch(_){}};
  for(const w of entries)if(w.syncId&&w.word?.trim())add('word:'+w.syncId,'词典单词'+(w.category?' · '+w.category:''));
  for(const m of snap.learningMaterials)if(!m.deleted&&!m.phoneticProfile&&(m.contentType==='word'||m.contentType==='reading_drill'||m.analysisOwner))add(m.id,m.source||'已收录词语／拼读资料');
  for(const row of sentences)add(row.m.id,row.label);
@@ -6058,8 +6064,8 @@ function paReusable(snap,text,digest){
 }
 function paTemplate(text){return {format:paFormat,original:text,notes:'',units:[]};}
 async function paTask(ids,snap,entries){
- const rules=paRules(),digest=await paDigest(rules),items=[];
- for(const id of ids){const t=paResolve(id,snap,entries),basis=paBasis(t);items.push({materialId:t.m.id,original:t.text,basisDigest:await paDigest(basis),baseSavedAt:t.m.pronunciationAnalysis?.savedAt||0,segments:basis.segments.map(s=>({...s,analysis:paReusable(snap,s.original,digest)||paTemplate(s.original)}))});}
+ const rules=paRules(),digest=await paDigest(rules),items=[],lookup=paLookup(snap,entries);
+ for(const id of ids){const t=paResolve(id,snap,entries,lookup),basis=paBasis(t);items.push({materialId:t.m.id,original:t.text,basisDigest:await paDigest(basis),baseSavedAt:t.m.pronunciationAnalysis?.savedAt||0,segments:basis.segments.map(s=>({...s,analysis:paReusable(snap,s.original,digest)||paTemplate(s.original)}))});}
  const knownTexts=new Set(items.flatMap(item=>[item.original,...item.segments.flatMap(s=>[s.original,...s.words.map(w=>w.lao)])]));
  const knownWordStructures=entries.filter(w=>knownTexts.has(w.word)&&['initialClass','baseVowel','vowelLength','textbookTone','targetSyllable'].some(k=>w[k])).map(w=>({word:w.word,scopeNote:w.targetSyllable?'已有字段只用于指定音节：'+w.targetSyllable:'原字段没有完整逐音节范围，仅供参考，不可套到整词',...Object.fromEntries(['initial','initialClass','baseVowel','closedVowel','vowelLength','codaLetter','codaSound','codaType','syllableType','targetSyllable','toneMark','textbookTone','source'].filter(k=>w[k]!==undefined).map(k=>[k,w[k]]))}));
  return {format:paBatchFormat,ruleDigest:digest,rules,knownWordStructures,instructions:'对单词直接按整词拆音节，不需要例句或语法解析；句子沿用已有语法分段。只填写各segments.analysis，返回整个JSON。不得改动身份、原句、分段、index、中文、words、basisDigest、baseSavedAt、ruleDigest或rules。不是生成音频，也不是重新分析语法。复用已填的可靠分析；knownWordStructures是原词库中的参考字段，注意它可能只针对targetSyllable，不可套到整词。多音节逐个分析，原文中的空格和标点要用separator原样保留。无法可靠分音节用unresolved并写原因，不要猜测。声调遵循所附教材名称与规则，规则未覆盖处标needsReview=true；特殊韵母请依据rules.specialRhymes记录活性；元音类别与长度分开，特殊韵母不套普通短元音死音节规则。已列明复辅音可推导教材声调，实际读音仍可待核对。声调推导与实际核音是独立状态；程序派生的ruleTone、toneNeedsReview、soundNeedsReview、embeddedFinal不要由AI自行编造。IPA不可靠时留空。不要新增词典词或用JSON正确代替语言正确。',unitTemplate:{kind:'syllable',text:'原音节',onset:{written:'原文首辅音或复合辅音',sound:'实际发音辅音，用老挝字母填写；无法确认留空并标待核对',mode:'normal / ho-leading / cluster / unknown',toneClass:'middle / low / high / unknown'},vowel:{base:'元音基本形式，用◌表示辅音位置',written:'原音节去掉尾辅音及声调符号后，用◌替换首辅音；前后元音均保留',length:'short / long / not-applicable / unknown'},coda:{written:'尾辅音，无则空串',sound:'依rules.codas填写，无则空串'},shape:'no-coda / closed',life:'live / dead / unknown',toneMark:'none / ່ / ້ / ໊ / ໋',tone:'短调 / 一声 / 二声 / 三声 / 四声 / 中降调；未知留空',ipa:'',explanation:'中文推导解释；待核对须说明',needsReview:true},separatorTemplate:{kind:'separator',text:'原文空白或标点'},unresolvedTemplate:{kind:'unresolved',text:'无法判断的原文片段',explanation:'需要核对的具体原因'},items};
@@ -6067,10 +6073,10 @@ async function paTask(ids,snap,entries){
 async function paPreview(root,snap,entries){
  if(root?.format!==paBatchFormat||!Array.isArray(root.items)||!root.items.length||root.items.length>100)throw Error('请导入本程序导出的发音分析任务，最多100项');
  const rules=paRules(),digest=await paDigest(rules);if(root.ruleDigest!==digest||!cloudSame(root.rules,rules))throw Error('教材规则已改变或被AI改动，请重新导出');
- const seen=new Set(),results=[];
+ const seen=new Set(),results=[],lookup=paLookup(snap,entries);
  for(const item of root.items){try{
   if(typeof item.materialId!=='string'||seen.has(item.materialId))throw Error('词句编号缺失或重复');seen.add(item.materialId);
-  const target=paResolve(item.materialId,snap,entries),basis=paBasis(target);
+  const target=paResolve(item.materialId,snap,entries,lookup),basis=paBasis(target);
   if(item.original!==target.text||item.basisDigest!==await paDigest(basis))throw Error('原文或语法分段已变化，请重新导出');
   if(item.baseSavedAt!==(target.m.pronunciationAnalysis?.savedAt||0))throw Error('发音解析已经更新，请重新导出');
   if(!Array.isArray(item.segments)||item.segments.length!==basis.segments.length)throw Error('发音分段数与导出任务不符');
@@ -6145,11 +6151,27 @@ if(!analyses.length&&!annotation){const candidates=snap.learningMaterials.filter
   const audio=detail.querySelector('.learn-audio-bottom');if(audio)audio.before(section);else detail.append(section);
  }
 };
-let paExportURL=null;
+/* The picker needs text and saved-analysis identities, never audio blobs or full profiles. */
+function paInventoryProjection(row,words){
+ if(words)return Object.fromEntries(['id','syncId','syncAliases','word','meaning','category','updatedAt'].filter(k=>row[k]!==undefined).map(k=>[k,row[k]]));
+ if(row.deleted||row.phoneticProfile)return null;
+ const m=Object.fromEntries(['id','contentType','textLao','translationZh','analysisOwner','linkedWordSyncIds','source'].filter(k=>row[k]!==undefined).map(k=>[k,row[k]]));
+ if(row.sentenceAnalysis){const a=row.sentenceAnalysis;m.sentenceAnalysis={original:a.original,segments:a.segments?.map(s=>({lao:s.lao,chinese:s.chinese,words:s.words?.map(w=>({lao:w.lao,meaning:w.meaning,role:w.role,target:w.target}))}))};}
+ if(row.pronunciationAnalysis)m.pronunciationAnalysis={ruleDigest:row.pronunciationAnalysis.ruleDigest,basisKey:row.pronunciationAnalysis.basisKey};return m;
+}
+async function paInventoryRows(name,words=false){
+ const db=await openDB();return new Promise((resolve,reject)=>{const rows=[],tx=db.transaction(name,'readonly'),cursor=tx.objectStore(name).openCursor();cursor.onsuccess=()=>{const row=cursor.result;if(!row)return;try{const value=paInventoryProjection(row.value,words);if(value)rows.push(value);row.continue();}catch(error){reject(error);tx.abort();}};tx.oncomplete=()=>resolve(rows);tx.onabort=tx.onerror=()=>reject(tx.error||Error('读取发音分析列表失败，请重试'));});
+}
+let paExportURL=null,paOpening=false;
 async function paOpen(onlyIds=null){
+ if(paOpening)return;
  if(learningHasWork()||recorder||batchAudioBusy)throw Error('请先完成编辑、录音或音频切分');stopPracticeAudio();
- const [snap,entries]=await Promise.all([learningSnapshot(),allEntries()]),digest=await paDigest(paRules()),h=learningEsc;
- const rows=onlyIds?onlyIds.map(id=>({id,...paResolve(id,snap,entries),label:'当前词句'})):paCandidates(snap,entries,sabRows(snap));
+ paOpening=true;try{
+ learningModal('单词／句子发音分析','<p role="status">正在读取词句目录，不加载录音，请稍候…</p>');
+ const [materials,entries,digest]=await Promise.all([paInventoryRows('learningMaterials'),paInventoryRows(storeName,true),paDigest(paRules())]),snap={learningMaterials:materials},h=learningEsc;
+ entries.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+ const lookup=paLookup(snap,entries);
+ const rows=onlyIds?onlyIds.map(id=>({id,...paResolve(id,snap,entries,lookup),label:'当前词句'})):paCandidates(snap,entries,materials.filter(m=>!m.analysisOwner&&['sentence','dialogue'].includes(m.contentType)).map(m=>({m,label:m.source||'已收录句子／完整对话'})));
  const selected=new Set(onlyIds||[]);let page=0,visible=[],preview=null,expected=null,words=null;
  learningModal('单词／句子发音分析','<p>单词直接按整词拆音节，不需要例句或语法解析；句子沿用已有语法分段。建议每批5～10项。导出交给AI填写后导入核对；这里不生成音频，也不改变原词义、语法和录音。</p><label>分析范围<select id="paKind"><option value="all">全部词句</option><option value="words">单词／词语</option><option value="sentences">已分段句子</option></select></label><input id="paSearch" placeholder="搜索单词、句子、中文、分类"><label><input id="paMissing" type="checkbox" style="width:auto" '+(onlyIds?'':'checked')+'>只显示缺少或需更新发音分析的项目</label><div id="paRows"></div><p><button id="paPrev">上一页</button><span id="paCount"></span><button id="paNext">下一页</button></p><div class="pa-toolbar"><button id="paAll">勾选本页</button><button id="paNone">清空已选</button><button id="paExport">导出发音分析任务</button><button id="paReuse">复用已存分析并预览</button></div><div id="paDownload"></div><hr><h3>导入AI返回的发音分析</h3><input id="paFile" type="file" accept=".json,application/json"><textarea id="paInput" rows="6" placeholder="也可以粘贴完整发音任务JSON；预览后可手动修改，再次预览"></textarea><button id="paPreview">预览并核对</button><div id="paResults"></div><button id="paSave" disabled>确认保存勾选项</button>');
  const fail=error=>$('#learningDialogStatus').textContent=error.message;
@@ -6166,6 +6188,7 @@ async function paOpen(onlyIds=null){
  $('#paReuse').onclick=async()=>{if(learningBusy)return;try{if(!selected.size||selected.size>100)throw Error('请勾选1～100项');const [fresh,currentEntries]=await Promise.all([learningSnapshot(),allEntries()]),task=await paTask([...selected],fresh,currentEntries);$('#paInput').value=JSON.stringify(task,null,2);invalidate();await $('#paPreview').onclick();}catch(e){fail(e);}};
  $('#paSave').onclick=async()=>{if(learningBusy||!preview)return;learningBusy=true;$('#paSave').disabled=true;try{const picked=[...learningDialog.querySelectorAll('[data-pa-save]:checked')].map(b=>preview[Number(b.dataset.paSave)]);if(!picked.length||picked.some(p=>!p||p.error))throw Error('请先勾选已核对的项目');const plan=await paPlan(picked,expected);await saCommitDictionary(plan,expected,words);preview=null;learningDraft=null;$('#paResults').querySelectorAll('input,button').forEach(b=>b.disabled=true);$('#learningDialogStatus').textContent='已保存'+picked.length+'项发音分析。重新打开单词或句子详情，展开语音分析即可查看；原词义、语法和录音保留。';}catch(e){fail(e);reviewUpdate();}finally{learningBusy=false;}};
  draw();
+ }catch(error){const status=$('#learningDialogStatus');if(status)status.textContent='发音分析列表未能打开：'+error.message;throw error;}finally{paOpening=false;}
 }
 async function paCorrectWord(id,button){await saOpenNested(id,button);if(learningDetail===id){if(typeof ssOpenManagement==='function')ssOpenManagement(learningDialog,'audio');learningDialog.querySelector('.learn-audio-bottom')?.scrollIntoView?.({block:'start',behavior:'smooth'});}}
 document.addEventListener('click',async e=>{

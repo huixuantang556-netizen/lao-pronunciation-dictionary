@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="27db7bb5df94bb81">
+  <meta name="lao-app-build" content="a899ecddc101235f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7111,6 +7111,80 @@ dcDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(dcDec
 @media(max-width:800px){#learningContent .learn-paths{grid-template-columns:1fr;gap:10px}#learningContent .learn-paths>button{min-height:92px;padding:14px 16px}#learningContent .learn-paths small{display:none}}
 @media(max-width:600px){#learningContent .learn-home-header{margin:0 0 14px}#learningContent .learn-home-header h2{font-size:21px}#learningContent .learn-home-header .learn-eyebrow{font-size:11px}#learningContent .learn-paths{gap:9px;margin:14px 0 0}#learningContent .learn-paths>button{grid-template-columns:36px minmax(0,1fr) 14px;gap:12px;min-height:84px;padding:14px 12px;border-radius:14px;box-shadow:none}#learningContent .learn-paths .learn-path-icon{width:36px;height:36px;border-radius:10px}#learningContent .learn-paths .learn-path-icon svg{width:20px;height:20px}#learningContent .learn-paths h3{font-size:16px;margin:0 0 3px}#learningContent .learn-paths p{font-size:11px;line-height:1.65}#learningContent .learn-paths .learn-path-arrow{font-size:21px}}
 @media(hover:hover) and (prefers-reduced-motion:no-preference){#learningContent .learn-paths>button{transition:background .16s,border-color .16s,transform .16s}#learningContent .learn-paths>button:hover{background:#f5faf7;border-color:#a7c7b7;transform:translateY(-2px)}}
+</style>
+<script data-learning-bundle="mobile-catalog">
+/* Mobile course chooser replaces the OS option sheet; course records are never rewritten. */
+const lcNativeCoursePicker=learningCoursePicker;
+learningCoursePicker=function(courses,current=''){const h=learningEsc,selected=courses.find(c=>c.id===current);return '<span class="lc-course-picker">'+lcNativeCoursePicker(courses,current)+'<button type="button" class="lc-picker-button" data-course-choose aria-haspopup="dialog"><span>'+h(selected?.title||'选择章节／课程')+'</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button></span>';};
+function lcChoiceRows(options,courses,query='',current=''){
+ const byId=new Map(courses.map(c=>[c.id,c])),q=query.normalize('NFKC').trim().toLocaleLowerCase();
+ return options.filter(o=>o.value).map(o=>{const c=byId.get(o.value);return {id:o.value,title:c?.title||o.text,meta:c?[c.textbookName,c.chapterName].filter(Boolean).join(' · '):'',search:o.text};}).filter(c=>!q||[c.title,c.meta,c.search].join(' ').normalize('NFKC').toLocaleLowerCase().includes(q)).map(c=>({...c,current:c.id===current}));
+}
+async function lcOpenChooser(button){
+ if(learningBusy||learningHasWork()||recorder)throw Error('请先保存编辑或结束录音，再选择章节');
+ const select=button.closest('.lc-course-picker')?.querySelector('[data-course-jump]');if(!select)return;
+ const options=[...select.options].map(o=>({value:o.value,text:o.textContent})),current=select.value,snap=await learningSnapshot(),courses=learningCourses(snap),h=learningEsc;if(button.isConnected===false)return;
+ learningModal('选择章节／课程','<div class="lc-chooser"><label class="lc-search-label">搜索章节<input id="lcCourseSearch" type="search" placeholder="章节名称、教材或关键词" autocomplete="off"></label><p id="lcCourseCount" role="status"></p><div id="lcCourseRows" class="lc-choice-list"></div></div>');
+ const draw=()=>{const rows=lcChoiceRows(options,courses,$('#lcCourseSearch').value,current);$('#lcCourseCount').textContent='共 '+rows.length+' 个章节／课程';$('#lcCourseRows').innerHTML=rows.map(c=>'<button type="button" data-lc-course="'+h(c.id)+'" '+(c.current?'aria-current="true"':'')+'><span><strong>'+h(c.title)+'</strong>'+(c.meta?'<small>'+h(c.meta)+'</small>':'')+'</span><span class="lc-choice-mark" aria-hidden="true">'+(c.current?'✓':'›')+'</span></button>').join('')||'<p class="lc-choice-empty">没有匹配的章节，请换个关键词。</p>';};
+ let opening=false;$('#lcCourseSearch').oninput=draw;$('#lcCourseRows').onclick=async e=>{const row=e.target.closest('[data-lc-course]');if(!row||opening)return;opening=true;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');await learningAuthorAction('course-open',{dataset:{id:row.dataset.lcCourse}});learningDialog.close();}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{opening=false;}};draw();
+}
+document.addEventListener('click',e=>{const button=e.target.closest('[data-course-choose]');if(button)lcOpenChooser(button).catch(learningError);});
+</script>
+<style data-learning-bundle="mobile-catalog">
+/* Scoped rules win over old compact-app grid assumptions without hiding content. */
+#learningContent .study-center .rr-summary{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px;min-width:0;max-width:100%;height:auto;min-height:0;padding:16px!important;background:#f5f8f1;box-sizing:border-box}
+#learningContent .study-center .rr-summary>div{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+#learningContent .study-center .rr-summary h3{font-size:16px;font-weight:600;line-height:1.5;margin:0 0 6px}
+#learningContent .study-center .rr-summary p{font-size:13px;font-weight:400;line-height:1.7;margin:4px 0;word-break:normal;overflow-wrap:break-word}
+#learningContent .study-center .rr-summary small{display:block;font-size:12px;line-height:1.7;word-break:normal;overflow-wrap:break-word}
+#learningContent .study-center .rr-summary>.rr-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#learningContent .study-center .rr-summary .rr-actions button{flex:0 1 auto;min-width:0;min-height:44px;height:auto;box-sizing:border-box;font-size:13px;font-weight:500;line-height:1.4;padding:9px 13px;margin:0;white-space:normal;border-radius:10px}
+.lc-course-picker{display:block;min-width:0;max-width:100%;flex:1 1 240px}.lc-course-picker>[data-course-jump]{width:100%;margin:0;font-size:16px;font-weight:400}.lc-picker-button{display:none}
+#learningPanel .learn-course-grid{gap:12px;align-items:start}
+#learningPanel .learn-course-tile{border:1px solid #dce6df;border-radius:13px;background:var(--paper,#fff);box-shadow:none;overflow:hidden;min-width:0}
+#learningPanel .learn-course-tile>.learn-lesson,#learningPanel .learn-course-grid>.learn-lesson{position:relative;background:none;border:0;border-radius:0;box-shadow:none;margin:0;padding:15px 32px 15px 15px;min-width:0;width:100%;text-align:left;line-height:1.6;box-sizing:border-box}
+#learningPanel .learn-course-grid>.learn-lesson{border:1px solid #dce6df;border-radius:13px;background:var(--paper,#fff)}
+#learningPanel .learn-course-tile>.learn-lesson::after{content:'›';position:absolute;right:13px;top:17px;font-size:22px;font-weight:400;color:#91a59b}
+#learningPanel .learn-course-grid .learn-lesson small{display:block;color:#788a81;font-size:11px;font-weight:400;line-height:1.6;margin:0 0 5px;white-space:normal;overflow-wrap:anywhere}
+#learningPanel .learn-course-grid .learn-lesson h3{font-size:17px;font-weight:600;line-height:1.6;letter-spacing:0;margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
+#learningPanel .learn-course-grid .learn-lesson p{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13px;font-weight:400;line-height:1.75;color:#718178;white-space:normal;overflow-wrap:anywhere;margin:0}
+#learningPanel .learn-course-tile>.comm-more{border:0;border-top:1px solid #edf0eb;border-radius:0;padding:0;margin:0;background:transparent;box-shadow:none}
+#learningPanel .learn-course-tile>.comm-more>summary{padding:8px 14px;min-height:40px;box-sizing:border-box;font-size:12px;font-weight:400;line-height:1.7;color:#788a81;cursor:pointer}
+#learningPanel .learn-course-tile>.comm-more>button{font-size:12px;font-weight:400;min-height:40px;margin:6px 0 9px 10px;padding:7px 10px}
+#learningPanel .learn-course-handles{padding:6px 10px;flex-wrap:wrap;border-bottom:1px solid #edf0eb}
+#learningPanel .learn-catalog-controls{gap:9px;margin:12px 0 16px}#learningPanel .learn-catalog-controls label{font-size:12px;font-weight:400;color:#788a81}#learningPanel .learn-catalog-controls label select{font-size:16px;font-weight:400;min-height:44px;padding:8px 32px 8px 10px;border-radius:10px;margin:0}
+#learningPanel .comm-home>.comm-back,#learningPanel #learningContent>.learn-back{display:inline-flex;align-items:center;min-height:40px;padding:5px 0;border:0;background:none;box-shadow:none;font-size:13px;font-weight:400;color:#718178}
+#learningPanel .comm-home>h2{font-size:21px;font-weight:650;line-height:1.5;margin:10px 0 12px}
+#learningPanel .comm-home>.comm-manage{margin:0 0 12px;padding:0;border:0;background:none;box-shadow:none}
+#learningPanel .comm-home>.comm-manage>summary{font-size:13px;font-weight:400;min-height:40px;box-sizing:border-box;padding:8px 0;color:#718178;line-height:1.6}
+#learningPanel .comm-home>label{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:400;color:#718178;margin:8px 0 14px}
+#learningPanel .comm-home>label select{width:auto;flex:1;min-width:0;font-size:16px;font-weight:400;min-height:44px;margin:0;padding:8px 12px;border-radius:10px}
+#learningPanel .comm-home>.tag-hint{font-size:11px;line-height:1.75;margin-top:14px}
+#learningDialog:has(.lc-chooser){width:min(560px,calc(100vw - 24px));box-sizing:border-box;border-radius:18px;padding:18px}
+#learningDialog:has(.lc-chooser)>header{margin:0 0 12px;align-items:center}#learningDialog:has(.lc-chooser)>header h2{font-size:18px;font-weight:600;line-height:1.5;margin:0}
+#learningDialog .lc-search-label{display:grid;gap:6px;font-size:12px;color:#718178;font-weight:400;margin:0}
+#learningDialog #lcCourseSearch{width:100%;min-width:0;box-sizing:border-box;font-size:16px;font-weight:400;padding:10px 12px;min-height:44px;border-radius:10px;margin:0}
+#learningDialog #lcCourseCount{font-size:12px;line-height:1.6;color:#788a81;margin:10px 0 6px}
+#learningDialog .lc-choice-list{max-height:55vh;max-height:55dvh;overflow:auto;overscroll-behavior:contain;border-top:1px solid #e7ede7}
+#learningDialog .lc-choice-list>button{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;width:100%;box-sizing:border-box;padding:12px 4px;min-height:62px;border:0;border-bottom:1px solid #edf0eb;border-radius:0;background:transparent;box-shadow:none;margin:0;color:var(--ink)}
+#learningDialog .lc-choice-list>button>span:first-child{min-width:0;flex:1}#learningDialog .lc-choice-list strong{display:block;font-size:15px;line-height:1.65;font-weight:500;overflow-wrap:anywhere}
+#learningDialog .lc-choice-list small{display:block;font-size:11px;line-height:1.65;font-weight:400;color:#788a81;margin-top:3px;overflow-wrap:anywhere}
+#learningDialog .lc-choice-mark{flex:none;color:#91a59b;font-size:18px;font-weight:400}#learningDialog .lc-choice-list [aria-current=true]{background:#f2f7f1}#learningDialog .lc-choice-list [aria-current=true] .lc-choice-mark{color:#087f70}
+#learningDialog .lc-choice-empty{font-size:13px;color:#788a81;padding:20px 0}
+@media(max-width:760px){
+ #learningContent .study-center .rr-summary{padding:13px!important;gap:10px;margin:10px 0;border-radius:12px}
+ #learningContent .study-center .rr-summary h3{font-size:15px}#learningContent .study-center .rr-summary p{font-size:12px}#learningContent .study-center .rr-summary small{font-size:11px}
+ #learningContent .study-center .rr-summary>.rr-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ #learningContent .study-center .rr-summary .rr-actions button{width:100%;font-size:12px;padding:8px 5px;min-height:44px;box-shadow:none}
+ #learningPanel .lc-course-picker>[data-course-jump]{display:none}#learningPanel .lc-picker-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;margin:0;border:1px solid #dce6df;border-radius:10px;background:var(--paper,#fff);box-shadow:none;font-size:14px;font-weight:400;line-height:1.6;text-align:left}
+ #learningPanel .lc-picker-button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}#learningPanel .lc-picker-button svg{width:16px;height:16px;flex:none;fill:none;stroke:#718178;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+ #learningPanel .learn-catalog-controls>.lc-course-picker{flex-basis:100%}#learningPanel .learn-quick-nav>.lc-course-picker{flex-basis:calc(100% - 80px)}
+ #learningPanel .learn-course-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+ #learningPanel .learn-course-grid .learn-lesson h3{font-size:16px;font-weight:600}#learningPanel .learn-course-grid .learn-lesson small{font-size:11px}#learningPanel .learn-course-grid .learn-lesson p{font-size:12px;line-height:1.8}
+ #learningPanel .learn-course-tile>.learn-lesson{padding:13px 30px 13px 13px}#learningPanel .comm-home>h2,#learningPanel #learningContent>h2{font-size:20px;line-height:1.5;font-weight:650;margin:10px 0 12px}
+ #learningPanel .comm-home>.comm-manage{margin-bottom:8px}#learningPanel .comm-home>label{margin:6px 0 12px}
+}
+@media(prefers-reduced-motion:no-preference){#learningDialog .lc-choice-list>button{transition:background .12s ease}#learningDialog .lc-choice-list>button:hover{background:#f2f7f1}}
 </style>
 <script src="./offline.js"></script>
 </body>

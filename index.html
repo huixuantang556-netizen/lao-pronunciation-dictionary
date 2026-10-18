@@ -823,6 +823,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       try {
         const backup=JSON.parse(await file.text());
         if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
+        if(backup?.format==='lao-dictionary-text-export-v1')throw new Error('这是不含音频的全部资料审查文件，不能作为完整备份恢复。请保留原录音，使用核对后的专用修复文件。');
         if(backup?.format==='lao-tag-review')throw new Error('这是导出的标签整理词表，请选择“词典标签更新-2026-10-08.json”，而不是标签整理词表。');
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
         const codaIncoming=validateCodaProgress(backup.codaProgress);
@@ -4458,25 +4459,27 @@ renderLearning=async function(...args){if(learningRoute==='lesson'&&learningLess
 /* Keep export feedback visible and downloads available until explicitly closed. */
 function openBackupExport(){
  const dialog=document.createElement('dialog');
- dialog.innerHTML='<h2>导出词典</h2><p>完整备份包含录音，资料较多时需要等待。整理标签可以先导出不含音频的词表。</p><p><button data-full>完整备份（含音频）</button> <button data-words>标签整理用词表</button></p><p data-status role="status"></p><div data-result></div><p><button data-close>关闭</button></p>';
+ dialog.innerHTML='<h2>导出词典与学习资料</h2><p>完整备份用于保留录音；全部资料（不含音频）包含词典、课程、语法、发音分析和学习记录，适合发给AI检查。它保留音频关联目录，但不含录音文件，不能代替完整备份或直接同步导入。</p><p><button data-full>完整备份（含音频）</button> <button data-text-all>全部资料（不含音频）</button> <button data-words>标签整理用词表</button></p><p data-status role="status"></p><div data-result></div><p><button data-close>关闭</button></p>';
  document.body.appendChild(dialog);dialog.showModal();let busy=false,url=null;
  const status=dialog.querySelector('[data-status]'),result=dialog.querySelector('[data-result]');
  dialog.querySelector('[data-close]').onclick=()=>dialog.close();
  dialog.addEventListener('close',()=>{if(url)URL.revokeObjectURL(url);dialog.remove();});
- async function run(full){
-  if(busy)return;busy=true;dialog.querySelector('[data-full]').disabled=true;dialog.querySelector('[data-words]').disabled=true;
-  status.textContent=full?'正在整理词条、录音和学习材料，请稍候…':'正在整理词表（不包含录音）…';result.replaceChildren();if(url){URL.revokeObjectURL(url);url=null;}
+ async function run(full,textOnly=false){
+  if(busy)return;busy=true;dialog.querySelector('[data-full]').disabled=true;dialog.querySelector('[data-words]').disabled=true;dialog.querySelector('[data-text-all]').disabled=true;
+  status.textContent=textOnly?'正在整理全部文字资料（不包含录音），请稍候…':full?'正在整理词条、录音和学习材料，请稍候…':'正在整理词表（不包含录音）…';result.replaceChildren();if(url){URL.revokeObjectURL(url);url=null;}
   try{
-   let blob,count;
-   if(full)({blob,count}=await exportBackup(message=>{status.textContent=message;}));
+   let blob,count,summary;
+   if(textOnly)({blob,count,summary}=await exportAllTextData(message=>{status.textContent=message;}));
+   else if(full)({blob,count}=await exportBackup(message=>{status.textContent=message;}));
    else{const rows=await allEntries(),entries=rows.map(w=>({syncId:w.syncId,word:w.word,ipa:w.ipa||'',meaning:w.meaning||'',category:w.category||'',note:w.note||''}));count=entries.length;blob=new Blob([JSON.stringify({format:'lao-tag-review',exportedAt:new Date().toISOString(),entries},null,2)],{type:'application/json'});}
    if(!dialog.open)return;
-   url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=(full?'老挝语完整备份':'老挝语标签整理词表')+'-'+new Date().toISOString().slice(0,10)+'.json';link.textContent='点击保存 JSON 文件';result.appendChild(link);
-   status.textContent='已准备好 '+count+' 个词条（'+(blob.size/1024/1024).toFixed(2)+' MB）。请点击下方链接保存；保存前不要关闭此窗口。'+(full?'':' 此词表仅用于整理标签，不能代替完整备份。');
+   url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=(textOnly?'老挝语全部资料-不含音频':full?'老挝语完整备份':'老挝语标签整理词表')+'-'+new Date().toISOString().slice(0,10)+'.json';link.textContent='点击保存 JSON 文件';result.appendChild(link);
+   status.textContent='已准备好 '+count+' 个词条（'+(blob.size/1024/1024).toFixed(2)+' MB）。请点击下方链接保存；保存前不要关闭此窗口。'+(textOnly?' 包含'+summary.materials+'条学习资料、'+summary.phoneticProfiles+'份发音分析和音频关联目录；不含录音，不可代替完整备份。发给AI前请确认可以分享其中的个人笔记。':full?'':' 此词表仅用于整理标签，不能代替完整备份。');
   }catch(e){status.textContent='导出失败：'+(e.message||String(e))+'。可将这段提示发给我排查。';}
-  finally{busy=false;dialog.querySelector('[data-full]').disabled=false;dialog.querySelector('[data-words]').disabled=false;}
+  finally{busy=false;dialog.querySelector('[data-full]').disabled=false;dialog.querySelector('[data-words]').disabled=false;dialog.querySelector('[data-text-all]').disabled=false;}
  }
  dialog.querySelector('[data-full]').onclick=()=>run(true);dialog.querySelector('[data-words]').onclick=()=>run(false);
+ dialog.querySelector('[data-text-all]').onclick=()=>run(false,true);
 }
 $('#exportButton').onclick=openBackupExport;
 </script>
@@ -4525,6 +4528,31 @@ async function exportBackup(progress=()=>{}){
  const header={format:backupFormat,version:3,exportedAt:new Date().toISOString(),defaultAudioSource:ttsSettings.endpoint||'',alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress()};
  const blob=new Blob([JSON.stringify(header).slice(0,-1),',"entries":',entries,',"learning":',new Blob(learningParts),',"defaultAudio":',defaultAudio,'}'],{type:'application/json'});
  return {blob,count:records.length};
+}
+/* A separate analysis exchange format, never a lossy full-backup replacement. */
+function textExportValue(value,seen=new WeakSet()){
+ if(value===null||value===undefined)return value;
+ if(typeof value==='string')return /^(data:audio\/|blob:)/i.test(value)?undefined:value;
+ if(typeof value!=='object')return value;
+ if(value instanceof Blob||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return undefined;
+ if(value instanceof Date)return value.toISOString();
+ if(seen.has(value))throw Error('文字资料包含循环引用，未生成导出文件');seen.add(value);
+ let result;if(Array.isArray(value))result=value.map(v=>textExportValue(v,seen)??null);else{result=Object.create(null);for(const key of Object.keys(value)){if(['audio','audioData','audioDataUrl','audioBlob','blob'].includes(key))continue;const v=textExportValue(value[key],seen);if(v!==undefined)result[key]=v;}}
+ seen.delete(value);return result;
+}
+async function exportAllTextData(progress=()=>{}){
+ if((typeof learningHasWork==='function'&&learningHasWork())||(typeof recorder!=='undefined'&&recorder))throw Error('请先保存或取消编辑，并完成录音，再导出已保存资料');
+ progress('正在读取全部文字资料，不加载默认音频缓存…');const database=await openDB(),names=[storeName,'learningMaterials','learningPlacements','learningAudio'],labels=['词典','课程、语法及发音分析','课程归属','音频目录（不含录音）'];
+ const counts=Object.fromEntries(names.map(name=>[name,0]));let profiles=0,annotations=0;
+ const arrays=await new Promise((resolve,reject)=>{
+  const tx=database.transaction(names,'readonly'),parts=Object.fromEntries(names.map(name=>[name,['[']]));let failure;
+  tx.oncomplete=()=>resolve(Object.fromEntries(names.map(name=>[name,new Blob([...parts[name],']'],{type:'application/json'})])));tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('读取全部文字资料失败'));
+  names.forEach((name,index)=>{const cursor=tx.objectStore(name).openCursor();cursor.onsuccess=()=>{const row=cursor.result;if(!row)return;try{const value=textExportValue(row.value);if(counts[name])parts[name].push(',');parts[name].push(new Blob([JSON.stringify(value)]));counts[name]++;if(name==='learningMaterials'){if(value.phoneticProfile)profiles++;if(value.pronunciationAnalysis)annotations++;}if(counts[name]===1||counts[name]%50===0)progress('正在导出'+labels[index]+'：'+counts[name]+'条');row.continue();}catch(error){failure=error;tx.abort();}};});
+ });
+ const rules=typeof paRules==='function'?paRules():null,summary={entries:counts[storeName],materials:counts.learningMaterials,placements:counts.learningPlacements,audioMetadata:counts.learningAudio,phoneticProfiles:profiles,analysisCards:annotations};
+ const header=textExportValue({format:'lao-dictionary-text-export-v1',version:1,audioIncluded:false,notAFullBackup:true,exportedAt:new Date().toISOString(),purpose:'完整文字资料审查与修复；不是可恢复录音的完整备份，不要直接同步导入。',excluded:['音频文件与二进制','默认发音缓存','登录凭据与云端密钥'],summary,phoneticRules:rules?{ruleDigest:await paDigest(rules),rules}:null,alphabetCells:await readAlphabetOverrides(),codaProgress:await readCodaProgress(),deviceResume:typeof scLocal==='function'?scLocal():null});
+ const blob=new Blob([JSON.stringify(header).slice(0,-1),',"entries":',arrays[storeName],',"learning":{"learningMaterials":',arrays.learningMaterials,',"learningPlacements":',arrays.learningPlacements,',"learningAudio":',arrays.learningAudio,'}}'],{type:'application/json;charset=utf-8'});
+ progress('全部文字资料已准备好；原始录音和本机数据未改动。');return {blob,count:summary.entries,summary};
 }
 </script>
 <style>#practiceAnswer,#checkAnswer,#practiceNotes{display:none!important}.learn-detail-compact{position:relative;padding-top:8px}.learn-detail-compact>.ipa{padding-right:110px;min-height:44px}.learn-detail-play{position:absolute;right:32px;top:0}.learn-detail-compact>.ipa{padding-right:142px}@media(max-width:560px){.learn-detail-play{right:16px}.learn-detail-compact>.ipa{padding-right:126px}}.learn-audio-bottom{display:block;border-top:1px solid var(--line);padding-top:20px;margin-top:24px}.letter-example-group h4{margin:14px 0 8px}.letter-example-group>p{margin:6px 0}.letter-example-group button{text-align:left;white-space:normal;overflow-wrap:anywhere;max-width:100%}</style>

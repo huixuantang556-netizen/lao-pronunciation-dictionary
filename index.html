@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="299be0b8c48f8ed1">
+  <meta name="lao-app-build" content="12838aad1fa092a6">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5395,6 +5395,7 @@ function saTemplate(original){return {format:sentenceAnalysisFormat,original,tra
 function saPrompt(original){return `请为下面的老挝语原文提供中文学习解析，只输出一个合法 JSON 对象（不要 Markdown 表格，不要代码或 HTML）。不要改变原文、补写主语或标点。segments.lao 按顺序拼接后，忽略空白必须与 original 完全一致。words 只列必要的独立词汇和少量固定搭配，不要枚举各种排列组合。例如“想”“水”可作为独立词，“想喝水”应放在 grammar 解释，不另建组合词卡。每个 words.lao 必须实际出现在该段，原文没有的“喝”不能补进单词表。
 只使用以下字段；不要自行填写词条 ID、音频网址或材料 ID。words 每项必须标注 kind：独立词为 word，固定搭配／组合短语为 phrase，人名为 name，不确定为 unknown。分类只是待核对建议，不代表自动新增词典。同段同词义不要重复。words 每项可加 isName 布尔值，人名必须填 true，普通词填 false。词义填写本句含义，人名和多义词写清语境。无法确定的语法或翻译要在 notes 或 explanation 中明确标注待核对，不能编造。自然翻译补出的内容也要注明。
 格式说明：translation 是全文翻译；segments 为逐句／分句拆解；words 每项为 {"lao":"原词或短语","meaning":"本句词义","role":"词性或本句作用","kind":"word / phrase / name / unknown","isName":false}；grammar 和 patterns 每项为 {"pattern":"结构","explanation":"中文说明，可含例句"}；quiz 每项为 {"question":"题目","options":["选项一","选项二","选项三"],"answer":0,"explanation":"解析"}，answer 从 0 开始。空数组允许保留。建议提供 3–5 道小测验。
+数字专项：遇到阿拉伯数字，先按本句语境分辨数量、金额、钟点、日期月份、年份或电话号码／编号，再在 grammar.explanation 写出原数字对应的老挝语读法和用法。电话号码逐位读，保留前导0，不按数量展开；不要仅凭数字长度判断。点号可能是千位分组，不能一律读成小数点。不确定请标明待核对。展开后的老挝语只写在说明里，不改 original 或 segments.lao，也不要把原文没有的展开数词塞进 words.lao。
 请填充下面模板，保留 format 和 original：
 ${JSON.stringify(saTemplate(original),null,2)}`;}
 function saDownload(name,text){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -7077,11 +7078,15 @@ function rrTodayStats(m){
 async function rrRecords(kind='new'){
  scGuard();const {snap,model:m}=await rrRead(),h=learningEsc,courses=typeof learningOrderedCourses==='function'?learningOrderedCourses(snap):learningCourses(snap);
  const rows=(kind==='review'?m.todayReview:m.todayNew).slice().sort((a,b)=>b.todayEvents.at(-1).at-a.todayEvents.at(-1).at);
- learningModal('今日学习记录','<div class="rr-records"><div class="rr-record-tabs">'+rrTodayStats(m)+'</div><p class="tag-hint">'+h(reviewDay(Date.now()))+' · 每日清单记录，不含自由练习与章节巩固。按方向计项，同一词句同一方向今天多次回忆只计一项。</p><h3>'+(kind==='review'?'今日复习':'今日新学')+' · '+rows.length+' 项</h3><div class="rr-record-list">'+(rows.map(r=>{
+ learningModal('今日学习记录','<div class="rr-records"><div class="rr-record-tabs">'+rrTodayStats(m)+'</div><p class="tag-hint">'+h(reviewDay(Date.now()))+' · 每日清单记录，不含自由练习与章节巩固。按方向计项，同一词句同一方向今天多次回忆只计一项。</p><h3>'+(kind==='review'?'今日复习':'今日新学')+' · '+rows.length+' 项</h3><div id="rrRecordList" class="rr-record-list">'+(rows.map((r,i)=>{
   const ids=new Set((r.item._practiceCourses||[]).map(c=>c.id)),labels=courses.filter(c=>ids.has(c.id)).map(scCourseLabel),last=r.todayEvents.at(-1);
-  return '<article class="rr-item rr-history-item"><div><strong lang="lo">'+h(r.item.word)+'</strong><p>'+h(r.item.meaning)+'</p><small>'+h(rrDirections[r.direction])+'</small><small class="rr-source">来源：'+h(labels.join('；')||(ids.size?'原章节不可用':'我的词典（未关联章节）'))+'</small><small>最近评级：'+h(reviewLabels[last.rating])+' · '+h(new Date(last.at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+' · 今日回忆 '+r.todayEvents.length+' 次'+(r.status==='paused'?' · 已暂停':'')+'</small></div></article>';
+  return '<article class="rr-item rr-history-item"><div><button type="button" class="rr-record-word" data-rr-record-detail="'+i+'" aria-label="'+h('打开 '+r.item.word+' 的详情')+'"><strong lang="lo">'+h(r.item.word)+'</strong></button><p>'+h(r.item.meaning)+'</p><small>'+h(rrDirections[r.direction])+'</small><small class="rr-source">来源：'+h(labels.join('；')||(ids.size?'原章节不可用':'我的词典（未关联章节）'))+'</small><small>最近评级：'+h(reviewLabels[last.rating])+' · '+h(new Date(last.at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+' · 今日回忆 '+r.todayEvents.length+' 次'+(r.status==='paused'?' · 已暂停':'')+'</small></div><button type="button" data-rr-record-detail="'+i+'">词句详情 ›</button></article>';
  }).join('')||'<p class="rr-empty">今天还没有'+(kind==='review'?'复习':'新学')+'记录。完成每日清单的评级后，会出现在这里。</p>')+'</div><div class="rr-actions"><button data-rr-manage>清单与目标</button></div></div>');
  learningDialog.classList.add('rr-records-dialog');
+ $('#rrRecordList')?.setAttribute('aria-label','今日学习词句');
+ const list=learningDialog.querySelector?.('.rr-record-list')||$('#rrRecordList');
+ if(list)list.onclick=async e=>{const b=e.target.closest('[data-rr-record-detail]');if(!b)return;const raw=b.dataset.rrRecordDetail;if(!/^\d+$/.test(raw))return;const row=rows[Number(raw)];if(!row)return;b.disabled=true;try{scGuard();const fresh=await rrRead(),item=rrCatalog(fresh.snap,fresh.words).find(w=>reviewKeys(w).some(k=>reviewKeys(row.item).includes(k)));if(!item||rrSignature(item)!==rrSignature(row.item))throw Error('此词句已修改、删除或尚未同步，请刷新学习记录');const id=item._practiceMaterialId||'word:'+item.syncId;if(typeof saOpenNested==='function')await saOpenNested(id,b);else await learningOpenDetail(id);}catch(error){$('#learningDialogStatus').textContent='详情暂时无法打开：'+error.message;}finally{b.disabled=false;}};
+
 }
 
 async function rrRead(){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);return {snap,words,model:rrModel(snap,words)};}
@@ -7542,6 +7547,132 @@ async function pxRefreshCloudCache(){const run=++pxCacheRead,uid=window.profileU
 const pxCloudRefreshBase=apRefreshSettings;apRefreshSettings=function(...args){const result=pxCloudRefreshBase(...args);void pxRefreshCloudCache();return result;};
 pxRender();void pxRefreshCloudCache();
 </script>
+<script data-learning-bundle="number-study">
+/* Contextual number readings; an additive display layer, never a rewrite of saved Lao or audio. */
+const nsSources=[['NIU · 老挝语数词','https://seasite.niu.edu/lao/LaoLanguage/Vocabulary_Learning/lao_numbers.htm'],['NIU · 数词与量词','https://seasite.niu.edu/lao/LaoLanguage/grammar_notes/grammar17.htm'],['FSI · Everyday Lao（数字及电话号码）','https://fsi-languages.yojik.eu/languages/FSI/Lao/Every-day-lao/Everyday%20Lao.pdf']];
+const nsDigits=['ສູນ','ໜຶ່ງ','ສອງ','ສາມ','ສີ່','ຫ້າ','ຫົກ','ເຈັດ','ແປດ','ເກົ້າ'];
+const nsGloss={'ສູນ':'0','ໜຶ່ງ':'1','ສອງ':'2','ສາມ':'3','ສີ່':'4','ຫ້າ':'5','ຫົກ':'6','ເຈັດ':'7','ແປດ':'8','ເກົ້າ':'9','ສິບ':'10','ຊາວ':'20','ເອັດ':'复合数末位的1','ຮ້ອຍ':'百','ພັນ':'千','ໝື່ນ':'万','ແສນ':'十万','ລ້ານ':'百万','ໂມງ':'点／小时','ນາທີ':'分钟','ເຄິ່ງ':'半','ຈຸດ':'小数点','ລົບ':'负','ເປີເຊັນ':'百分比'};
+const nsLabels={cardinal:'普通数量',money:'金额',phone:'电话号码（逐位读）',identifier:'编号（逐位读）',time:'钟点时间',hour:'小时数',month:'月份',dateDay:'日期中的日',year:'年份',duration:'时长／年龄',measure:'数量与计量单位',ordinal:'顺序',decimal:'小数',percent:'百分比',ambiguous:'读法需确认',unsupported:'格式需核对'};
+function nsCardinalParts(value,tail=false){
+ const n=Number(value);if(!Number.isSafeInteger(n)||n<0||n>999999999999)throw Error('此数字超出已核对的范围');
+ if(n<10)return [n===1&&tail?'ເອັດ':nsDigits[n]];
+ if(n<100){const t=Math.floor(n/10),u=n%10;return [...(t===1?['ສິບ']:t===2?['ຊາວ']:[nsDigits[t],'ສິບ']),...(u?[u===1?'ເອັດ':nsDigits[u]]:[])];}
+ const units=[[1000000,'ລ້ານ'],[100000,'ແສນ'],[10000,'ໝື່ນ'],[1000,'ພັນ'],[100,'ຮ້ອຍ']];
+ const [base,unit]=units.find(([base])=>n>=base),q=Math.floor(n/base),r=n%base;return [...nsCardinalParts(q),unit,...(r?nsCardinalParts(r,true):[])];
+}
+function nsDigitParts(raw){return [...raw.replace(/\D/g,'')].map(n=>nsDigits[Number(n)]);}
+function nsDecimalParts(raw){const [whole,fraction]=raw.split('.');return [...nsCardinalParts(whole),'ຈຸດ',...nsDigitParts(fraction)];}
+function nsContext(text,start,end,hint=''){
+ const before=text.slice(Math.max(text.lastIndexOf('\n',start-1)+1,start-55),start),nextLine=text.indexOf('\n',end),after=text.slice(end,Math.min(nextLine<0?text.length:nextLine,end+45));
+ return {before,after,line:before+text.slice(start,end)+after,hint};
+}
+function nsClassify(raw,c,override=''){
+ const after=c.after.trimStart(),before=c.before.trimEnd(),hint=c.hint||'',compact=raw.replace(/[ +()]/g,''),digits=compact.replace(/\D/g,''),unit=after.match(/^(ກິໂລແມັດ|ກິໂລ|ແມັດ|ອົງສາ|ແກ້ວ|ຄົນ|ໂຕ|ອັນ|ກີບ|ໂດລາ|ບາດ|ໂລ|ລິດ|ປີ|ເດືອນ|ມື້)/)?.[0]||'';
+ const money=['ກີບ','ບາດ','ໂດລາ'].includes(unit)||!unit&&(/(基普|老币|美元|泰铢|[万千].*(?:可以|便宜|贵|钱))/.test(hint)||/ລາຄາ\s*$/.test(before)||/^\d{1,3}(?:[.,]\d{3})+$/.test(raw)&&/ກີບ/.test(hint));
+ const phone=/(?:ເບີ(?:ໂທ)?[^0-9\n]{0,40}|ໂທລະສັບ[^0-9\n]{0,20})$/.test(before)||/(电话号码|电话是|电话为|号码|phone|telephone)/i.test(hint);
+ let kind='cardinal',normalized=compact,note='按十进制位值组合读，不把每一位分别念出。',parts=[],alternative='';
+ if(digits.length>24)return {kind:'unsupported',raw,lao:'',parts:[],note:'这串数字过长，可能是标识符，请人工核对，不生成数量读法。',unit};
+ if(override==='phone'||override==='identifier'||phone&&digits.length>=1&&!unit){kind=override||'phone';parts=nsDigitParts(raw);note='这是号码，不表示数量：逐位读，保留前导0；数字1用ໜຶ່ງ，不用复合数量末位的ເອັດ。分隔符仅用于分组。';}
+ else if(/^\d{1,2}:\d{2}$/.test(raw)){
+  const [hour,minute]=raw.split(':').map(Number);kind='time';if(hour>23||minute>59)return {kind:'unsupported',raw,lao:'',parts:[],note:'钟点超出00:00—23:59范围，请核对原资料。',unit};
+  parts=[...nsCardinalParts(hour),'ໂມງ',...(minute===30?['ເຄິ່ງ']:minute?[...nsCardinalParts(minute),'ນາທີ']:[])];note='按“小时＋ໂມງ＋分钟＋ນາທີ”学习；30分钟可用ເຄິ່ງ。原句未注明上午／下午时，不自行补时段。';
+ }
+ else if(/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(raw)){return {kind:'unsupported',raw,lao:'',parts:[],note:'完整日期需确认历法及月份名称；保留原样，不当成数量或电话号码。',unit};}
+ else if(override!=='cardinal'&&((/^0\d/.test(compact)&&!/[.,]/.test(compact))||/^[+]/.test(raw)||digits.length>=7&&!money&&!unit&&!/ປີ\s*$/.test(before)||/^\d+[/-]\d+/.test(raw))){kind='ambiguous';note='可能是号码、编号、日期或范围，不能仅按长度判定为数量。请选择读法；原句不变。';}
+ else{
+  if(/^\d{1,3}(?:[.,]\d{3})+$/.test(compact)){
+   if(!money&&!['cardinal','decimal'].includes(override))return {kind:'ambiguous',raw,lao:'',parts:[],note:'点号／逗号可能是千位分组，也可能是小数点。请选择“按分组数量读”或“小数读法”。',unit};
+   normalized=compact.replace(/[.,]/g,'');note='这里的点号／逗号是千位分组，不读作小数点；去掉分组符后按数量读。';
+  }else if(/^-?\d+\.\d+$/.test(compact)){kind='decimal';}
+  else if(!/^-?\d+(?:\.\d+)?[%％]?$/.test(compact))return {kind:'unsupported',raw,lao:'',parts:[],note:'格式暂未可靠识别，请核对；不会将部分数字截开冒充完整读法。',unit};
+  if(override==='decimal'){normalized=compact.replace(',','.');kind='decimal';}
+  const percent=/[%％]$/.test(normalized);normalized=normalized.replace(/[%％]$/,'');const negative=normalized.startsWith('-');normalized=normalized.replace(/^-/,'');
+  try{parts=/\./.test(normalized)?nsDecimalParts(normalized):nsCardinalParts(normalized);}catch(_){return {kind:'unsupported',raw,lao:'',parts:[],note:'超过当前已核对的数量范围，请人工确认。',unit};}
+  if(/\./.test(normalized))note='小数点读ຈຸດ；小数部分逐位读，保留0，数字1仍用ໜຶ່ງ。';
+  if(negative)parts.unshift('ລົບ');if(percent){kind='percent';parts.push('ເປີເຊັນ');note+=' 百分数读出数量后接ເປີເຊັນ。';}
+  else if(money)kind='money';else if(/ໂມງ/.test(after.slice(0,8)))kind='hour';else if(/ວັນທີ່?\s*$/.test(before))kind='dateDay';else if(/ເດືອນ\s*$/.test(before))kind='month';else if(/ປີ\s*$/.test(before)&&digits.length===4)kind='year';else if(/ທີ່?\s*$/.test(before))kind='ordinal';else if(['ປີ','ເດືອນ','ມື້'].includes(unit))kind='duration';else if(unit)kind='measure';
+  if(kind==='money'){note+=' 数量后接货币单位；ລະ表示“每／每一”。';const n=Number(normalized);if(n>=10000&&n<1000000&&n%1000===0)alternative=nsCardinalParts(n/1000).join('')+'ພັນ';}
+  if(kind==='month')note+=' ເດືອນ＋数字表示第几个月／月份，不把月份数字逐位念。';
+  if(kind==='dateDay'||kind==='ordinal')note+=' ທີ／ທີ່ 后的数字表示日期或顺序；原有标记已经在句子里，不重复补写。';
+  if(kind==='year')note+=' 此处按年份的整数量读法展示，不按电话号码逐位读；历法仍须依原文确认。';
+  if(kind==='measure')note+=' 数词与后面的量词／计量单位构成数量短语；通常是“名词＋数词＋量词”，不擅自调整原句顺序。';
+  if(kind==='duration')note+=' 数字＋时间单位表示时长；年龄常用数字＋ປີ，需结合句意。';
+  if(normalized==='1'&&/(ຄົນ|ແກ້ວ|ໂຕ|ອັນ)\s*$/.test(before)){kind='measure';note+=' 本句把“一”放在量词后，是“名词＋量词＋一”的用法；不要照中文顺序改写。';}
+  if(parts.includes('ຊາວ'))note+=' 20用ຊາວ，不按“二＋十”拼。';if(parts.includes('ເອັດ'))note+=' 此复合数末位1用ເອັດ；单独1和号码中的1用ໜຶ່ງ。';
+ }
+ return {raw,kind,normalized,parts,lao:parts.join(kind==='phone'||kind==='identifier'?' ':' '),compactLao:parts.join(''),unit,note,alternative,breakdown:parts.map(lao=>({lao,meaning:nsGloss[lao]||''}))};
+}
+function nsScan(text,hint=''){
+ text=String(text||'');const out=[],regex=/\+?\d{4}[-/]\d{1,2}[-/]\d{1,2}|\+?\d+(?:[.,]\d+)*(?::\d+)*(?:[%％])?/g;let m;
+ while((m=regex.exec(text))&&out.length<200){let raw=m[0],start=m.index,end=regex.lastIndex;const preliminary=nsContext(text,start,end,hint);
+  if(/ເບີ|ໂທ|电话|号码|phone/i.test(preliminary.line+' '+hint)){const tail=text.slice(start).match(/^\+?\d+(?:[ -]\d{2,})+/)?.[0];if(tail&&tail.replace(/\D/g,'').length>=7){raw=tail;end=start+raw.length;regex.lastIndex=end;}}
+  if(text[start-1]==='-'&&(start===1||/[\s(=]/.test(text[start-2]))){start--;raw='-'+raw;}
+  let context=nsContext(text,start,end,hint);
+  if(text.trim()===raw&&/[\u0e80-\u0eff]/.test(hint)){let at=hint.indexOf(raw);while(at>=0&&(/\d/.test(hint[at-1]||'')||/\d/.test(hint[at+raw.length]||'')))at=hint.indexOf(raw,at+1);if(at>=0)context=nsContext(hint,at,at+raw.length,hint);}
+  const reading=nsClassify(raw,context);if(/[A-Za-z]/.test(text[start-1]||'')||/[A-Za-z]/.test(text[end]||'')){reading.kind='ambiguous';reading.lao='';reading.parts=[];reading.note='数字与拉丁字母相连，可能是型号或编号，请确认读法。';}
+  out.push({start,end,context,...reading});
+ }
+ return out;
+}
+function nsSentenceHtml(text,ranges=[],hint=''){
+ const numbers=nsScan(text,hint),parts=[...ranges.map((r,i)=>({...r,index:i})).filter(r=>!numbers.some(n=>r.start<n.end&&r.end>n.start)),...numbers.map(n=>({...n,number:true}))].sort((a,b)=>a.start-b.start);let at=0,out='';
+ for(const r of parts){out+=learningEsc(text.slice(at,r.start));out+=r.number?'<button type="button" class="ns-number" data-ns-number="'+r.start+'" data-ns-text="'+learningEsc(text)+'" data-ns-hint="'+learningEsc(hint)+'" aria-label="'+learningEsc('查看数字 '+text.slice(r.start,r.end)+' 的老挝语表达')+'">'+learningEsc(text.slice(r.start,r.end))+'</button>':'<button data-wsl-token="'+r.index+'" aria-pressed="false">'+learningEsc(text.slice(r.start,r.end))+'</button>';at=r.end;}
+ return out+learningEsc(text.slice(at));
+}
+function nsContextHint(m,snap){let root=m;const seen=new Set();while(root.analysisOwner&&!seen.has(root.id)){seen.add(root.id);const next=snap.learningMaterials.find(x=>x.id===root.analysisOwner&&!x.deleted);if(!next)break;root=next;}
+ if(root.phoneticProfile){const candidates=snap.learningMaterials.filter(x=>!x.deleted&&!x.analysisOwner&&!x.courseDefinition&&x.pronunciationAnalysis?.segments?.some(s=>s.profileId===root.id||s.words?.some(w=>w.profileId===root.id)));if(candidates.length===1)root=candidates[0];else if(candidates.length){const hints=candidates.map(x=>[x.textLao,x.translationZh].join(' ')),kinds=new Set(hints.map(h=>nsScan(m.textLao,h)[0]?.kind));if(kinds.size===1)root=candidates[0];}}
+ return [root.textLao,root.translationZh,m.translationZh].filter(Boolean).join(' ');}
+/* UI integration below. Pure helpers above are also used for the offline material audit. */
+async function nsPlay(reading,generate,isCurrent=()=>true){
+ if(!reading.lao)throw Error('请先确认数字用途');if(learningHasWork()||recorder)throw Error('请先完成编辑、录音或同步');
+ const text=reading.compactLao||reading.lao,words=await allEntries(),match=words.find(w=>saTextKey(w.word)===saTextKey(text));if(!isCurrent())return;
+ if(match){try{await rrPlay(match,isCurrent);return;}catch(error){if(!/暂无/.test(error.message))throw error;}}
+ let blob=await learningCachedSpeech(text);if(!isCurrent())return;if(!blob&&generate)blob=await defaultSpeech(text);if(!isCurrent())return;if(!blob)throw Error('暂无这段老挝语读法的已保存音频；可主动点击 Gemini 生成（需联网，可能消耗额度）');await learningPlayBlob(blob);
+}
+async function nsOpen(number,button,override=''){
+ scGuard();if(recorder||typeof rpSaving!=='undefined'&&rpSaving)throw Error('请先完成当前保存或录音');const reading=override?{...number,...nsClassify(number.raw,number.context,override)}:number,parent=typeof letterDetailCapture==='function'?letterDetailCapture(button):null;
+ stopPracticeAudio();if(parent)letterDetailParents.push(parent);const h=learningEsc,uncertain=!reading.lao;
+ learningModal('数字表达 · '+reading.raw,'<section class="ns-study"><p class="ns-kind">'+h(nsLabels[reading.kind]||'数字表达')+'</p><p class="ns-original">原句：<span lang="lo">'+h(number.context.line)+'</span></p>'+(uncertain?'<p class="ns-note">'+h(reading.note)+'</p><div class="ns-actions"><button data-ns-choice="cardinal">按分组数量读</button><button data-ns-choice="identifier">按号码／编号逐位读</button>'+(number.raw.includes('.')?'<button data-ns-choice="decimal">按小数读</button>':'')+'</div>':'<p class="ns-reading" lang="lo">'+h(reading.lao)+'</p><p class="ns-note">生成发音需联网，可能消耗额度；打开本页或点击数字不会自动生成。</p><div class="ns-actions"><button id="nsPlay">▶ 播放已有发音</button><button id="nsGenerate">Gemini 生成读法发音</button></div><h3>构词与语法</h3><div class="ns-breakdown">'+reading.breakdown.map(p=>'<span><strong lang="lo">'+h(p.lao)+'</strong><small>'+h(p.meaning)+'</small></span>').join('')+'</div><p class="ns-note">'+h(reading.note)+'</p>'+(reading.unit?'<p>句中相邻单位：<strong lang="lo">'+h(reading.unit)+'</strong>。以上读法只展开原数字，不重复添加原句已有的单位。</p>':'')+(reading.alternative&&saTextKey(reading.alternative)!==saTextKey(reading.lao)?'<p>金额中也常用“多少千”的组合：<span lang="lo">'+h(reading.alternative)+'</span>。两种组合数值相同。</p>':'')+'<div id="nsPhonetics"></div>')+'<p id="nsStatus" role="status"></p><details class="ns-sources"><summary>读法依据与说明</summary><p>这是按语境生成的数字用法补充，不替换原句、旧解析或录音；推测分类不等于母语者逐条核音。号码不作数量计算。</p>'+nsSources.map(([label,url])=>'<p><a href="'+url+'" target="_blank" rel="noopener noreferrer">'+h(label)+'</a></p>').join('')+'</details></section>');
+ learningDialog.classList.add('ns-dialog');if(parent)letterDetailBackButton();const host=learningDialog.querySelector('.ns-study');let request=0;const current=()=>host.isConnected&&learningDialog.open;
+ for(const b of host.querySelectorAll('[data-ns-choice]'))b.onclick=async()=>{try{const next={...number,...nsClassify(number.raw,number.context,b.dataset.nsChoice)};if(next.lao){host.querySelector('#nsStatus').textContent='';const parentButton=button;learningClose();await nsOpen(next,parentButton);}else host.querySelector('#nsStatus').textContent=next.note;}catch(e){if(current())host.querySelector('#nsStatus').textContent=e.message;}};
+ if(uncertain)return;
+ const play=async generate=>{const seq=++request;const b=host.querySelector(generate?'#nsGenerate':'#nsPlay');b.disabled=true;try{await nsPlay(reading,generate,()=>seq===request&&current());if(current()&&seq===request)host.querySelector('#nsStatus').textContent='正在播放展开后的老挝语，不是原始阿拉伯数字。';}catch(e){if(current()&&seq===request)host.querySelector('#nsStatus').textContent=e.message;}finally{b.disabled=false;}};
+ host.querySelector('#nsPlay').onclick=()=>play(false);host.querySelector('#nsGenerate').onclick=()=>play(true);
+ try{if(typeof paReusable==='function'){const snap=await learningSnapshot(),digest=await paDigest(paRules()),saved=paReusable(snap,reading.compactLao||reading.lao,digest);if(current()&&saved)host.querySelector('#nsPhonetics').innerHTML='<details><summary>已保存的老挝语读法语音分析</summary>'+paAnalysisHtml(saved)+'</details>';}}catch(e){if(current())host.querySelector('#nsStatus').textContent='语音分析暂未匹配，读法与语法仍可查看。';}
+}
+const nsOldSentenceHtml=wslSentenceHtml;wslSentenceHtml=function(text,ranges){return /\d/.test(text)?nsSentenceHtml(text,ranges):nsOldSentenceHtml(text,ranges);};
+const nsOldDetail=learningOpenDetail;learningOpenDetail=async function(id){await nsOldDetail(id);if(learningDetail!==id)return;const {m,w,snap}=await learningResolve(id);if(learningDetail!==id)return;const text=w?.word||m.textLao;if(!/\d/.test(text))return;const hint=nsContextHint({...m,textLao:text,translationZh:w?.meaning||m.translationZh},snap),detail=learningDialog.querySelector('.learn-detail');if(!detail)return;
+ const line=detail.querySelector('.wsl-sentence')||detail.querySelector('.ss-original');if(line){for(const b of line.querySelectorAll('[data-ns-number]'))b.dataset.nsHint=hint;if(!line.querySelector('[data-ns-number]'))line.innerHTML=nsSentenceHtml(text,[],hint);}
+ if(!/[\u0e80-\u0eff]/.test(text))for(const old of detail.querySelectorAll('.ss-pronunciation')){old.open=false;const summary=old.querySelector('summary');if(summary)summary.textContent='原阿拉伯数字解析（仅核对，不作读音依据）';}
+ const panel=document.createElement('section');panel.className='ns-detail-links';panel.innerHTML='<h3>数字表达</h3><p>点击数字查看老挝语读法、构词与句中用法。号码逐位读；原句与原解析保留。</p><div>'+nsScan(text,hint).map(n=>'<button type="button" class="ns-number" data-ns-number="'+n.start+'" data-ns-text="'+learningEsc(text)+'" data-ns-hint="'+learningEsc(hint)+'">'+learningEsc(n.raw)+' · '+learningEsc(nsLabels[n.kind])+'</button>').join('')+'</div>';(detail.querySelector('.ss-reading')||detail).append(panel);
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-ns-number]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();const text=b.dataset.nsText||'',start=Number(b.dataset.nsNumber),number=nsScan(text,b.dataset.nsHint||'').find(n=>n.start===start);if(number)void nsOpen(number,b).catch(error=>{const status=document.querySelector('#learningDialogStatus')||document.querySelector('#rpStatus');if(status)status.textContent=error.message;});},true);
+document.addEventListener('dblclick',e=>{if(e.target.closest('[data-ns-number]')){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('pointerdown',e=>{if(e.target.closest('[data-ns-number]'))e.stopImmediatePropagation();},true);
+function nsDecoratePractice(){for(const n of document.querySelectorAll('.rp-card-word[lang="lo"],.rp-card-examples article p[lang="lo"],.study-example p[lang="lo"],#questionIPA[lang="lo"],.learn-card-main[data-learn="play-card"] strong[lang="lo"]')){
+ const text=n.textContent;if(!/\d/.test(text))continue;const main=n.closest('.learn-card-main[data-learn="play-card"]');
+ if(main?.tagName==='BUTTON'){const box=document.createElement('div');box.className=main.className+' ns-card-main';box.dataset.learn='play-card';box.dataset.id=main.dataset.id;box.setAttribute('role','group');box.setAttribute('aria-label','词句与数字读法；可用下方播放按钮听整句');box.append(...main.childNodes);main.replaceWith(box);}
+ if(n.closest('button'))continue;
+ let hint=n.nextElementSibling?.textContent||'';if(n.matches('.rp-card-word')&&typeof rpCurrent!=='undefined')hint=rpCurrent?.item.meaning||'';if(n.id==='questionIPA'&&typeof studyCardItem!=='undefined')hint=studyCardItem?.meaning||'';
+ const key=text+'|'+hint;if(n.dataset.nsDecorated===key)continue;n.dataset.nsDecorated=key;n.innerHTML=nsSentenceHtml(text,[],hint);
+}}
+if(typeof MutationObserver==='function'){let pending=false;new MutationObserver(()=>{if(pending)return;pending=true;queueMicrotask(()=>{pending=false;nsDecoratePractice();});}).observe(document.body,{childList:true,subtree:true});}
+</script>
+<style data-learning-bundle="number-study">
+.ns-number{display:inline!important;min-height:0!important;width:auto!important;margin:0 2px!important;padding:1px 5px!important;border:0!important;border-bottom:2px dotted #37947f!important;border-radius:5px!important;background:#e7f3ec!important;color:#087e69!important;font:inherit!important;line-height:inherit!important;vertical-align:baseline;cursor:pointer;box-shadow:none!important}
+.ns-number:focus-visible{outline:2px solid #168772;outline-offset:2px}
+.learn-card-main.ns-card-main{box-sizing:border-box;width:100%;background:transparent;border:0;text-align:left;cursor:pointer}
+.ns-detail-links{margin-top:22px;padding:16px;background:#f2f8f4;border:1px solid #d8e9de;border-radius:14px}
+.ns-detail-links h3{font-size:16px;margin:0 0 8px}.ns-detail-links p{font-size:13px;color:#698078;line-height:1.7}.ns-detail-links>div{display:flex;gap:12px;flex-wrap:wrap}
+#learningDialog.ns-dialog{width:min(900px,calc(100% - 24px));box-sizing:border-box;padding:24px;border-radius:22px}
+.ns-study{min-width:0}.ns-kind{display:inline-block;border-radius:8px;background:#e6f2e9;color:#337763;padding:6px 10px;font-size:13px}.ns-original{font-size:14px;line-height:1.8;color:#6a8078;overflow-wrap:anywhere}
+.ns-reading{font-size:clamp(25px,4vw,38px);line-height:1.9;color:#087e69;padding:16px;background:#f1f8f3;border-radius:14px;overflow-wrap:anywhere}
+.ns-actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.ns-actions button{font-size:14px;min-height:44px;padding:9px 13px;border-radius:11px}
+.ns-study h3{font-size:17px;margin:24px 0 12px}.ns-breakdown{display:flex;gap:10px;flex-wrap:wrap}.ns-breakdown>span{background:#fafcf9;border:1px solid #dfebe2;border-radius:10px;padding:8px 12px;display:grid;gap:5px}.ns-breakdown strong{font-size:23px;color:#325c4f}.ns-breakdown small{font-size:12px;color:#71857c}
+.ns-note,.ns-study>p:not(.ns-reading):not(.ns-kind){font-size:14px;line-height:1.9;overflow-wrap:anywhere}.ns-sources{font-size:12px;color:#6a8078;margin-top:20px;line-height:1.8}.ns-study #nsStatus{color:#947337}
+.rr-record-word{background:transparent;border:0;padding:0;margin:0;text-align:left;color:#24564a;text-decoration:underline;text-decoration-color:#bfd9cd;text-underline-offset:5px}.rr-history-item>button{align-self:center;min-height:44px}.rr-history-item .rr-record-word strong{font-size:24px}
+@media(max-width:600px){#learningDialog.ns-dialog{padding:18px 14px}.ns-study .ns-reading{padding:12px;font-size:27px}.rr-history-item{flex-wrap:wrap}.rr-history-item>div{flex:1 1 100%}.rr-history-item>button{margin-bottom:4px}}
+</style>
 <script src="./offline.js"></script>
 </body>
 </html>

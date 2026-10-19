@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="533591c3d826c061">
+  <meta name="lao-app-build" content="cca98fa304ab8e5a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5649,7 +5649,7 @@ const saAudioOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){
  await saAudioOriginalDetail(id);if(learningDetail!==id)return;
  const audio=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!audio)return;
- const button=document.createElement('button');button.textContent='↻ 重新生成本条默认发音';audio.append(button);
+ const button=document.createElement('button');button.dataset.ssRegenerate='true';button.textContent='↻ 重新生成本条默认发音';audio.append(button);
  button.onclick=async()=>{button.disabled=true;try{await saRegenerate(id);}catch(e){alert(e.message);}finally{button.disabled=false;}};
  const host=learningDialog.querySelector('.sentence-analysis');if(!host)return;
  const {m}=await learningResolve(id);if(learningDetail!==id||!m.sentenceAnalysis)return;
@@ -6716,6 +6716,7 @@ showView=function(view,...args){
 @media(max-width:560px){#learningDialog:has(.ss-detail){padding:14px;width:calc(100vw - 20px);box-sizing:border-box}#learningDialog .ss-reading .wsl-sentence,#learningDialog .ss-original{font-size:24px;line-height:1.95}#learningDialog .ss-main-actions{gap:6px}#learningDialog .ss-main-actions button{font-size:13px;padding:8px 10px;min-height:44px}#learningDialog .ss-main-actions .ss-manage-toggle{margin-left:0}#learningDialog .ss-reading .learn-meaning,#learningDialog .ss-reading .wsl-translation{font-size:16px}#learningDialog .ss-management button{min-height:44px}#learningDialog .ss-reading .wsl-card{padding:10px}#learningDialog .ss-grammar-item p{font-size:14px}}
 /* Never paint the legacy detail while asynchronous enrichers are composing it. */
 #learningDialog[data-ss-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
+#learningDialog .ss-quick-management{display:contents}#learningDialog .ss-quick-management button{border-color:#aacdc0}#learningDialog .ss-quick-management [data-ss-regenerate]{background:#edf6f3;color:#087f70}
 </style>
 <script data-learning-bundle="sentence-study-layout">
 /* One reading surface; move existing controls, never clone handlers or rewrite saved analysis. */
@@ -6729,7 +6730,7 @@ function ssGroup(title,className=''){const group=ssElement('section',className);
 function ssSetManagement(dialog,open){
  const manager=dialog.querySelector('.ss-management'),toggle=dialog.querySelector('[data-ss-manage]');if(!manager||!toggle)return false;
  if(!open&&(learningHasWork()||recorder)){const status=dialog.querySelector('.ss-play-status');if(status)status.textContent='请先保存或取消当前编辑，并完成录音，再收起设置。';return false;}
- manager.hidden=!open;toggle.textContent=open?'完成设置':'⚙ 设置／管理';toggle.setAttribute('aria-expanded',String(open));dialog.classList.toggle('learn-settings',open||learningSettings);return true;
+ manager.hidden=!open;const quick=dialog.querySelector('.ss-quick-management');if(quick)quick.hidden=!open;toggle.textContent=open?'完成设置':'⚙ 设置／管理';toggle.setAttribute('aria-expanded',String(open));dialog.classList.toggle('learn-settings',open||learningSettings);return true;
 }
 function ssOpenManagement(dialog,part=''){if(!ssSetManagement(dialog,true))return;const target=part==='audio'?dialog.querySelector('.ss-audio-tools'):part==='analysis'?dialog.querySelector('.ss-analysis-tools'):dialog.querySelector('.ss-management');if(target){if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView?.({block:'start',behavior:'smooth'});}}
 function ssCompose(detail,resolved,id){
@@ -6738,7 +6739,8 @@ function ssCompose(detail,resolved,id){
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssGroup('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
- actions.append(play);if(record)actions.append(record);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText)quick.append(editText);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){

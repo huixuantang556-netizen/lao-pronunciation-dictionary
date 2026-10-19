@@ -1,0 +1,31 @@
+{
+  "sourceFile": "老挝语全部资料-不含音频-2026-10-19 (1).json",
+  "sourceExportedAt": "2026-10-19T11:00:13.228Z",
+  "scope": "仅检查用户提供的资料快照，不是当前浏览器或云端的实时清单",
+  "activeCourses": 36,
+  "sharedV2Courses": 35,
+  "legacyCourses": [
+    {
+      "id": "foundation-1-1",
+      "title": "第一课：中辅音与单元音",
+      "fix": "旧版词汇、句子、朗读页现共用统一词卡与听读工具栏；保留原始 ID 和知识点"
+    }
+  ],
+  "deletedLegacyCourses": [
+    "第二课"
+  ],
+  "displayTypes": {
+    "knowledge / article": 11,
+    "word-ref / word-cards": 51,
+    "reading / reading-grid": 23,
+    "sentence / sentence-list": 9,
+    "word-ref / table": 3,
+    "table / table": 3,
+    "dialogue / dialogue": 47,
+    "table / comparison": 2,
+    "reading / word-cards": 1
+  },
+  "issues": [],
+  "retainedSpecialLayouts": "知识点正文、字母／元音练习、普通表格及比较表属于内容专用形式；保留，不强行转换为词卡",
+  "dataChanges": "无；读取快照只生成检查报告"
+}

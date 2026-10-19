@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="bc9a978efb7f2b7f">
+  <meta name="lao-app-build" content="f2f21f2e3fd44d6e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1671,6 +1671,15 @@ async function cloudReadRemote(uid,api,table,known,status){
       }
       $('#cloudEnterButton').onclick=()=>{if(!busy)enterAccount();};
       const learningSyncButton=document.createElement('button');learningSyncButton.type='button';learningSyncButton.textContent='仅同步学习资料与语法';$('#cloudSyncButton').after(learningSyncButton);
+      window.laoSyncAccountProfile=async()=>{
+        if(busy)throw Error('正在同步或处理账号，请稍后重试');
+        if(!session||session.user.id!==cloudWorkspace)throw Error('请先登录并进入此账号词典，再同步昵称与头像');
+        if(typeof pxAccountCloudSync!=='function')throw Error('账号资料同步组件未加载，请更新完整程序包');
+        busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
+        try{const uid=session.user.id,task=()=>pxAccountCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status);if(navigator.locks)return await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});return await task();}
+        catch(error){status('账号资料同步未完成：'+error.message+'。本机资料保留，可重试。');throw error;}
+        finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
+      };
       learningSyncButton.onclick=async()=>{
         if(busy)return;if(!session||session.user.id!==cloudWorkspace){status('请先进入同一账号词典，再同步学习资料。');return;}
         busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
@@ -2883,10 +2892,11 @@ async function learningCloudSync(uid,api,status){
  learningBusy=true;
  try{
   status('正在准备本机学习资料…');
-  const snap=await learningSnapshot(),local=new Map(),assets=new Map(),remote=new Map();
+  const snap=await learningSnapshot(),local=new Map(),assets=new Map(),remote=new Map(),privateLocal=[];
   const localTotal=learningStores.reduce((n,k)=>n+snap[k].length,0);let prepared=0;
   const d=await openDB(),saved=await new Promise((resolve,reject)=>{const t=d.transaction('cloud_meta','readonly'),s=t.objectStore('cloud_meta'),r=s.get('learningCheckpoint'),v=s.get('learningServerRevisions');t.oncomplete=()=>resolve({base:r.result||{},revisions:v.result||{}});t.onabort=()=>reject(t.error);}),base=saved.base;
   for(const kind of learningStores)for(const row of snap[kind]){
+   if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(kind,row,uid)){privateLocal.push(row);prepared++;continue;}
    status('正在检查本机学习资料与音频',{done:prepared,total:localTotal});
    if(prepared%50===0)await new Promise(resolve=>setTimeout(resolve,0));
    learningValidateRecord(kind,row);let payload=row;
@@ -2900,7 +2910,7 @@ async function learningCloudSync(uid,api,status){
    prepared++;
   }
   status('词典已同步，正在读取学习材料…');
-  try{for(const [key,row] of await cloudReadRemote(uid,api,'lao_learning_records',cloudKnownRows(uid,'lao_learning_records',base,saved.revisions),status))remote.set(key,row);}
+  try{for(const [key,row] of await cloudReadRemote(uid,api,'lao_learning_records',cloudKnownRows(uid,'lao_learning_records',base,saved.revisions),status)){if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(row.record_kind||key.slice(0,key.indexOf(':')),row.payload,uid))continue;remote.set(key,row);}}
   catch(e){if(e.status===404||/lao_learning_records.*(not find|not exist)|schema cache/i.test(e.message))throw new Error('词典已同步；学习材料仍保存在本机。请先在 Supabase 执行项目中的 learning-cloud.sql，建立学习材料专用同步表，然后重试。');throw e;}
   status('正在比较学习资料版本…');
   const plan=[],conflicts=[];
@@ -2915,7 +2925,7 @@ async function learningCloudSync(uid,api,status){
   const audioSession=cloudAudioSession(uid,api,assets),audioRequests=[];
   for(const p of plan)if(p.target&&p.kind==='learningAudio'){validateAudio(p.target.payload.audio);audioRequests.push(p.target.payload.audio);}
   await audioSession.prefetch(audioRequests,status,'正在下载缺少的教材录音');
-  const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));
+  const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));merged.learningMaterials.push(...privateLocal);
   let checked=0;
   for(const p of plan){status('正在整理已就绪的学习资料与录音',{done:checked++,total:plan.length});if(checked%50===0)await new Promise(resolve=>setTimeout(resolve,0));if(!p.target)continue;let value={...p.target.payload};if(value.id!==p.id)throw new Error('材料编号不一致。');if(p.kind==='learningAudio'){
    const a=value.audio;validateAudio(a);const blob=await audioSession.load(a);assets.set(a.path,blob);delete value.audio;value.blob=blob;
@@ -7338,7 +7348,7 @@ apRefreshSettings();
 #personalCenter .ap-account-identity{display:flex;align-items:center;gap:14px}#personalCenter .ap-account-symbol{display:grid;place-items:center;flex:none;width:48px;height:48px;background:#eff6ec;border-radius:14px;font-size:29px}#personalCenter .ap-account-identity p{margin:0}
 </style>
 <script data-learning-bundle="profile-personalization">
-/* Small local profile only: no cloud upload, original image retention or dictionary writes. */
+/* Compact profile cache and image editor; account sync transports compressed avatars, never original photos. */
 const pxFrames=Object.freeze({plain:'简约',leaf:'青叶',gold:'暖金',sky:'晴空',blossom:'樱粉',night:'星夜'});
 function pxProfileKey(){return window.profileUser?.id?'lao-personal-profile-v1-user-'+window.profileUser.id:workspaceName('lao-personal-profile-v1');}
 function pxLegacyEmoji(){let value;try{if(window.profileUser)value=localStorage.getItem('lao-avatar-'+window.profileUser.id);}catch(_){}return typeof avatarOptions!=='undefined'&&avatarOptions.includes(value)?value:'🌿';}
@@ -7346,14 +7356,14 @@ function pxNickname(value){if(typeof value!=='string')throw Error('昵称须为�
 function pxValidImage(value){return typeof value==='string'&&value.length<=150000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value);}
 function pxNormalize(value){let nickname='';try{nickname=pxNickname(value?.nickname||'');}catch(_){}const emoji=typeof avatarOptions!=='undefined'&&avatarOptions.includes(value?.emoji)?value.emoji:pxLegacyEmoji(),image=pxValidImage(value?.image)?value.image:'';return {version:1,nickname,emoji,image,avatarType:value?.avatarType==='image'&&image?'image':'emoji',frame:Object.hasOwn(pxFrames,value?.frame)?value.frame:'plain'};}
 function pxRead(){let value;try{value=JSON.parse(localStorage.getItem(pxProfileKey())||'null');}catch(_){}return pxNormalize(value);}
-function pxSave(value){const safe=pxNormalize({...value,nickname:pxNickname(value.nickname||'')});localStorage.setItem(pxProfileKey(),JSON.stringify(safe));return safe;}
+function pxSave(value){if(typeof pxProfileSyncBusy!=='undefined'&&pxProfileSyncBusy)throw Error('正在同步账号资料，请等待完成后再修改');const safe=pxNormalize({...value,nickname:pxNickname(value.nickname||'')});localStorage.setItem(pxProfileKey(),JSON.stringify({...safe,cloudPending:true,cloudState:'pending'}));return safe;}
 function pxAvatarFace(profile){const face=document.createElement('span');face.className='px-avatar-face';if(profile.avatarType==='image'&&pxValidImage(profile.image)){const img=document.createElement('img');img.src=profile.image;img.alt='';img.width=img.height=256;face.append(img);}else face.textContent=profile.emoji;return face;}
 function pxPaintAvatar(node,profile,base){node.className=base+' px-avatar px-frame-'+profile.frame;node.replaceChildren(pxAvatarFace(profile));}
 const pxHeaderAvatar=document.createElement('span'),pxHeaderLabel=document.createElement('span'),pxAccountText=document.createElement('div'),pxName=document.createElement('strong'),pxForm=document.createElement('form'),pxEditor=document.createElement('div');
 pxHeaderAvatar.setAttribute('aria-hidden','true');pxHeaderLabel.textContent='设置';pxAccountText.className='px-account-text';pxName.className='px-account-name';pxAccountText.append(pxName,apIdentity);document.querySelector('#apAccountIdentity').append(pxAccountText);
 pxForm.className='px-nickname-form';pxForm.innerHTML='<label for="pxNickname">个人昵称</label><div class="px-nickname-fields"><input id="pxNickname" type="text" maxlength="96" autocomplete="nickname" placeholder="给自己起个昵称（最多24个字）"><button type="submit" id="pxSaveNickname">保存昵称</button></div>';
 document.querySelector('#apAccountIdentity').after(pxForm);
-pxEditor.className='px-editor';pxEditor.innerHTML='<div class="px-photo-actions"><button type="button" id="pxChooseImage">选择图片作为头像</button><input id="pxImageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden><button type="button" id="pxUseImage" hidden>使用已上传头像</button><button type="button" id="pxRemoveImage" hidden>移除上传图片</button></div><p class="ap-note">支持 JPG、PNG、WebP，最大10MB。自动居中裁成正方形并压缩到256像素；原照片不改动，图片不上传服务器。</p><h4>头像框</h4><div id="pxFrameChoices" class="px-frame-choices" role="group" aria-label="选择头像框"></div><p class="ap-note">昵称、头像和头像框按当前账号／本机空间保存在此浏览器，不自动同步，不包含在词典备份中。</p>';
+pxEditor.className='px-editor';pxEditor.innerHTML='<div class="px-photo-actions"><button type="button" id="pxChooseImage">选择图片作为头像</button><input id="pxImageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden><button type="button" id="pxUseImage" hidden>使用已上传头像</button><button type="button" id="pxRemoveImage" hidden>移除上传图片</button></div><p class="ap-note">支持 JPG、PNG、WebP，最大10MB。自动居中裁成正方形并压缩到256像素；原照片不改动，同步时只上传压缩后的头像。</p><h4>头像框</h4><div id="pxFrameChoices" class="px-frame-choices" role="group" aria-label="选择头像框"></div><p class="ap-note">昵称、头像和头像框可通过同一账号同步。本机缓存供离线使用；未登录时只保存在本机，不自动上传。</p>';
 document.querySelector('#apAvatarHost').prepend(pxEditor);
 const pxStatus=document.createElement('p');pxStatus.id='pxProfileStatus';pxStatus.setAttribute('role','status');pxStatus.setAttribute('aria-live','polite');pxForm.after(pxStatus);
 const pxNicknameInput=document.querySelector('#pxNickname'),pxFile=document.querySelector('#pxImageFile');let pxDraftDirty=false,pxLastScope='',pxUploadGeneration=0;
@@ -7367,7 +7377,7 @@ function pxRender(){const key=pxProfileKey(),profile=pxRead();if(key!==pxLastSco
 }
 const pxPreviousRefresh=apRefreshSettings;apRefreshSettings=function(...args){const result=pxPreviousRefresh(...args);pxRender();return result;};
 pxNicknameInput.oninput=()=>{pxDraftDirty=true;};
-pxForm.onsubmit=e=>{e.preventDefault();try{pxSave({...pxRead(),nickname:pxNicknameInput.value});pxDraftDirty=false;pxRender();pxStatus.textContent='昵称已保存在本机。';}catch(error){pxStatus.textContent='昵称未保存：'+error.message;}};
+pxForm.onsubmit=e=>{e.preventDefault();try{pxSave({...pxRead(),nickname:pxNicknameInput.value});pxDraftDirty=false;pxRender();pxStatus.textContent='昵称已保存；可点“同步昵称与头像”同步到账号。';}catch(error){pxStatus.textContent='昵称未保存：'+error.message;}};
 document.querySelector('#avatarChoices').onclick=e=>{const button=e.target.closest('[data-avatar]');if(!button||typeof avatarOptions==='undefined'||!avatarOptions.includes(button.dataset.avatar))return;try{pxSave({...pxRead(),emoji:button.dataset.avatar,avatarType:'emoji'});pxCancelUpload();pxRender();pxStatus.textContent='头像已保存；已上传的图片仍保留，可随时切回。';}catch(error){pxStatus.textContent='头像未保存：'+error.message;}};
 document.querySelector('#pxFrameChoices').onclick=e=>{const button=e.target.closest('[data-px-frame]');if(!button||!Object.hasOwn(pxFrames,button.dataset.pxFrame))return;try{pxSave({...pxRead(),frame:button.dataset.pxFrame});pxRender();pxStatus.textContent='头像框已保存在本机。';}catch(error){pxStatus.textContent='头像框未保存：'+error.message;}};
 document.querySelector('#pxUseImage').onclick=()=>{try{const profile=pxRead();if(!profile.image)return;pxSave({...profile,avatarType:'image'});pxCancelUpload();pxRender();pxStatus.textContent='已切回上传的图片头像。';}catch(error){pxStatus.textContent='头像未保存：'+error.message;}};
@@ -7383,7 +7393,54 @@ pxRender();
 #personalButton.px-settings-button{display:inline-flex;align-items:center;gap:9px;padding:6px 13px 6px 7px;min-height:46px;white-space:nowrap}.px-avatar{display:inline-grid;place-items:center;box-sizing:border-box;flex:none;border-radius:50%;border:2px solid transparent;background:#f0f5ed;padding:3px;overflow:hidden;vertical-align:middle}.px-avatar-face{display:grid;place-items:center;width:100%;height:100%;min-width:0;overflow:hidden;border-radius:50%;background:#eff5ec;line-height:1}.px-avatar-face img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}.px-frame-plain{border-color:#dce7d7}.px-frame-leaf{border-color:#16876e;background:#dff2e9;box-shadow:0 0 0 2px #d9eee5}.px-frame-gold{border-color:#c69a36;background:#fbf0cd;box-shadow:0 0 0 2px #f5e7bb}.px-frame-sky{border-color:#6399bf;background:#e4f1fa;box-shadow:0 0 0 2px #dcecf7}.px-frame-blossom{border-color:#cd8ca4;background:#fae8f0;box-shadow:0 0 0 2px #f4dce7}.px-frame-night{border-color:#7b75a7;background:#eae8f8;box-shadow:0 0 0 2px #e4e0f4}#personalButton .px-header-avatar{width:34px;height:34px;font-size:21px;padding:2px}#personalCenter .ap-account-symbol.px-avatar{width:58px;height:58px;font-size:34px}#personalCenter .px-account-text{min-width:0;flex:1}#personalCenter .px-account-name{display:block;font-size:19px;line-height:1.6;font-weight:600;color:#254e40;overflow-wrap:anywhere}#personalCenter .px-account-text #profileIdentity{font-size:13px;line-height:1.7;color:#758576;margin-top:2px}#personalCenter .px-nickname-form{margin:20px 0 0}#personalCenter .px-nickname-form label{display:block;font-size:13px;color:#536f5e;margin:0 0 7px}#personalCenter .px-nickname-fields{display:flex;align-items:center;gap:9px}#personalCenter .px-nickname-fields input{flex:1;min-width:0;width:100%;margin:0;padding:10px 12px;min-height:44px;border-radius:10px;border:1px solid #cfdfd1}#personalCenter .px-nickname-fields button{flex:none;min-height:44px;padding:10px 14px;font-size:13px;margin:0}#personalCenter .px-photo-actions{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}#personalCenter .px-photo-actions button{font-size:13px;padding:10px 14px;margin:0}#personalCenter .px-editor h4{font-size:14px;margin:20px 0 12px;color:#466953}#personalCenter .px-frame-choices{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}#personalCenter .px-frame-choices>button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;background:#fff;border:1px solid #dce7dd;border-radius:12px;padding:12px 5px;font-size:12px;color:#567362;min-width:0}#personalCenter .px-frame-choices>button[aria-pressed=true]{background:#eef7f1;border:2px solid #087f70;padding:11px 4px;color:#087f70}#personalCenter .px-frame-preview{width:42px;height:42px;font-size:26px}#personalCenter #pxProfileStatus{font-size:12px;line-height:1.7;color:#087f70;white-space:pre-wrap;margin:9px 0}#personalCenter #pxProfileStatus:empty{display:none}#personalCenter #avatarSection .tag-hint{font-size:12px;line-height:1.7;color:#748676}#personalCenter #avatarChoices{margin-top:18px}
 @media(max-width:650px){#personalButton.px-settings-button{gap:7px;font-size:13px;padding-right:10px;margin-left:8px}#personalCenter .px-frame-choices{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}#personalCenter .px-account-name{font-size:17px}#personalCenter .px-nickname-fields{gap:7px}#personalCenter .px-nickname-fields button{padding:10px;font-size:12px}#personalCenter .ap-account-symbol.px-avatar{width:52px;height:52px}}
 #personalCenter .ap-account-symbol.px-avatar{border-radius:50%;padding:3px}
+#personalCenter .px-sync-bar{margin:14px 0;padding:12px 14px;background:#f0f6ef;border-radius:12px}#personalCenter .px-sync-bar button{font-size:13px;min-height:44px;padding:9px 14px}#personalCenter #pxCloudStatus{font-size:12px;color:#38644e;line-height:1.8;margin:8px 0;overflow-wrap:anywhere}
 </style>
+<script data-learning-bundle="profile-cloud">
+/* Private account profile: one existing learning-table row; never scan or transfer audio for profile-only sync. */
+let pxProfileSyncBusy=false;
+const pxProfileId=uid=>'account-profile:'+uid;
+function pxUid(uid){return typeof uid==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);}
+function pxValidateProfileRow(kind,row){if(!row?.id?.startsWith('account-profile:')&&row?.accountProfile===undefined)return;const p=row.accountProfile;if(kind!=='learningMaterials'||row.contentType!=='knowledge'||!p||!pxUid(p.ownerId)||row.id!==pxProfileId(p.ownerId)||p.version!==1||typeof p.nickname!=='string'||p.nickname!==pxNickname(p.nickname)||typeof p.image!=='string'||p.image!==''&&!pxValidImage(p.image)||!Object.hasOwn(pxFrames,p.frame)||!avatarOptions.includes(p.emoji)||!['image','emoji'].includes(p.avatarType)||p.avatarType==='image'&&!p.image||!Number.isSafeInteger(row.updatedAt)||row.updatedAt<0)throw Error('账号资料格式无效');}
+const pxPreviousRecordValidation=learningValidateRecord;
+learningValidateRecord=function(kind,row){pxValidateProfileRow(kind,row);return pxPreviousRecordValidation(kind,row);};
+function pxIsForeignProfile(kind,row,uid){if(kind!=='learningMaterials'||!row?.id?.startsWith('account-profile:')&&row?.accountProfile===undefined)return false;pxValidateProfileRow(kind,row);return row.accountProfile.ownerId!==uid;}
+function pxRequireOwner(uid){if(!pxUid(uid)||uid!==cloudWorkspace||window.profileUser?.id!==uid)throw Error('账号空间已改变，请先进入当前账号词典');}
+function pxRawCache(){try{return JSON.parse(localStorage.getItem(pxProfileKey())||'null');}catch(_){return null;}}
+function pxProfileRow(snap,uid){const row=snap.learningMaterials.find(m=>m.id===pxProfileId(uid)&&!m.deleted);if(row)pxValidateProfileRow('learningMaterials',row);return row||null;}
+async function pxStageProfile(uid){pxRequireOwner(uid);const key=pxProfileKey(),rawText=localStorage.getItem(key),raw=pxRawCache(),snap=await learningSnapshot(),prior=pxProfileRow(snap,uid),legacy=localStorage.getItem('lao-avatar-'+uid);pxRequireOwner(uid);
+ if(raw?.cloudPending===false||!rawText&&!avatarOptions.includes(legacy))return;
+ const profile=pxRead(),payload={...profile,ownerId:uid};if(!prior||!cloudSame(prior.accountProfile,payload)){const row={...learningBlank(pxProfileId(uid),'knowledge','账号资料 · '+(profile.nickname||'我的账号')),accountProfile:payload,updatedAt:Math.max(Date.now(),(prior?.updatedAt||0)+1)};await learningWrite({learningMaterials:[row]},snap);}
+ pxRequireOwner(uid);if(localStorage.getItem(key)!==rawText)throw Error('个人资料刚刚被其他窗口修改，请重新同步');
+ // Acknowledge staging before network I/O. If storage fails, do not start a cloud write.
+ localStorage.setItem(key,JSON.stringify({...profile,cloudPending:false,cloudState:'staged'}));
+}
+async function pxApplyProfile(uid,row){pxRequireOwner(uid);if(!row)return;if(row.accountProfile?.ownerId!==uid)throw Error('账号资料归属不一致');pxValidateProfileRow('learningMaterials',row);if(pxRawCache()?.cloudPending===true)throw Error('另一窗口刚刚修改了个人资料，本机新修改已保留，请再次同步');localStorage.setItem(pxProfileKey(),JSON.stringify({...pxNormalize(row.accountProfile),cloudPending:false,cloudState:'synced'}));pxRender();}
+async function pxProfileCheckpoint(uid,snap){const database=await openDB();return new Promise((resolve,reject)=>{const t=database.transaction('cloud_meta','readonly'),r=t.objectStore('cloud_meta').get('accountProfileCheckpoint:'+uid),fallback=t.objectStore('cloud_meta').get('learningCheckpoint');t.oncomplete=()=>resolve(r.result||fallback.result?.['learningMaterials:'+pxProfileId(uid)]||null);t.onabort=()=>reject(t.error);});}
+async function pxCommitProfile(uid,row,snap,revision){pxRequireOwner(uid);const d=await openDB(),t=d.transaction(['learningMaterials','cloud_meta'],'readwrite'),done=transactionDone(t),meta=t.objectStore('cloud_meta'),q=t.objectStore('learningMaterials').getAll(),align=Number.isSafeInteger(revision)&&revision>0,b=align?meta.get('learningCheckpoint'):null,r=align?meta.get('learningServerRevisions'):null;let failure,left=align?3:1;const ready=()=>{if(--left)return;try{pxRequireOwner(uid);if(!learningSameRecords(q.result,snap.learningMaterials))throw Error('本机资料刚刚已变化，请重新同步');const value=row?{deleted:false,payload:row}:null;if(row)t.objectStore('learningMaterials').put(row);meta.put(value,'accountProfileCheckpoint:'+uid);if(align){const key='learningMaterials:'+pxProfileId(uid);meta.put({...b.result,[key]:value},'learningCheckpoint');meta.put({...r.result,[key]:revision},'learningServerRevisions');}}catch(e){failure=e;t.abort();}};q.onsuccess=ready;if(align)b.onsuccess=r.onsuccess=ready;try{await done;}catch(e){throw failure||e;}}
+async function pxAccountCloudSync(uid,api,status=()=>{}){
+ if(pxProfileSyncBusy)throw Error('账号资料正在同步');pxRequireOwner(uid);scGuard();pxProfileSyncBusy=true;const report=(text,p)=>{status(text,p);const n=document.querySelector('#pxCloudStatus');if(n)n.textContent=text;};
+ try{report('正在准备昵称与头像…');await pxStageProfile(uid);const snap=await learningSnapshot(),localRow=pxProfileRow(snap,uid),local=localRow?{deleted:false,payload:localRow}:null,base=await pxProfileCheckpoint(uid,snap);
+  const path='/rest/v1/lao_learning_records?owner_id=eq.'+encodeURIComponent(uid)+'&record_kind=eq.learningMaterials&record_id=eq.'+encodeURIComponent(pxProfileId(uid))+'&select=owner_id,record_kind,record_id,payload,revision&limit=1';
+  report('正在读取账号昵称与头像…');const received=await api(path);pxRequireOwner(uid);if(!Array.isArray(received)||received.length>1)throw Error('云端账号资料返回异常');const remoteRow=received[0];if(remoteRow&&(remoteRow.owner_id!==uid||remoteRow.record_kind!=='learningMaterials'||remoteRow.record_id!==pxProfileId(uid)||!Number.isSafeInteger(remoteRow.revision)||remoteRow.revision<=0||remoteRow.payload?.accountProfile?.ownerId!==uid||remoteRow.payload.deleted))throw Error('云端账号资料身份或版本不一致');if(remoteRow)learningValidateRecord('learningMaterials',remoteRow.payload);
+  const remote=remoteRow?{deleted:false,payload:remoteRow.payload}:null;let action=!local&&remote?'remote':cloudDecision(local,remote,base);if(action==='conflict'){report('两台设备都修改了账号资料，请选择保留版本');const choice=await cloudResolveConflicts([{label:'账号昵称与头像',local,remote}],async()=>{throw Error('账号头像不是录音');});action=choice[0];if(!['local','remote'].includes(action))throw Error('尚未选择账号资料版本');}
+  const target=action==='local'?local:action==='remote'?remote:local||remote;let revision=remoteRow?.revision;
+  if(action==='local'&&target){report('正在上传账号昵称与压缩头像…');const changes=[{kind:'learningMaterials',id:pxProfileId(uid),payload:target.payload,revision:remoteRow?.revision??null}];await cloudBatchWrite(uid,api,'lao_learning_records',changes,report);revision=changes[0].result.revision;}
+  await pxCommitProfile(uid,target?.payload||null,snap,revision);await pxApplyProfile(uid,target?.payload||null);report(target?'昵称、头像和头像框同步完成。其他设备使用同一账号点“同步昵称与头像”即可接收。':'此账号暂无个人资料，未覆盖任何头像。');return true;
+ }finally{pxProfileSyncBusy=false;pxRender();}
+}
+const pxOriginalCloudSync=learningCloudSync;
+learningCloudSync=async function(uid,api,status){if(pxProfileSyncBusy)throw Error('账号资料正在同步');pxRequireOwner(uid);scGuard();pxProfileSyncBusy=true;try{await pxStageProfile(uid);const result=await pxOriginalCloudSync(uid,api,status),snap=await learningSnapshot(),row=pxProfileRow(snap,uid);await pxCommitProfile(uid,row,snap);await pxApplyProfile(uid,row);return result;}finally{pxProfileSyncBusy=false;pxRender();}};
+const pxOriginalConflictInfo=cloudConflictInfo,pxOriginalConflictDescription=cloudConflictDescription;
+cloudConflictInfo=function(item){if(item.local?.payload?.accountProfile||item.remote?.payload?.accountProfile)return {title:'账号昵称与头像',kind:'昵称、头像、头像框或修改时间不同'};return pxOriginalConflictInfo(item);};
+cloudConflictDescription=function(value){const p=value?.payload?.accountProfile;if(!p)return pxOriginalConflictDescription(value);return JSON.stringify({昵称:p.nickname||'未设置',头像:p.avatarType==='image'?'上传的图片头像':p.emoji,头像框:pxFrames[p.frame]||'未知',修改时间:new Date(value.payload.updatedAt).toLocaleString()},null,2);};
+const pxSyncBar=document.createElement('div');pxSyncBar.className='px-sync-bar';pxSyncBar.innerHTML='<button type="button" id="pxSyncProfile">同步昵称与头像</button><p id="pxCloudStatus" role="status" aria-live="polite"></p><p class="ap-note">保存后点这里同步；另一设备登录同一账号后也点一次即可接收。这里只同步一份账号资料，不扫描词典或录音。“云端同步”也会包含账号资料。</p>';pxForm.after(pxSyncBar);
+const pxCloudRenderBase=pxRender;pxRender=function(...args){pxCloudRenderBase(...args);const button=document.querySelector('#pxSyncProfile'),label=document.querySelector('#pxCloudStatus');button.disabled=pxProfileSyncBusy;if(!pxProfileSyncBusy){const raw=pxRawCache();label.textContent=!window.profileUser?'未登录：个人资料仅保存在本机。':window.profileUser.id!==cloudWorkspace?'请先打开此账号词典，再同步个人资料。':raw?.cloudState==='synced'?'本机账号资料已与云端同步。':'可以同步昵称、头像和头像框；本机修改尚未确认同步。';}};
+document.querySelector('#pxSyncProfile').onclick=async()=>{try{if(typeof window.laoSyncAccountProfile!=='function')throw Error('账号同步组件未加载，请更新完整程序包');await window.laoSyncAccountProfile();}catch(error){document.querySelector('#pxCloudStatus').textContent='未同步：'+error.message;}};
+let pxCacheRead=0;
+async function pxRefreshCloudCache(){const run=++pxCacheRead,uid=window.profileUser?.id,key=pxProfileKey(),text=localStorage.getItem(key),raw=pxRawCache();if(pxProfileSyncBusy||uid!==cloudWorkspace||!pxUid(uid)||text&&raw?.cloudPending!==false)return;try{const row=pxProfileRow(await learningSnapshot(),uid);if(run!==pxCacheRead||pxProfileSyncBusy||key!==pxProfileKey()||localStorage.getItem(key)!==text)return;if(row)await pxApplyProfile(uid,row);}catch(error){const label=document.querySelector('#pxCloudStatus');if(label)label.textContent='账号资料缓存暂未刷新：'+error.message;}}
+const pxCloudRefreshBase=apRefreshSettings;apRefreshSettings=function(...args){const result=pxCloudRefreshBase(...args);void pxRefreshCloudCache();return result;};
+pxRender();void pxRefreshCloudCache();
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

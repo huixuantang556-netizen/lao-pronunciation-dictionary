@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f2f21f2e3fd44d6e">
+  <meta name="lao-app-build" content="48c632b6d1c9a009">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7040,11 +7040,25 @@ function rrModel(snap,words,now=Date.now()){
   let state=null;for(const e of events){if(e.source==='consolidation'&&state&&e.rating==='green')continue;state=rrAdvance(state,e.rating,e.at);}
   const formal=events.filter(e=>e.source==='review'),first=formal[0],todayFormal=formal.filter(e=>reviewDay(e.at)===today);
   if(todayFormal.length){if(first&&reviewDay(first.at)===today)newDone++;else reviewDone++;}
-  rows.push({item,direction,state,status:member.status,events,fresh:!first,due:!state||state.nextReviewAt<=now});
+  rows.push({item,direction,state,status:member.status,events,todayEvents:todayFormal,todayKind:todayFormal.length?(reviewDay(first.at)===today?'new':'review'):null,fresh:!first,due:!state||state.nextReviewAt<=now});
  }
  const active=rows.filter(r=>r.status==='active'),due=active.filter(r=>!r.fresh&&r.due).sort((a,b)=>a.state.nextReviewAt-b.state.nextReviewAt),fresh=active.filter(r=>r.fresh&&r.due);
- return {rows,goals,newDone,reviewDone,due,fresh,queue:[...due.slice(0,Math.max(0,goals.reviewGoal-reviewDone)),...fresh.slice(0,Math.max(0,goals.newGoal-newDone))]};
+ return {rows,goals,newDone,reviewDone,todayNew:rows.filter(r=>r.todayKind==='new'),todayReview:rows.filter(r=>r.todayKind==='review'),due,fresh,queue:[...due.slice(0,Math.max(0,goals.reviewGoal-reviewDone)),...fresh.slice(0,Math.max(0,goals.newGoal-newDone))]};
 }
+
+function rrTodayStats(m){
+ return '<button type="button" class="rr-stat-link" data-rr-records="new" aria-label="查看今日新学记录">今日新学 '+m.newDone+' / '+m.goals.newGoal+'</button><span aria-hidden="true"> · </span><button type="button" class="rr-stat-link" data-rr-records="review" aria-label="查看今日复习记录">复习 '+m.reviewDone+' / '+m.goals.reviewGoal+'</button>';
+}
+async function rrRecords(kind='new'){
+ scGuard();const {snap,model:m}=await rrRead(),h=learningEsc,courses=typeof learningOrderedCourses==='function'?learningOrderedCourses(snap):learningCourses(snap);
+ const rows=(kind==='review'?m.todayReview:m.todayNew).slice().sort((a,b)=>b.todayEvents.at(-1).at-a.todayEvents.at(-1).at);
+ learningModal('今日学习记录','<div class="rr-records"><div class="rr-record-tabs">'+rrTodayStats(m)+'</div><p class="tag-hint">'+h(reviewDay(Date.now()))+' · 每日清单记录，不含自由练习与章节巩固。按方向计项，同一词句同一方向今天多次回忆只计一项。</p><h3>'+(kind==='review'?'今日复习':'今日新学')+' · '+rows.length+' 项</h3><div class="rr-record-list">'+(rows.map(r=>{
+  const ids=new Set((r.item._practiceCourses||[]).map(c=>c.id)),labels=courses.filter(c=>ids.has(c.id)).map(scCourseLabel),last=r.todayEvents.at(-1);
+  return '<article class="rr-item rr-history-item"><div><strong lang="lo">'+h(r.item.word)+'</strong><p>'+h(r.item.meaning)+'</p><small>'+h(rrDirections[r.direction])+'</small><small class="rr-source">来源：'+h(labels.join('；')||(ids.size?'原章节不可用':'我的词典（未关联章节）'))+'</small><small>最近评级：'+h(reviewLabels[last.rating])+' · '+h(new Date(last.at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+' · 今日回忆 '+r.todayEvents.length+' 次'+(r.status==='paused'?' · 已暂停':'')+'</small></div></article>';
+ }).join('')||'<p class="rr-empty">今天还没有'+(kind==='review'?'复习':'新学')+'记录。完成每日清单的评级后，会出现在这里。</p>')+'</div><div class="rr-actions"><button data-rr-manage>清单与目标</button></div></div>');
+ learningDialog.classList.add('rr-records-dialog');
+}
+
 async function rrRead(){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);return {snap,words,model:rrModel(snap,words)};}
 async function rrAttempt(item,direction,rating,id,source='review'){
  const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]),current=rrCatalog(snap,words).find(w=>reviewKeys(w).some(k=>reviewKeys(item).includes(k)));
@@ -7058,7 +7072,7 @@ async function rrAttempt(item,direction,rating,id,source='review'){
 pendingReviewRecord=async function(row,course,direction,rating,id){const item=row.reviewWord?{...row.reviewWord}:{_practiceMaterialId:row.id,word:row.lao,meaning:row.zh};await rrAttempt(item,direction==='lao'?'wordToMeaning':'meaningToSpeech',rating,'rolling-review:'+id,'consolidation');};
 prMount=async function(){
  const center=$('#learningContent')?.querySelector('.study-center');if(!center||learningRoute!=='study')return;const {model:m}=await rrRead();if(!center.isConnected||learningRoute!=='study')return;
- const section=document.createElement('section');section.className='pr-summary sc-box rr-summary';section.innerHTML='<div><p class="sc-eyebrow">先回忆，再看答案 · 各能力独立排期</p><h3>每日滚动复习</h3><p>今日新学 '+m.newDone+' / '+m.goals.newGoal+' · 复习 '+m.reviewDone+' / '+m.goals.reviewGoal+'</p><small>待新学 '+m.fresh.length+' · 已到期 '+m.due.length+' · 已暂停 '+m.rows.filter(r=>r.status==='paused').length+'（按方向计项）</small></div><div class="rr-actions"><button class="primary" data-pending-review>今日学习 →</button><button data-rr-picker>添加词句</button><button data-rr-manage>清单与目标</button></div>';
+ const section=document.createElement('section');section.className='pr-summary sc-box rr-summary';section.innerHTML='<div><p class="sc-eyebrow">先回忆，再看答案 · 各能力独立排期</p><h3>每日滚动复习</h3><div class="rr-today-stats">'+rrTodayStats(m)+'</div><small>待新学 '+m.fresh.length+' · 已到期 '+m.due.length+' · 已暂停 '+m.rows.filter(r=>r.status==='paused').length+'（按方向计项）</small></div><div class="rr-actions"><button class="primary" data-pending-review>今日学习 →</button><button data-rr-picker>添加词句</button><button data-rr-manage>清单与目标</button></div>';
  const old=center.querySelector('.pr-summary');if(old)old.replaceWith(section);else center.querySelector('.sc-overview')?.after(section);
 };
 prOpen=async function(){scGuard();const {model:m}=await rrRead();if(m.queue.length){rrSession(m.queue);return;}learningModal('今日学习','<p>当前目标下没有到期任务。尚有 '+m.due.length+' 项到期、'+m.fresh.length+' 项可新学；目标不是删除或推迟任务。</p><p>刚完成巩固的词句会在计划时间再出现，不需要反复立即测试。</p><button data-rr-picker>添加学习词句</button><button data-rr-manage>查看清单／调整目标</button>');};
@@ -7077,6 +7091,7 @@ async function rrManage(options={}){
  scGuard();const {snap,model:m}=await rrRead(),h=learningEsc,courses=typeof learningOrderedCourses==='function'?learningOrderedCourses(snap):learningCourses(snap),selected=new Set();let page=0,filtered=[],busy=false;
  const sourceIds=new Set(m.rows.flatMap(r=>(r.item._practiceCourses||[]).map(c=>c.id))),sources=courses.filter(c=>sourceIds.has(c.id));
  learningModal('学习清单与每日目标','<form id="rrGoals" class="rr-actions"><label>每日新学（方向项）<input id="rrNewGoal" type="number" min="0" max="500" value="'+m.goals.newGoal+'"></label><label>每日复习（方向项）<input id="rrReviewGoal" type="number" min="0" max="500" value="'+m.goals.reviewGoal+'"></label><button>保存目标</button></form><p class="tag-hint">按方向计项，同一词句的认词、口述、书写分别显示。移出仅暂停该方向，不删除词条、章节、录音或历史；可从已暂停列表恢复。</p><div class="rr-controls"><label>显示<select id="rrStatus"><option value="fresh">待新学（'+m.fresh.length+'）</option><option value="due">已到期（'+m.due.length+'）</option><option value="active">全部正在学习</option><option value="paused">已暂停／已移出</option><option value="all">全部清单</option></select></label><label>来源章节<select id="rrMSource"><option value="">全部章节与词典</option><option value="__dictionary">未关联章节的词典词句</option>'+sources.map(c=>'<option value="'+h(c.id)+'">'+h(scCourseLabel(c))+'</option>').join('')+'</select></label><label>方向<select id="rrMDirection"><option value="">全部方向</option>'+Object.entries(rrDirections).map(([k,v])=>'<option value="'+k+'">'+h(v)+'</option>').join('')+'</select></label><label>搜索词句<input id="rrMSearch" placeholder="老挝语或中文"></label></div><div class="rr-actions"><button id="rrMSelectPage">勾选当前页</button><button id="rrMSelectAll">勾选筛选结果</button><button id="rrMClear">清空勾选</button><button id="rrMPause">移出已勾选项</button><button id="rrMRestore">恢复已勾选项</button></div><p id="rrMCount" role="status"></p><div id="rrManageList" class="rr-list"></div><div class="rr-actions"><button id="rrMPrev">上一页</button><span id="rrMPage"></span><button id="rrMNext">下一页</button><button data-rr-picker>添加词句</button></div>');
+ learningDialog.classList.add('rr-manager-dialog');
  $('#rrStatus').value=['fresh','due','active','paused','all'].includes(options.scope)?options.scope:'fresh';$('#rrMSource').value=options.source||'';$('#rrMDirection').value=options.direction||'';$('#rrMSearch').value=options.search||'';
  const listNode=$('#rrManageList'),settings=()=>({scope:$('#rrStatus').value,source:$('#rrMSource').value,direction:$('#rrMDirection').value,search:$('#rrMSearch').value});
  const draw=()=>{const f=settings();filtered=rrManageScope(m,f.scope).filter(r=>(!f.direction||r.direction===f.direction)&&(!f.search.trim()||(r.item.word+' '+r.item.meaning).includes(f.search.trim()))&&(!f.source||(f.source==='__dictionary'?!r.item._practiceCourses?.length:r.item._practiceCourses?.some(c=>c.id===f.source))));page=Math.max(0,Math.min(page,Math.ceil(filtered.length/20)-1));
@@ -7123,14 +7138,60 @@ function rrSession(queue,options={}){
  };draw();
 }
 async function rrLegacyImport(){const {snap,words,model}=await rrRead(),registered=new Set(model.rows.map(r=>reviewTarget(r.item)+'|'+r.direction)),old=prRows(snap,words).filter(r=>Object.hasOwn(rrDirections,r.direction)&&!registered.has(reviewTarget(r.item)+'|'+r.direction)),ops=[];for(const direction of Object.keys(rrDirections)){const targets=[...new Set(old.filter(r=>r.direction===direction).map(r=>reviewTarget(r.item)))];if(targets.length)ops.push({version:1,type:'membership',direction,status:'active',targets,at:Date.now()});}if(ops.length)await rrSave(ops,snap);await rrManage();$('#learningDialogStatus').textContent='已把尚未入清单的旧版已测词句加入；已暂停项不会恢复。旧历史保留，不将旧熟悉评级直接认作长期掌握。';}
-document.addEventListener('click',e=>{if(e.target.closest('[data-rr-picker]'))rrPicker().catch(learningError);else if(e.target.closest('[data-rr-manage]'))rrManage().catch(learningError);else if(e.target.closest('[data-rr-legacy]'))rrLegacyOpen().catch(learningError);else if(e.target.closest('[data-rr-import]'))rrLegacyImport().catch(learningError);});
+document.addEventListener('click',e=>{if(e.target.closest('[data-rr-records]'))rrRecords(e.target.closest('[data-rr-records]').dataset.rrRecords).catch(learningError);else if(e.target.closest('[data-rr-picker]'))rrPicker().catch(learningError);else if(e.target.closest('[data-rr-manage]'))rrManage().catch(learningError);else if(e.target.closest('[data-rr-legacy]'))rrLegacyOpen().catch(learningError);else if(e.target.closest('[data-rr-import]'))rrLegacyImport().catch(learningError);});
 const rrManageBase=rrManage;
-rrManage=async function(...args){await rrManageBase(...args);const footer=document.createElement('div');footer.className='rr-actions';footer.innerHTML='<button data-rr-legacy>旧版复习记录</button><button data-rr-import>把旧版已测词句加入新清单</button>';$('#rrManageList').after(footer);};
+rrManage=async function(...args){await rrManageBase(...args);const footer=document.createElement('div');footer.className='rr-actions rr-manager-records';footer.innerHTML=rrTodayStats((await rrRead()).model)+'<details><summary>旧版记录与迁移</summary><button data-rr-legacy>旧版复习记录</button><button data-rr-import>把旧版已测词句加入新清单</button></details>';$('#rrGoals').after(footer);};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='learning'&&learningRoute==='study'&&!learningHasWork())prMount().catch(learningError);});
 </script>
 <style data-learning-bundle="rolling-review">
 .rr-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.rr-actions button,.rr-pause{font-size:14px;min-height:42px;padding:9px 14px;border-radius:12px}.rr-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rr-controls label,.rr-actions label{display:grid;gap:6px;font-size:14px}.rr-controls input,.rr-controls select{width:100%;min-width:0}.rr-list{margin:14px 0;max-height:52vh;overflow:auto;overscroll-behavior:contain}.rr-item{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid #dce8e2}.rr-item>div,.rr-item>span{flex:1;min-width:0}.rr-item strong{font-size:21px;overflow-wrap:anywhere}.rr-item small{display:block;color:#657d76;font-size:13px;margin-top:4px}.rr-item input[type=checkbox]{width:20px;height:20px;flex:none}.rr-item button{flex:none;font-size:13px;padding:8px 10px}.rr-pause{margin-top:20px;color:#657d76}.rr-summary{gap:18px}.rr-summary h3{margin:4px 0}.rr-summary p{margin:8px 0}@media(max-width:600px){.rr-controls{grid-template-columns:1fr}.rr-summary{padding:16px!important}.rr-summary .rr-actions{gap:8px}.rr-actions button{font-size:13px}.rr-list{max-height:43vh}.rr-item strong{font-size:20px}}@media(prefers-reduced-motion:no-preference){.rr-item{animation:rr-enter .16s ease-out}@keyframes rr-enter{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}}
 .rr-managed-item{align-items:flex-start}.rr-managed-item input[type=checkbox]{margin-top:5px}.rr-managed-item .rr-source{color:#337661;line-height:1.7;overflow-wrap:anywhere}.rr-managed-item small{line-height:1.65}.rr-managed-item button{min-height:42px}@media(max-width:600px){.rr-managed-item{flex-wrap:wrap;gap:8px}.rr-managed-item>div{flex:1 1 calc(100% - 40px)}.rr-managed-item>button{margin-left:28px}}
+.rr-today-stats{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+button.rr-stat-link{display:inline-block;min-height:40px;padding:6px 4px;border:0;border-radius:6px;background:transparent;box-shadow:none;color:#216f60;font-size:inherit;font-weight:500;text-decoration:underline;text-decoration-color:#a8cdc1;text-underline-offset:5px}
+button.rr-stat-link:hover{background:#eaf4ef}
+#learningDialog.rr-manager-dialog,#learningDialog.rr-records-dialog{box-sizing:border-box;width:min(960px,calc(100% - 32px));max-width:960px;padding:24px;border-radius:24px}
+#learningDialog.rr-manager-dialog *,#learningDialog.rr-records-dialog *{box-sizing:border-box}
+#learningDialog.rr-manager-dialog>header,#learningDialog.rr-records-dialog>header{align-items:center;gap:16px;margin:0 0 20px;padding:0}
+#learningDialog.rr-manager-dialog>header h2,#learningDialog.rr-records-dialog>header h2{font-size:23px;line-height:1.4;margin:0;min-width:0}
+#learningDialog.rr-manager-dialog #rrGoals{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:14px;padding:18px;margin:0;background:#f0f7f2;border:1px solid #d7e7de;border-radius:16px}
+#learningDialog.rr-manager-dialog label{min-width:0;margin:0;gap:8px;color:#58756c;line-height:1.5;font-size:13px}
+#learningDialog.rr-manager-dialog input:not([type=checkbox]),#learningDialog.rr-manager-dialog select{display:block;width:100%;min-width:0;height:46px;min-height:46px;margin:0;padding:10px 12px;border:1px solid #cbded4;border-radius:10px;background-color:#fff;color:#244b42;font-size:16px;line-height:24px;box-shadow:none}
+#learningDialog.rr-manager-dialog select{appearance:none;-webkit-appearance:none;padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2358756c' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");background-position:right 14px center;background-size:16px;background-repeat:no-repeat}
+#learningDialog.rr-manager-dialog input:focus,#learningDialog.rr-manager-dialog select:focus{outline:none;border-color:#168772;box-shadow:inset 0 0 0 2px #79bbaa}
+#learningDialog.rr-manager-dialog button:focus-visible,.rr-stat-link:focus-visible{outline:2px solid #168772;outline-offset:-3px}
+#learningDialog.rr-manager-dialog .tag-hint{font-size:13px;line-height:1.7;margin:12px 0 20px;color:#6a8077}
+#learningDialog.rr-manager-dialog .rr-controls{gap:16px;margin:0 0 18px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#learningDialog.rr-manager-dialog .rr-actions{gap:8px;margin:12px 0}
+#learningDialog.rr-manager-dialog button{margin:0;min-height:42px;font-size:14px;padding:9px 13px;border-radius:10px}
+#learningDialog.rr-manager-dialog #rrGoals button{height:46px;margin:0;background:#fff}
+#learningDialog.rr-manager-dialog .rr-manager-records{padding:4px 0 10px;margin:8px 0 0;border-bottom:1px solid #e0eae4}
+.rr-manager-records details{margin-left:auto;font-size:12px;color:#698278}
+.rr-manager-records details summary{cursor:pointer;min-height:36px;padding:8px}
+#learningDialog.rr-manager-dialog #rrMCount{margin:18px 0 8px;font-size:13px;color:#58756c}
+#learningDialog.rr-manager-dialog .rr-list{padding:0 12px;margin:0 0 16px;border:1px solid #dce8e2;border-radius:14px;background:#fbfdfb;max-height:42vh}
+#learningDialog.rr-manager-dialog .rr-managed-item{padding:16px 0;gap:12px}
+#learningDialog.rr-manager-dialog .rr-managed-item:last-child{border-bottom:0}
+#learningDialog.rr-manager-dialog .rr-managed-item strong{font-size:23px;line-height:1.6}
+#learningDialog.rr-manager-dialog .rr-managed-item small{margin-top:5px;font-size:12px;line-height:1.65}
+.rr-record-tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rr-records .tag-hint{font-size:13px;line-height:1.7;color:#6a8077;margin:12px 0 20px}
+.rr-records h3{font-size:17px;margin:16px 0 8px}
+.rr-record-list{border:1px solid #dce8e2;border-radius:14px;background:#f7fbf8;padding:0 16px;margin-bottom:16px}
+.rr-history-item{padding:16px 0;align-items:flex-start}
+.rr-history-item:last-child{border-bottom:0}
+.rr-history-item p{font-size:15px;margin:4px 0 8px;overflow-wrap:anywhere}
+.rr-history-item small{line-height:1.6;overflow-wrap:anywhere}
+.rr-empty{padding:20px 0;color:#6a8077;line-height:1.7}
+@media(max-width:600px){
+ #learningDialog.rr-manager-dialog,#learningDialog.rr-records-dialog{width:calc(100% - 20px);padding:18px 14px;border-radius:18px}
+ #learningDialog.rr-manager-dialog>header h2,#learningDialog.rr-records-dialog>header h2{font-size:20px}
+ #learningDialog.rr-manager-dialog #rrGoals{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:14px;gap:12px}
+ #learningDialog.rr-manager-dialog #rrGoals button{grid-column:1 / -1}
+ #learningDialog.rr-manager-dialog .rr-controls{grid-template-columns:minmax(0,1fr);gap:12px}
+ .rr-manager-records details{margin-left:0;width:100%}
+ #learningDialog.rr-manager-dialog .rr-managed-item>button{margin-left:32px}
+ #learningDialog.rr-manager-dialog .rr-list{max-height:44vh}
+}
 </style>
 <script data-learning-bundle="dictionary-card-input">
 /* Dictionary cards: immediate saved-audio taps, double-tap detail, isolated controls. */
@@ -7264,7 +7325,7 @@ rpTabs.className='rp-tabs';rpTabs.innerHTML='<button type="button" data-rp-mode=
 $('#rpDirection').value=rpDirection;
 function rpGuard(){scGuard();if(rpSaving||typeof practiceChecking!=='undefined'&&practiceChecking)throw Error('请等待本次结果保存完成');}
 function rpToggle(){rpDaily.hidden=rpMode!=='daily';rpLegacy.hidden=rpMode!=='free';for(const button of rpTabs.querySelectorAll('[data-rp-mode]'))button.setAttribute('aria-pressed',String(button.dataset.rpMode===rpMode));}
-function rpStats(model){$('#rpStats').textContent='今日新学 '+model.newDone+' / '+model.goals.newGoal+' · 复习 '+model.reviewDone+' / '+model.goals.reviewGoal+' · 待新学 '+model.fresh.length+' · 已到期 '+model.due.length;}
+function rpStats(model){$('#rpStats').innerHTML=rrTodayStats(model)+'<span> · 待新学 '+model.fresh.length+' · 已到期 '+model.due.length+'</span>';}
 async function rpRefreshStats(){const {model}=await rrRead();if(activeView==='practice'&&rpMode==='daily')rpStats(model);}
 function rpCanRestart(){const answer=$('#rpSession').querySelector('#rrWritten');return !answer?.value||confirm('本题尚未评级，切换后需要重新回忆。继续吗？');}
 async function rpRender(options={}){

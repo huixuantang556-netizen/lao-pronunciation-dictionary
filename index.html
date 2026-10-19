@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b28046a645064e84">
+  <meta name="lao-app-build" content="795c2664f0e04941">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5857,15 +5857,16 @@ learningOpenDetail=async function(id){
  panel.innerHTML='<div class="wsl-sentence" lang="lo">'+wslSentenceHtml(m.textLao,ranges)+'</div><p class="wsl-translation">'+h(m.translationZh||a.translation||'')+'</p><p class="wsl-hint">点词听读 · 查看本句词义</p>'+(fallbacks.length?'<details class="wsl-other-meanings"><summary>其他词义</summary>'+fallbacks.map((t,i)=>'<button data-wsl-token="'+(ranges.length+i)+'"><span lang="lo">'+h(t.lao)+'</span> · '+h(t.meaning)+'</button>').join('')+'</details>':'')+'<div class="wsl-card" aria-live="polite" hidden></div><p class="wsl-status" role="status"></p>';
  host.prepend(panel);let timer=null,selection=0;
  const status=panel.querySelector('.wsl-status'),card=panel.querySelector('.wsl-card');
+ panel.wslCancelSelection=()=>{clearTimeout(timer);selection++;card.paRun=(card.paRun||0)+1;};
  async function select(index,play){const request=++selection,token=tokens[index];if(!token)return;
   panel.querySelectorAll('[data-wsl-token]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.wslToken)===index)));
   const target=token.target||'',related=target?wslRelated(snap,target,m.id):[];
   let entry=null;try{if(target.startsWith('word:'))entry=learningFindWord(target.slice(5),await allEntries());}catch(_){}
   if(request!==selection||!panel.isConnected)return;
-  card.hidden=false;card.innerHTML=wslCardHtml(token,target,entry,related);
+  card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);
   if(typeof paWordCard==='function')void paWordCard(card,m,token,snap);
   if(card.animate&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches)card.animate([{opacity:.45,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:160});
-  status.textContent='';if(play&&target)try{await saPlay(target);}catch(e){if(request===selection)status.textContent=e.message;}
+  status.textContent='';if(play&&target)try{await saPlay(target,{isCurrent:()=>request===selection&&panel.isConnected});}catch(e){if(request===selection)status.textContent=e.message;}
  }
  panel.onclick=e=>{const b=e.target.closest('button');if(!b)return;clearTimeout(timer);
   if(b.dataset.wslToken!==undefined){if(e.detail>1)return;timer=setTimeout(()=>{if(panel.isConnected)void select(Number(b.dataset.wslToken),true);},350);}
@@ -7650,13 +7651,47 @@ async function nsOpen(number,button,override=''){
  host.querySelector('#nsPlay').onclick=()=>play(false);host.querySelector('#nsGenerate').onclick=()=>play(true);
  try{if(typeof paReusable==='function'){const snap=await learningSnapshot(),digest=await paDigest(paRules()),saved=paReusable(snap,reading.compactLao||reading.lao,digest);if(current()&&saved)host.querySelector('#nsPhonetics').innerHTML='<details><summary>已保存的老挝语读法语音分析</summary>'+paAnalysisHtml(saved)+'</details>';}}catch(e){if(current())host.querySelector('#nsStatus').textContent='语音分析暂未匹配，读法与语法仍可查看。';}
 }
+function nsInlineMeaning(reading){
+ if(!reading.lao)return reading.raw+' · 读法需确认';
+ if(reading.kind==='phone'||reading.kind==='identifier')return nsLabels[reading.kind]+'：'+reading.raw;
+ const n=Number(reading.normalized)*(reading.parts[0]==='ລົບ'?-1:1),value=Number.isFinite(n)?n.toLocaleString('zh-CN',{maximumFractionDigits:12}):reading.raw;
+ return reading.currency?value+({'ກີບ':'基普','ບາດ':'泰铢','ໂດລາ':'美元'})[reading.currency]:(nsLabels[reading.kind]||'数字')+' · '+(reading.kind==='time'?reading.raw:value);
+}
+function nsInlineHtml(reading){
+ const h=learningEsc,uncertain=!reading.lao;return '<strong class="ns-inline-reading" '+(!uncertain?'lang="lo"':'')+'>'+h(reading.lao||'数字读法待确认')+'</strong><p class="wsl-meaning">'+h(nsInlineMeaning(reading))+'</p><small class="wsl-role">数词 · '+h(nsLabels[reading.kind])+'</small><div class="wsl-word-actions">'+(!uncertain?'<button type="button" data-ns-inline-play>▶ 听单词</button>':'')+'<button type="button" data-ns-inline-detail>数字详情</button></div>'+(uncertain?'<p class="ns-inline-note">'+h(reading.note)+'</p><div class="ns-actions"><button data-ns-inline-choice="cardinal">按分组数量读</button><button data-ns-inline-choice="identifier">按号码逐位读</button>'+(reading.raw.includes('.')?'<button data-ns-inline-choice="decimal">按小数读</button>':'')+'</div>':'')+'<div class="ns-inline-examples"></div><details class="ns-inline-grammar"><summary>构词与语法</summary><div class="ns-breakdown">'+(reading.breakdown||[]).map(p=>'<span><strong lang="lo">'+h(p.lao)+'</strong><small>'+h(p.meaning)+'</small></span>').join('')+'</div><p class="ns-inline-note">'+h(reading.note)+'</p></details><details class="ns-inline-phonetics"><summary>语音分析</summary><div class="ns-inline-phonetic-body"><p>正在查找展开后读法的已有语音分析…</p></div></details><p class="ns-inline-status" role="status"></p>';
+}
+async function nsSelect(number,button){
+ scGuard();if(recorder||typeof rpSaving!=='undefined'&&rpSaving)throw Error('请先完成当前保存或录音');
+ const root=button.closest('.wsl-panel,.ss-reading,.learn-card,.rp-flashcard,.study-example,#practiceCard')||button.parentElement;if(!root)throw Error('原句页面已变化，请重新打开');
+ root.wslCancelSelection?.();stopPracticeAudio();const request=(root.nsSelection||0)+1;root.nsSelection=request;
+ let card=root.querySelector('.wsl-card');if(!card){card=document.createElement('section');card.className='wsl-card ns-inline-card';card.setAttribute('aria-live','polite');const anchor=root.querySelector('.wsl-hint,.learn-meaning,.study-example-translation,.learn-card-main,.rp-card-word,.question-row');if(anchor)anchor.after(card);else root.append(card);}
+ card.paRun=(card.paRun||0)+1;card.hidden=false;card.innerHTML=nsInlineHtml(number);card.classList.add('ns-number-card');root.nsButton=button;
+ for(const b of root.querySelectorAll('[data-wsl-token],[data-ns-number]'))b.setAttribute('aria-pressed',String(b===button));
+ const current=()=>root.isConnected&&card.isConnected&&button.isConnected&&root.nsSelection===request&&root.nsButton===button;
+ const status=card.querySelector('.ns-inline-status'),play=async()=>{try{if(!current())return;status.textContent='';await nsPlay(number,false,current);if(current())status.textContent='正在播放已保存的老挝语读法。';}catch(error){if(current())status.textContent=/暂无/.test(error.message)?'暂无这段读法的已保存发音。请点“数字详情”，主动生成一次后即可点数字听读。':error.message;}};
+ card.querySelector('[data-ns-inline-play]')?.addEventListener('click',e=>{e.stopPropagation();void play();});
+ card.querySelector('[data-ns-inline-detail]').onclick=async e=>{e.stopPropagation();if(!current())return;try{stopPracticeAudio();await nsOpen(number,e.currentTarget);}catch(error){status.textContent=error.message;}};
+ for(const b of card.querySelectorAll('[data-ns-inline-choice]'))b.onclick=async e=>{e.stopPropagation();const next={...number,...nsClassify(number.raw,number.context,b.dataset.nsInlineChoice)};if(!next.lao){status.textContent=next.note;return;}try{await nsSelect(next,button);}catch(error){status.textContent=error.message;}};
+ const phonetics=card.querySelector('.ns-inline-phonetics');if(typeof appPreference==='function'){phonetics.open=appPreference('expandPronunciation');}
+ // Opening the inline card is an explicit saved-audio request, never a generation request.
+ const audio=number.lao?play():Promise.resolve();
+ try{const snap=await learningSnapshot();if(!current())return;
+  const related=snap.learningMaterials.filter(m=>!m.deleted&&!m.analysisOwner&&m.id!==(typeof learningDetail==='undefined'?'':learningDetail)&&['sentence','dialogue'].includes(m.contentType)&&/\d/.test(m.textLao)&&nsScan(m.textLao,m.translationZh||'').some(n=>number.lao&&n.kind===number.kind&&n.compactLao===number.compactLao)).filter((m,i,a)=>a.findIndex(x=>x.textLao===m.textLao&&x.translationZh===m.translationZh)===i).slice(0,5);
+  card.querySelector('.ns-inline-examples').innerHTML=related.length?'<details><summary>关联例句 · '+related.length+'</summary>'+related.map((m,i)=>'<p><span lang="lo">'+learningEsc(m.textLao)+'</span><br>'+learningEsc(m.translationZh||'')+'<br><button type="button" data-ns-inline-example="'+i+'">例句详情</button></p>').join('')+'</details>':'';
+  const examplesFold=card.querySelector('.ns-inline-examples details');if(examplesFold&&typeof appPreference==='function')examplesFold.open=appPreference('expandExamples');
+  for(const b of card.querySelectorAll('[data-ns-inline-example]'))b.onclick=async e=>{e.stopPropagation();if(!current())return;try{stopPracticeAudio();await saOpenNested(related[Number(b.dataset.nsInlineExample)].id,b);}catch(error){status.textContent=error.message;}};
+  let saved=null;if(number.lao&&typeof paReusable==='function'){const digest=await paDigest(paRules());if(!current())return;saved=paReusable(snap,number.compactLao||number.lao,digest);}
+  if(current())card.querySelector('.ns-inline-phonetic-body').innerHTML=saved?paAnalysisHtml(saved):'<p>尚无这段老挝语读法的已保存语音分析；不会用原阿拉伯数字的旧解析代替。展开“构词与语法”可查看数字用法。</p>';
+ }catch(error){if(current())card.querySelector('.ns-inline-phonetic-body').textContent='已有分析暂时无法读取：'+error.message;}
+ await audio;
+}
 const nsOldSentenceHtml=wslSentenceHtml;wslSentenceHtml=function(text,ranges){return /\d/.test(text)?nsSentenceHtml(text,ranges):nsOldSentenceHtml(text,ranges);};
 const nsOldDetail=learningOpenDetail;learningOpenDetail=async function(id){await nsOldDetail(id);if(learningDetail!==id)return;const {m,w,snap}=await learningResolve(id);if(learningDetail!==id)return;const text=w?.word||m.textLao;if(!/\d/.test(text))return;const hint=nsContextHint({...m,textLao:text,translationZh:w?.meaning||m.translationZh},snap),detail=learningDialog.querySelector('.learn-detail');if(!detail)return;
  const line=detail.querySelector('.wsl-sentence')||detail.querySelector('.ss-original');if(line){for(const b of line.querySelectorAll('[data-ns-number]'))b.dataset.nsHint=hint;if(!line.querySelector('[data-ns-number]'))line.innerHTML=nsSentenceHtml(text,[],hint);}
  if(!/[\u0e80-\u0eff]/.test(text))for(const old of detail.querySelectorAll('.ss-pronunciation')){old.open=false;const summary=old.querySelector('summary');if(summary)summary.textContent='原阿拉伯数字解析（仅核对，不作读音依据）';}
  const panel=document.createElement('section');panel.className='ns-detail-links';panel.innerHTML='<h3>数字表达</h3><p>点击数字查看老挝语读法、构词与句中用法。号码逐位读；原句与原解析保留。</p><div>'+nsScan(text,hint).map(n=>'<button type="button" class="ns-number" data-ns-number="'+n.start+'" data-ns-text="'+learningEsc(text)+'" data-ns-hint="'+learningEsc(hint)+'">'+learningEsc(n.raw)+' · '+learningEsc(nsLabels[n.kind])+'</button>').join('')+'</div>';(detail.querySelector('.ss-reading')||detail).append(panel);
 };
-document.addEventListener('click',e=>{const b=e.target.closest('[data-ns-number]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();const text=b.dataset.nsText||'',start=Number(b.dataset.nsNumber),number=nsScan(text,b.dataset.nsHint||'').find(n=>n.start===start);if(number)void nsOpen(number,b).catch(error=>{const status=document.querySelector('#learningDialogStatus')||document.querySelector('#rpStatus');if(status)status.textContent=error.message;});},true);
+document.addEventListener('click',e=>{const b=e.target.closest('[data-ns-number]');if(!b){const word=e.target.closest('[data-wsl-token]'),root=word?.closest('.wsl-panel');if(root){root.nsSelection=(root.nsSelection||0)+1;root.nsButton=null;for(const n of root.querySelectorAll('[data-ns-number]'))n.setAttribute('aria-pressed','false');stopPracticeAudio();}return;}e.preventDefault();e.stopImmediatePropagation();if(e.detail>1)return;const text=b.dataset.nsText||'',start=Number(b.dataset.nsNumber),number=nsScan(text,b.dataset.nsHint||'').find(n=>n.start===start);if(number)void nsSelect(number,b).catch(error=>{const status=learningDialog.open?document.querySelector('#learningDialogStatus'):document.querySelector(typeof activeView!=='undefined'&&activeView==='practice'?'#rpStatus':'#learningStatus');if(status)status.textContent=error.message;});},true);
 document.addEventListener('dblclick',e=>{if(e.target.closest('[data-ns-number]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('pointerdown',e=>{if(e.target.closest('[data-ns-number]'))e.stopImmediatePropagation();},true);
 function nsDecoratePractice(){for(const n of document.querySelectorAll('.rp-card-word[lang="lo"],.rp-card-examples article p[lang="lo"],.study-example p[lang="lo"],#questionIPA[lang="lo"],.learn-card-main[data-learn="play-card"] strong[lang="lo"]')){
@@ -7671,6 +7706,14 @@ if(typeof MutationObserver==='function'){let pending=false;new MutationObserver(
 <style data-learning-bundle="number-study">
 .ns-number{display:inline!important;min-height:0!important;width:auto!important;margin:0 2px!important;padding:1px 5px!important;border:0!important;border-bottom:2px dotted #37947f!important;border-radius:5px!important;background:#e7f3ec!important;color:#087e69!important;font:inherit!important;line-height:inherit!important;vertical-align:baseline;cursor:pointer;box-shadow:none!important}
 .ns-number:focus-visible{outline:2px solid #168772;outline-offset:2px}
+.ns-number[aria-pressed="true"]{background:#087f70!important;color:#fff!important;border-bottom-color:#087f70!important}
+.ns-number-card .ns-inline-reading{display:block;font-size:25px;line-height:1.85;overflow-wrap:anywhere;color:#087f70}
+.ns-number-card>details,.ns-number-card .ns-inline-examples>details{margin-top:16px;padding-top:14px;border-top:1px solid #d3e5da}
+.ns-number-card summary{cursor:pointer;color:#176d5d;font-size:15px;line-height:1.65;padding:4px 0}
+.ns-number-card .ns-breakdown{margin-top:12px}.ns-number-card .ns-inline-note,.ns-number-card .ns-inline-phonetic-body{font-size:14px;line-height:1.8;overflow-wrap:anywhere}
+.ns-number-card .ns-inline-status{font-size:13px;line-height:1.7;color:#8b7444;margin:10px 0 0}
+.ns-inline-card{margin:16px 0;padding:18px;border:1px solid #d7e7dd;border-radius:16px;background:#edf7f1;text-align:left}
+.ns-inline-card .wsl-word-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.ns-inline-card button{font-size:14px;min-height:42px;padding:8px 12px}
 .learn-card-main.ns-card-main{box-sizing:border-box;width:100%;background:transparent;border:0;text-align:left;cursor:pointer}
 .ns-detail-links{margin-top:22px;padding:16px;background:#f2f8f4;border:1px solid #d8e9de;border-radius:14px}
 .ns-detail-links h3{font-size:16px;margin:0 0 8px}.ns-detail-links p{font-size:13px;color:#698078;line-height:1.7}.ns-detail-links>div{display:flex;gap:12px;flex-wrap:wrap}

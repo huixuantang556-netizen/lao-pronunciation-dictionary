@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="139ae2450124cf56">
+  <meta name="lao-app-build" content="b887dd3c04f3a188">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3359,7 +3359,22 @@ const lessonPages=new Map();
 let lessonPageBar=null;
 document.addEventListener('change',e=>{if(e.target.matches('[data-page-speed]')&&lessonPageAudio&&e.target.closest('[data-page-key]')===lessonPageBar)lessonPageAudio.playbackRate=Number(e.target.value)||1;});
 let lessonPageRun=0,lessonPageAudio=null,lessonPageURL=null,lessonPageJump=null;
-function lessonPageStop(){if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+const lessonDurationCache=new WeakMap(),lessonDurationProbes=new Set();
+async function lessonBlobDuration(blob,current){
+ if(lessonDurationCache.has(blob))return lessonDurationCache.get(blob);
+ const duration=await new Promise((resolve,reject)=>{const a=new Audio(),url=URL.createObjectURL(blob);let done=false,timer;
+  const finish=(value,error)=>{if(done)return;done=true;clearTimeout(timer);lessonDurationProbes.delete(cancel);a.onloadedmetadata=a.onerror=null;a.pause();a.removeAttribute?.('src');URL.revokeObjectURL(url);error?reject(error):resolve(value);};
+  const cancel=()=>finish(0,Error('已停止读取列表时长'));lessonDurationProbes.add(cancel);
+  a.onloadedmetadata=async()=>{a.onloadedmetadata=null;if(!current())return cancel();if(Number.isFinite(a.duration)&&a.duration>0)return finish(a.duration);try{if(typeof batchDecode!=='function')throw Error('音频时长不可用');const buffer=await batchDecode(blob);if(!current())return cancel();if(!Number.isFinite(buffer.duration)||buffer.duration<=0)throw Error('音频时长不可用');finish(buffer.duration);}catch(e){finish(0,e);}};
+  a.onerror=()=>finish(0,Error('无法读取已保存音频的时长'));timer=setTimeout(()=>finish(0,Error('读取音频时长超时，请重试')),10000);a.preload='metadata';a.src=url;try{a.load();}catch(error){finish(0,error);}
+ });
+ if(current())lessonDurationCache.set(blob,duration);return duration;
+}
+async function lessonQueueDurations(playlist,current){
+ const durations=new Array(playlist.length);let index=0;
+ await Promise.all(Array.from({length:Math.min(4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
+}
+function lessonPageStop(){if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course){
  let blocks=section.blocks;
@@ -3423,26 +3438,32 @@ async function lessonPageListen(page,bar){
 }
 async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun){
  const status=bar.querySelector('[data-page-status]');
+ const current=()=>token===lessonPageRun&&bar.isConnected!==false;
+ status.textContent='正在读取列表总时长…';
+ let durations;try{durations=await lessonQueueDurations(playlist,current);}catch(error){if(!current())return;lessonPageStop();throw error;}if(!current())return;
+ const starts=[];let duration=0;for(const seconds of durations){starts.push(duration);duration+=seconds;}
+ const format=seconds=>Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0');
  let controls=bar.querySelector('.page-progress');
- if(!controls){controls=document.createElement('div');controls.className='page-progress';controls.innerHTML='<button type="button" data-queue-prev>上一词／段</button><label>本条音频进度<input type="range" min="0" max="1000" value="0" data-queue-seek aria-label="本条音频进度"></label><span data-queue-time></span><button type="button" data-queue-next>下一词／段</button>';bar.append(controls);}
- const seek=controls.querySelector('[data-queue-seek]'),clock=controls.querySelector('[data-queue-time]');let position=0;
+ if(!controls){controls=document.createElement('div');controls.className='page-progress';controls.innerHTML='<button type="button" data-queue-prev aria-label="上一词／段" title="上一词／段">‹</button><label class="page-total-progress">列表总进度<input type="range" min="0" max="10000" value="0" data-queue-seek aria-label="列表总音频进度"></label><span data-queue-time></span><button type="button" data-queue-next aria-label="下一词／段" title="下一词／段">›</button>';bar.append(controls);}
+ const seek=controls.querySelector('[data-queue-seek]'),clock=controls.querySelector('[data-queue-time]');let position=0,finished=false;
  controls.querySelector('[data-queue-prev]').onclick=()=>lessonPageJump?.(Math.max(0,position-1));
  controls.querySelector('[data-queue-next]').onclick=()=>lessonPageJump?.(position+1);
  lessonPageJump=index=>{if(token!==lessonPageRun)return;lessonPageAudio?.pause();void play(index);};
- seek.oninput=()=>{const a=lessonPageAudio,p=playlist[position];if(token!==lessonPageRun||!a||!p)return;const end=p.end??a.duration;if(Number.isFinite(end)&&end>(p.start||0))a.currentTime=(p.start||0)+(end-(p.start||0))*Number(seek.value)/1000;};
- async function play(index){
+ seek.max='10000';seek.disabled=false;
+ seek.oninput=()=>{if(!current())return;const time=Math.max(0,Math.min(duration-.001,duration*Number(seek.value)/10000));let index=starts.length-1;while(index>0&&starts[index]>time)index--;const offset=time-starts[index],a=lessonPageAudio,paused=!!a?.paused&&!finished;if(index===position&&a&&!finished){a.queueOffset=offset;try{a.currentTime=(playlist[index].start||0)+offset;}catch(_){}clock.textContent=format(time)+' / '+format(duration);}else void play(index,offset,paused);};
+ async function play(index,offset=0,paused=false){
   if(token!==lessonPageRun)return;
-  if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){status.textContent='本页播放完成';lessonPageStop();return;}index=0;}
-  position=index;const part=playlist[index];if(lessonPageAudio){lessonPageAudio.onended=null;lessonPageAudio.ontimeupdate=null;lessonPageAudio.pause();}if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);
-  lessonPageURL=URL.createObjectURL(part.blob);const a=lessonPageAudio=new Audio(lessonPageURL);a.playbackRate=Number(bar.querySelector('[data-page-speed]')?.value)||1;let advanced=false;
+  if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){status.textContent='本页播放完成';finished=true;seek.value='10000';clock.textContent=format(duration)+' / '+format(duration);return;}index=0;}
+  finished=false;position=index;const part=playlist[index];if(lessonPageAudio){lessonPageAudio.onended=null;lessonPageAudio.ontimeupdate=null;lessonPageAudio.pause();}if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);
+  lessonPageURL=URL.createObjectURL(part.blob);const a=lessonPageAudio=new Audio(lessonPageURL);a.queueOffset=offset;a.playbackRate=Number(bar.querySelector('[data-page-speed]')?.value)||1;let advanced=false;
   const next=()=>{if(advanced||token!==lessonPageRun||lessonPageAudio!==a)return;advanced=true;a.pause();void play(index+1);};
   status.textContent='正在播放 '+(part.at+1)+(part.count>1?'–'+(part.at+part.count):'')+' / '+total+' 项'+(part.count>1?'（未切分整段，只能按段跳转）':'');
-  seek.value='0';clock.textContent='';
-  const update=()=>{if(token!==lessonPageRun||lessonPageAudio!==a)return;const start=part.start||0,end=part.end??a.duration,duration=end-start;if(Number.isFinite(duration)&&duration>0){seek.value=String(Math.max(0,Math.min(1000,(a.currentTime-start)/duration*1000)));clock.textContent=Math.max(0,a.currentTime-start).toFixed(1)+' / '+duration.toFixed(1)+' 秒';}};
-  a.onloadedmetadata=()=>{if(lessonPageAudio!==a||token!==lessonPageRun)return;if(part.start)a.currentTime=part.start;update();};
+  seek.value=String((starts[index]+offset)/duration*10000);clock.textContent=format(starts[index]+offset)+' / '+format(duration);
+  const update=()=>{if(token!==lessonPageRun||lessonPageAudio!==a)return;const elapsed=starts[index]+Math.max(0,Math.min(durations[index],a.currentTime-(part.start||0)));seek.value=String(elapsed/duration*10000);clock.textContent=format(elapsed)+' / '+format(duration);};
+  a.onloadedmetadata=()=>{if(lessonPageAudio!==a||token!==lessonPageRun)return;a.currentTime=(part.start||0)+(a.queueOffset||0);update();};
   a.ontimeupdate=()=>{update();if(part.end!=null&&a.currentTime>=part.end)next();};a.onended=next;
   a.onerror=()=>{if(token===lessonPageRun&&lessonPageAudio===a){status.textContent='音频播放失败，请检查已保存的音频';lessonPageStop();}};
-  try{await a.play();if(token!==lessonPageRun||lessonPageAudio!==a)a.pause();}catch(e){if(token===lessonPageRun&&lessonPageAudio===a){status.textContent='播放失败：'+e.message;lessonPageStop();}}
+  try{if(!paused)await a.play();if(token!==lessonPageRun||lessonPageAudio!==a)a.pause();}catch(e){if(token===lessonPageRun&&lessonPageAudio===a){status.textContent='播放失败：'+e.message;lessonPageStop();}}
  }
  await play(0);
 }
@@ -8022,7 +8043,7 @@ const cfValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row.favoriteFolder!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||row.id!==row.favoriteFolder.id||!cfFolderValid(row.favoriteFolder)))throw Error('收藏文件夹格式无效');if(row.favorite?.folder!==undefined&&(typeof row.favorite.folder!=='string'||row.favorite.folder.length>100))throw Error('收藏分类格式无效');return cfValidate(kind,row);};
 async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.length>60)throw Error('文件夹名称需为 1–60 个字');learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot();if(workspace!==fvWorkspace())throw Error('账号已变化');const id='folder:'+crypto.randomUUID(),row={...learningBlank(id,'knowledge','收藏文件夹'),favoriteFolder:{id,name},updatedAt:Date.now()};await learningWrite({learningMaterials:[row]},snap);await fvRefresh();return id;}finally{learningBusy=false;}}
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
-function cfMaskButtons(){return '<div class="cf-mask-controls"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button></div>';}
+function cfMaskButtons(){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button></div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset')n.textContent=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');}});
 async function cfFavoritePlaylist(rows,bar){
@@ -8058,7 +8079,7 @@ const cfWsl=wslCardHtml;
 wslCardHtml=function(token,target,entry,related){return cfWsl(token,target,entry,related)+(target?'<div class="cf-word-controls"><button type="button" data-cf-record="'+learningEsc(target)+'">🎙 录制参考发音</button><button type="button" class="cf-regenerate" data-cf-regenerate="'+learningEsc(target)+'">↻ 重新生成本条默认发音</button></div>':'<p class="tag-hint">先保存本句解析并关联此词，才可保存该词参考音。</p>');};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();b.disabled=true;void (b.dataset.cfRecord?cfRecord(b.dataset.cfRecord):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
 function cfDecorate(){
- for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))bar.insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
+ for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
 }
@@ -8073,6 +8094,15 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 [data-fv-list] .lesson-page-player{position:static;display:block}[data-fv-list] select{max-width:100%;min-width:0}
 [data-fv-list] .fv-filters{align-items:end}[data-fv-list] .fv-item{gap:1rem}[data-fv-list] .fv-actions label{max-width:180px}
 @media(max-width:640px){.page-progress button{flex:1}.page-progress label{order:3;flex-basis:100%}.fv-item{display:block!important}.fv-actions{flex-wrap:wrap}}
+.cf-mask-controls{display:inline-block;position:relative;margin:0;flex:0 0 auto;font-size:13px;color:#537368}
+.cf-mask-controls>summary{cursor:pointer;list-style:none;padding:8px 4px;white-space:nowrap}.cf-mask-controls>summary::-webkit-details-marker{display:none}.cf-mask-controls>summary::after{content:'⌄';margin-left:6px}
+.cf-mask-menu{position:absolute;right:0;top:100%;z-index:100;min-width:150px;padding:6px;background:#fff;border:1px solid #d6e7df;border-radius:10px;box-shadow:0 6px 22px #143d3420;display:grid;gap:2px}
+.cf-mask-menu button,#learningPanel .cf-mask-menu button{width:100%;justify-content:flex-start;border:0;background:none;font-size:13px;padding:8px 10px;min-height:36px;margin:0;border-radius:6px;text-align:left}
+.page-progress{flex:1 0 100%;width:100%;min-width:0;margin:2px 0 0;gap:10px;flex-wrap:nowrap}
+.page-progress label{margin:0;min-width:0;font-size:12px;color:#698077;flex:1}.page-progress input{accent-color:#087e6d;cursor:pointer;height:18px;margin:3px 0 0}
+.page-progress button,#learningPanel .page-progress button{width:30px;min-width:30px;min-height:30px;height:30px;padding:0;flex:0 0 30px;font-size:24px;border:0;background:transparent;color:#087e6d;border-radius:6px}
+.page-progress span{font-size:12px;white-space:nowrap;color:#537368}
+@media(max-width:640px){.page-progress label{order:0;flex-basis:auto}.cf-mask-menu{min-width:145px}}
 </style>
 <script src="./offline.js"></script>
 </body>

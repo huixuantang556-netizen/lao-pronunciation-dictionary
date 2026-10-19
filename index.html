@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="593372031b9128db">
+  <meta name="lao-app-build" content="c736ec8b52d5b3a9">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1492,8 +1492,10 @@ async function cloudReadRemote(uid,api,table,known,status){
         const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,blobs));
         conflicts.forEach((c,i)=>plan.push({key:c.key,row:c.row,action:resolutions[i],target:resolutions[i]==='local'?c.local:c.remote}));
         const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
-        status('等待你确认同步计划：上传 '+uploads+' 项，接收 '+downloads+' 项');
-        if(!confirm('将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
+        if(uploads||downloads){
+          status('等待你确认词典阶段计划：上传 '+uploads+' 项，接收 '+downloads+' 项；随后继续检查课程与手录参考发音');
+          if(!confirm('词典阶段将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n随后继续同步课程、学习记录及手录参考发音。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
+        }else status('词典暂无变化，继续检查课程、学习记录与手录参考发音…');
         function validateAudio(a){if(!a||!a.path?.startsWith(uid+'/')||!/^[0-9a-f]{64}$/.test(a.sha)||a.path!==uid+'/'+a.sha+'-'+a.mime?.replace(/[^a-z0-9]/g,'_')||!a.mime?.startsWith('audio/')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('云端音频索引无效，已停止。');}
         const audioSession=cloudAudioSession(uid,api,blobs),audioRequests=[];
         async function loadAudio(a){validateAudio(a);return audioSession.load(a);}
@@ -2966,7 +2968,7 @@ async function learningCloudSync(uid,api,status){
   const checkpoint=Object.fromEntries(plan.filter(p=>p.target).map(p=>[p.key,p.target]));
   const database=await openDB(),t=database.transaction([...learningStores,'cloud_meta'],'readwrite'),done=transactionDone(t);let remaining=learningStores.length;
   for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{if(!cloudSame(r.result,snap[kind])){t.abort();return;}if(--remaining===0){learningApplySyncDelta(t,snap,merged);t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
-  await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status('学习资料同步完成：学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
+  await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status('学习资料同步完成：本次上传 '+pending.length+' 项学习资料（含 '+pending.filter(p=>p.kind==='learningAudio').length+' 份录音），接收 '+plan.filter(p=>p.action==='remote').length+' 项；学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
  }finally{learningBusy=false;}
 }
 </script>
@@ -8173,6 +8175,10 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
  #learningPanel:not(.learn-settings) .learn-card .learn-card-actions>button{box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center;width:100%!important;min-width:0!important;max-width:none!important;height:40px;min-height:40px;padding:0!important;margin:0!important;border-radius:9px;font-size:18px;line-height:1;flex:none}
  #learningPanel:not(.learn-settings) .learn-card .learn-card-actions>.fv-button{height:40px;min-height:40px;font-size:23px!important;border:1px solid transparent}
  #learningPanel:not(.learn-settings) .learn-card .learn-card-actions svg{width:18px;height:18px;flex:0 0 18px}
+ /* Dialogue wrappers have older, more-specific column rules. Keep sentence actions compact. */
+ #learningPanel:not(.learn-settings) .v2-sentences .learn-card .learn-card-actions,#learningPanel:not(.learn-settings) .comm-detail .v2-sentences .learn-card .learn-card-actions{display:flex;flex-direction:row;flex-wrap:nowrap;justify-content:flex-start;align-items:center;gap:6px;margin:0;padding:6px 12px 10px}
+ #learningPanel:not(.learn-settings) .v2-sentences .learn-card .learn-card-actions>button,#learningPanel:not(.learn-settings) .comm-detail .v2-sentences .learn-card .learn-card-actions>button{flex:0 0 44px;width:44px!important;min-width:44px!important;max-width:44px!important;height:44px;min-height:44px}
+ #learningPanel:not(.learn-settings) .v2-sentences .learn-card .learn-card-actions>.fv-button,#learningPanel:not(.learn-settings) .comm-detail .v2-sentences .learn-card .learn-card-actions>.fv-button{margin-left:auto!important}
 }
 /* Keep navigation stable; panel entry transforms also disturb fixed players. */
 .panel:not(.hidden){animation:none!important}

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="14f84957bf32e6f2">
+  <meta name="lao-app-build" content="5bd1e2b551d1b8cf">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7046,7 +7046,7 @@ prMount=async function(){
 };
 prOpen=async function(){scGuard();const {model:m}=await rrRead();if(m.queue.length){rrSession(m.queue);return;}learningModal('今日学习','<p>当前目标下没有到期任务。尚有 '+m.due.length+' 项到期、'+m.fresh.length+' 项可新学；目标不是删除或推迟任务。</p><p>刚完成巩固的词句会在计划时间再出现，不需要反复立即测试。</p><button data-rr-picker>添加学习词句</button><button data-rr-manage>查看清单／调整目标</button>');};
 async function rrPicker(){
- scGuard();const {snap,words}=await rrRead(),catalog=rrCatalog(snap,words),courses=learningCourses(snap),h=learningEsc,selected=new Set();let page=0,filtered=[];
+ scGuard();const {snap,words}=await rrRead(),catalog=rrCatalog(snap,words),courses=typeof learningOrderedCourses==='function'?learningOrderedCourses(snap):learningCourses(snap),h=learningEsc,selected=new Set();let page=0,filtered=[];
  learningModal('选择加入学习清单','<div class="rr-controls"><label>章节<select id="rrCourse"><option value="">全部章节与词典</option>'+courses.map(c=>'<option value="'+h(c.id)+'">'+h(scCourseLabel(c))+'</option>').join('')+'</select></label><label>内容<select id="rrKind"><option value="all">词与句</option><option value="word">单词</option><option value="sentence">句子</option></select></label><label>搜索<input id="rrSearch" placeholder="老挝语或中文"></label><label>加入方向<select id="rrDirection">'+Object.entries(rrDirections).map(([k,v])=>'<option value="'+k+'">'+h(v)+'</option>').join('')+'<option value="both">口述和书写（各计一项）</option></select></label></div><div class="rr-actions"><button id="rrPage">勾选当前页</button><button id="rrAll">勾选整个筛选范围</button><button id="rrClear">清空勾选</button></div><p id="rrCount" role="status"></p><div id="rrItems" class="rr-list"></div><div class="rr-actions"><button id="rrPrev">上一页</button><button id="rrNext">下一页</button><button id="rrAdd" class="primary">加入已勾选词句</button></div>');
  const draw=()=>{filtered=catalog.filter(w=>(!$('#rrCourse').value||w._practiceCourses?.some(c=>c.id===$('#rrCourse').value))&&($('#rrKind').value==='all'||(practiceIsSentence(w)?'sentence':'word')===$('#rrKind').value)&&(!$('#rrSearch').value.trim()||(w.word+' '+w.meaning).includes($('#rrSearch').value.trim())));page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));$('#rrCount').textContent=filtered.length+' 项 · 第 '+(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/20))+' 页 · 已勾选 '+selected.size;$('#rrItems').innerHTML=filtered.slice(page*20,page*20+20).map((w,i)=>'<label class="rr-item"><input type="checkbox" data-rr-index="'+(page*20+i)+'" '+(selected.has(reviewTarget(w))?'checked':'')+'><span><strong lang="lo">'+h(w.word)+'</strong><small>'+h(w.meaning)+'</small></span></label>').join('');$('#rrPrev').disabled=page===0;$('#rrNext').disabled=(page+1)*20>=filtered.length;};
  for(const id of ['rrCourse','rrKind','rrSearch'])$('#'+id).oninput=()=>{page=0;draw();};
@@ -7063,16 +7063,20 @@ async function rrManage(){
  $('#rrManageList').onclick=async e=>{const b=e.target.closest('[data-rr-member]');if(!b||b.disabled)return;b.disabled=true;try{const status=$('#rrStatus').value==='active'?'paused':'active';await rrSave([{version:1,type:'membership',at:Date.now(),direction:b.dataset.direction,status,targets:[b.dataset.rrMember]}]);await rrManage();}catch(error){$('#learningDialogStatus').textContent=error.message;b.disabled=false;}};draw();
 }
 async function rrPlay(item,isCurrent){if(item._practiceMaterialId)return saPlay(item._practiceMaterialId,{isCurrent});const current=(await allEntries()).find(w=>reviewKeys(w).some(k=>reviewKeys(item).includes(k)));if(!current||rrSignature(current)!==rrSignature(item)||!isCurrent())return;const manual=await recordedReferenceForWord(current),blob=manual?.blob||audioBlobFor(current)||await learningCachedSpeech(current.word);if(!isCurrent())return;if(!blob)throw Error('暂无已保存录音，请从词条详情录制参考音');await learningPlayBlob(blob,manual?.start||0,manual?.end??null);}
-function rrSession(queue){
- let index=0;const h=learningEsc;
- const draw=()=>{if(index>=queue.length){learningModal('本轮已完成','<p>已保存本轮回忆结果。熟悉仍在清单中，下一次按计划出现；暂未到期的词句不需要立即再刷。</p><button data-pending-review>继续今日任务</button><button data-rr-manage>查看清单与目标</button>');return;}
+const rrSessionGlobalQuery=$;
+function rrSession(queue,options={}){
+ let index=0;const h=learningEsc,$=options.host?selector=>options.host.querySelector(selector):rrSessionGlobalQuery;
+ const status=()=>options.host?$('#rrSessionStatus'):$('#learningDialogStatus');
+ const render=(title,html)=>{if(options.host)options.host.innerHTML='<h3 class="rp-round-title">'+h(title)+'</h3>'+html+'<p id="rrSessionStatus" role="status"></p>';else learningModal(title,html);};
+ const draw=()=>{if(index>=queue.length){options.onStep?.(null);render('本轮已完成','<p>已保存本轮回忆结果。熟悉仍在清单中，下一次按计划出现；暂未到期的词句不需要立即再刷。</p><button data-pending-review>继续今日任务</button><button data-rr-manage>查看清单与目标</button>');return;}
  const row=queue[index],item=row.item,id='rolling-review:'+crypto.randomUUID(),recognition=row.direction==='wordToMeaning';let revealed=false,saving=false;
- learningModal('每日回忆 · '+(index+1)+' / '+queue.length,'<p class="tag-hint">'+h(rrDirections[row.direction])+' · '+(row.fresh?'新学':'到期复习')+'</p><h2>'+h(recognition?item.word:item.meaning)+'</h2>'+(row.direction==='meaningToWord'?'<label>先完整写出答案（也可在纸上写）<input id="rrWritten" lang="lo" autocomplete="off" placeholder="在这里默写"></label>':'<p>先独立回忆，再查看答案。</p>')+'<button id="rrReveal">显示答案并听录音</button><div id="rrAnswer" hidden><h3 lang="lo">'+h(recognition?item.meaning:item.word)+'</h3><p id="rrWritingResult"></p><button id="rrPlay">▶ 再听一次</button><p class="tag-hint">口述仅为自评，不自动判定发音。书写请核对完整拼写。</p><div class="rr-actions"><button id="rrRed">陌生／没想起</button><button id="rrYellow">模糊／有提示</button><button id="rrGreen" class="primary">熟悉／独立想起</button></div></div><button id="rrPause" class="rr-pause">早就会了／移出此方向复习</button><p class="tag-hint">移出只影响当前方向，保留词句和历史，可从清单恢复。</p>');
- const current=()=>index<queue.length&&queue[index]===row&&learningDialog.open&&$('#rrPlay')?.isConnected;
- const play=()=>rrPlay(item,current).catch(e=>{if(current())$('#learningDialogStatus').textContent=e.message;});$('#rrPlay').onclick=play;
+ options.onStep?.(row);
+ render('每日回忆 · '+(index+1)+' / '+queue.length,'<p class="tag-hint">'+h(rrDirections[row.direction])+' · '+(row.fresh?'新学':'到期复习')+'</p><h2>'+h(recognition?item.word:item.meaning)+'</h2>'+(row.direction==='meaningToWord'?'<label>先完整写出答案（也可在纸上写）<input id="rrWritten" lang="lo" autocomplete="off" placeholder="在这里默写"></label>':'<p>先独立回忆，再查看答案。</p>')+'<button id="rrReveal">显示答案并听录音</button><div id="rrAnswer" hidden><h3 lang="lo">'+h(recognition?item.meaning:item.word)+'</h3><p id="rrWritingResult"></p><button id="rrPlay">▶ 再听一次</button><p class="tag-hint">口述仅为自评，不自动判定发音。书写请核对完整拼写。</p><div class="rr-actions"><button id="rrRed">陌生／没想起</button><button id="rrYellow">模糊／有提示</button><button id="rrGreen" class="primary">熟悉／独立想起</button></div></div><button id="rrPause" class="rr-pause">早就会了／移出此方向复习</button><p class="tag-hint">移出只影响当前方向，保留词句和历史，可从清单恢复。</p>');
+ const current=()=>index<queue.length&&queue[index]===row&&(options.host?(activeView==='practice'&&options.isCurrent?.()!==false):learningDialog.open)&&$('#rrPlay')?.isConnected;
+ const play=()=>rrPlay(item,current).catch(e=>{if(current())status().textContent=e.message;});$('#rrPlay').onclick=play;
  $('#rrReveal').onclick=()=>{if(revealed)return;revealed=true;$('#rrAnswer').hidden=false;$('#rrReveal').hidden=true;const input=$('#rrWritten');if(input){input.disabled=true;const value=input.value.normalize('NFC').trim();if(value){const matches=value===item.word.normalize('NFC').trim();$('#rrWritingResult').textContent=matches?'书写与保存答案一致（不代表长期掌握）':'书写与答案不同：请按实际情况选陌生或模糊';if(!matches)$('#rrGreen').disabled=true;}}void play();};
- for(const [key,rating] of [['rrRed','red'],['rrYellow','yellow'],['rrGreen','green']])$('#'+key).onclick=async()=>{if(!revealed||saving||$('#'+key).disabled)return;saving=true;try{await rrAttempt(item,row.direction,rating,id);stopPracticeAudio();index++;draw();}catch(e){$('#learningDialogStatus').textContent='尚未保存：'+e.message;}finally{saving=false;}};
- $('#rrPause').onclick=async()=>{if(saving)return;saving=true;try{await rrSave([{version:1,type:'membership',at:Date.now(),direction:row.direction,status:'paused',targets:[reviewTarget(item)]}]);stopPracticeAudio();index++;draw();}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{saving=false;}};
+ for(const [key,rating] of [['rrRed','red'],['rrYellow','yellow'],['rrGreen','green']])$('#'+key).onclick=async()=>{if(!revealed||saving||$('#'+key).disabled)return;saving=true;options.onSaving?.(true);try{await rrAttempt(item,row.direction,rating,id);stopPracticeAudio();index++;draw();options.onRecorded?.();}catch(e){status().textContent='尚未保存：'+e.message;}finally{saving=false;options.onSaving?.(false);}};
+ $('#rrPause').onclick=async()=>{if(saving)return;saving=true;options.onSaving?.(true);try{await rrSave([{version:1,type:'membership',at:Date.now(),direction:row.direction,status:'paused',targets:[reviewTarget(item)]}]);stopPracticeAudio();index++;draw();options.onRecorded?.();}catch(e){status().textContent=e.message;}finally{saving=false;options.onSaving?.(false);}};
  };draw();
 }
 async function rrLegacyImport(){const {snap,words,model}=await rrRead(),registered=new Set(model.rows.map(r=>reviewTarget(r.item)+'|'+r.direction)),old=prRows(snap,words).filter(r=>Object.hasOwn(rrDirections,r.direction)&&!registered.has(reviewTarget(r.item)+'|'+r.direction)),ops=[];for(const direction of Object.keys(rrDirections)){const targets=[...new Set(old.filter(r=>r.direction===direction).map(r=>reviewTarget(r.item)))];if(targets.length)ops.push({version:1,type:'membership',direction,status:'active',targets,at:Date.now()});}if(ops.length)await rrSave(ops,snap);await rrManage();$('#learningDialogStatus').textContent='已把尚未入清单的旧版已测词句加入；已暂停项不会恢复。旧历史保留，不将旧熟悉评级直接认作长期掌握。';}
@@ -7203,6 +7207,52 @@ document.addEventListener('click',e=>{const scene=e.target.closest('[data-scene-
  #learningPanel .comm-home>.comm-manage{margin-bottom:8px}#learningPanel .comm-home>label{margin:6px 0 12px}
 }
 @media(prefers-reduced-motion:no-preference){#learningDialog .lc-choice-list>button{transition:background .12s ease}#learningDialog .lc-choice-list>button:hover{background:#f2f7f1}}
+</style>
+<script data-learning-bundle="review-practice-link">
+/* Daily learning and practice share rrModel/rrAttempt; legacy free practice stays intact. */
+function rpPlan(model,direction='all'){const matches=row=>direction==='all'||row.direction===direction;return [...model.due.filter(matches).slice(0,Math.max(0,model.goals.reviewGoal-model.reviewDone)),...model.fresh.filter(matches).slice(0,Math.max(0,model.goals.newGoal-model.newDone))];}
+let rpMode='daily',rpSaving=false,rpLoading=null,rpCurrent=null,rpSessionKey='',rpDirection='all',rpGeneration=0;
+const rpPanel=$('#practicePanel'),rpLegacy=document.createElement('div'),rpDaily=document.createElement('section'),rpTabs=document.createElement('div');
+rpLegacy.id='rpLegacy';rpLegacy.hidden=true;rpLegacy.append(...rpPanel.childNodes);
+const rpFreeNote=document.createElement('p');rpFreeNote.className='rp-hint';rpFreeNote.textContent='自由练习保留原来的独立记录；每日清单与学习中心共用目标，请切回“每日清单”完成今日任务。';rpLegacy.prepend(rpFreeNote);
+rpDaily.id='rpDaily';rpDaily.innerHTML='<h2>每日学习与默写</h2><p id="rpStats" role="status"></p><p class="rp-hint">与学习中心共用清单和每日目标 · 到期复习优先 · 口述、认词、书写分别记录</p><div class="rp-tools"><label>练习方向<select id="rpDirection"><option value="all">全部已加入方向</option><option value="meaningToSpeech">看中文说老挝语</option><option value="meaningToWord">看中文写老挝语</option><option value="wordToMeaning">看老挝语回忆中文</option></select></label><button data-rr-picker>添加词句</button><button data-rr-manage>清单与目标</button><button id="rpRefresh">检查今日任务</button></div><div id="rpSession" class="rp-session"></div><p id="rpStatus" role="status"></p>';
+rpTabs.className='rp-tabs';rpTabs.innerHTML='<button type="button" data-rp-mode="daily" aria-pressed="true">每日清单</button><button type="button" data-rp-mode="free" aria-pressed="false">自由练习</button>';rpPanel.append(rpTabs,rpDaily,rpLegacy);
+function rpGuard(){scGuard();if(rpSaving||typeof practiceChecking!=='undefined'&&practiceChecking)throw Error('请等待本次结果保存完成');}
+function rpToggle(){rpDaily.hidden=rpMode!=='daily';rpLegacy.hidden=rpMode!=='free';for(const button of rpTabs.querySelectorAll('[data-rp-mode]'))button.setAttribute('aria-pressed',String(button.dataset.rpMode===rpMode));}
+function rpStats(model){$('#rpStats').textContent='今日新学 '+model.newDone+' / '+model.goals.newGoal+' · 复习 '+model.reviewDone+' / '+model.goals.reviewGoal+' · 待新学 '+model.fresh.length+' · 已到期 '+model.due.length;}
+async function rpRefreshStats(){const {model}=await rrRead();if(activeView==='practice'&&rpMode==='daily')rpStats(model);}
+function rpCanRestart(){const answer=$('#rpSession').querySelector('#rrWritten');return !answer?.value||confirm('本题尚未评级，切换后需要重新回忆。继续吗？');}
+async function rpRender(options={}){
+ if(rpLoading)return rpLoading;
+ rpLoading=(async()=>{const {model}=await rrRead();if(activeView!=='practice'||rpMode!=='daily')return;rpToggle();rpStats(model);
+  const key=workspaceName('daily-learning')+'|'+reviewDay(Date.now())+'|'+rpDirection;
+  const valid=rpCurrent&&model.rows.some(row=>row.status==='active'&&row.direction===rpCurrent.direction&&reviewKeys(row.item).some(k=>reviewKeys(rpCurrent.item).includes(k))&&rrSignature(row.item)===rrSignature(rpCurrent.item));
+  const sameWorkspaceAndDirection=rpSessionKey.split('|').slice(0,-2).join('|')===key.split('|').slice(0,-2).join('|')&&rpSessionKey.split('|').at(-1)===rpDirection;
+  if(!options.restart&&sameWorkspaceAndDirection&&valid){rpSessionKey=key;return;}
+  stopPracticeAudio();const run=++rpGeneration;rpSessionKey=key;rpCurrent=null;const host=$('#rpSession'),queue=rpPlan(model,rpDirection);
+  if(!queue.length){host.innerHTML='<h3>当前没有待开始的今日任务</h3><p>到期复习 '+model.due.length+' 项，待新学 '+model.fresh.length+' 项。尚未到期或今日目标已完成的词句不会强行提前出题。</p><p>想专练书写，请在清单中加入书写方向；口述熟悉不会自动算作会写。</p><button data-rr-picker>选择学习词句</button><button data-rr-manage>查看清单／调整目标</button>';return;}
+  rrSession(queue,{host,isCurrent:()=>run===rpGeneration&&rpMode==='daily',onStep:row=>{rpCurrent=row;},onSaving:value=>{rpSaving=value;},onRecorded:()=>{void rpRefreshStats().catch(e=>{$('#rpStatus').textContent=e.message;});}});
+ })();try{await rpLoading;}finally{rpLoading=null;}
+}
+const rpLegacyChoose=choosePractice;
+choosePractice=async function(options={}){rpToggle();if(rpMode==='daily'){if(activeView==='practice')await rpRender(options);return;}return rpLegacyChoose(options);};
+function rpCancelFreeRequest(){if(typeof practiceRequest==='number')practiceRequest++;stopPracticeAudio();}
+prOpen=async function(){rpGuard();if(rpMode!=='daily')rpCancelFreeRequest();rpMode='daily';rpToggle();if(learningDialog.open)learningDialog.close();await showView('practice');if(activeView==='practice')await rpRender();};
+rpTabs.addEventListener('click',async e=>{const button=e.target.closest('[data-rp-mode]');if(!button)return;try{rpGuard();if(rpMode===button.dataset.rpMode)return;if(!rpCanRestart())return;rpCancelFreeRequest();rpMode=button.dataset.rpMode;rpToggle();await choosePractice({resume:true});}catch(error){$('#rpStatus').textContent=error.message;}});
+$('#rpDirection').onchange=async()=>{try{rpGuard();if(!rpCanRestart()){$('#rpDirection').value=rpDirection;return;}rpDirection=$('#rpDirection').value;await rpRender({restart:true});}catch(error){$('#rpDirection').value=rpDirection;$('#rpStatus').textContent=error.message;}};
+$('#rpRefresh').onclick=async()=>{try{rpGuard();if(rpCanRestart())await rpRender({restart:true});}catch(error){$('#rpStatus').textContent=error.message;}};
+learningDialog.addEventListener('close',()=>{if(activeView==='practice'&&rpMode==='daily'&&!rpSaving)void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='practice'&&rpMode==='daily'&&!learningHasWork()&&!rpSaving)void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});});
+const rpPrepareUpdate=window.prepareLaoAppUpdate;
+window.prepareLaoAppUpdate=async function(){rpGuard();if(!rpCanRestart())throw Error('已取消更新，保留当前默写内容');if(rpPrepareUpdate)await rpPrepareUpdate();};
+rpToggle();if(activeView==='practice')void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});
+</script>
+<style data-learning-bundle="review-practice-link">
+#practicePanel .rp-tabs{display:flex;gap:6px;padding:4px;background:#edf3ed;border-radius:12px;width:fit-content;max-width:100%;margin-bottom:16px}#practicePanel .rp-tabs button{border:0;background:transparent;color:#65796c;font-size:14px;font-weight:500;min-height:44px;padding:9px 16px;box-shadow:none;border-radius:9px}#practicePanel .rp-tabs [aria-pressed=true]{background:#fff;color:#087f70;box-shadow:0 1px 5px #183e3610}
+#practicePanel #rpDaily>h2{font-size:23px;margin:0 0 8px}#rpStats{font-size:14px;color:#245e4d;line-height:1.7;margin:6px 0}#rpDaily .rp-hint,#rpStatus{font-size:12px;color:#607266;line-height:1.7}
+#rpDaily .rp-tools{display:flex;flex-wrap:wrap;align-items:end;gap:9px;margin:14px 0}#rpDaily .rp-tools label{display:grid;gap:5px;font-size:12px;color:#607266;margin:0}#rpDaily .rp-tools select{font-size:16px;min-height:44px;margin:0;padding:8px 12px;max-width:100%;font-weight:400}#rpDaily .rp-tools button{font-size:13px;min-height:44px;padding:8px 12px;margin:0}
+#rpDaily .rp-session{max-width:780px;margin:20px auto 0;padding:24px;border:1px solid #d8e6dd;border-radius:18px;background:#fff;box-sizing:border-box}#rpDaily .rp-session .rp-round-title{font-size:16px;font-weight:500;color:#607266;margin:0 0 16px}#rpDaily .rp-session>h2{font-size:32px;line-height:1.8;margin:18px 0;overflow-wrap:anywhere}#rpDaily .rp-session p{font-size:14px;line-height:1.8}#rpDaily .rp-session .tag-hint{font-size:12px;color:#607266}#rpDaily .rp-session button{font-size:14px;min-height:44px;margin:4px 5px 4px 0;padding:9px 13px}#rpDaily .rp-session label{display:grid;gap:8px;font-size:14px}#rpDaily .rp-session input{font-size:20px;min-height:48px}#rpDaily .rp-session .rr-actions{margin:12px 0;gap:8px}#rpDaily .rp-session #rrAnswer h3{font-size:26px;line-height:1.8;overflow-wrap:anywhere}#rpDaily [hidden],#practicePanel>#rpLegacy[hidden],#practicePanel>#rpDaily[hidden]{display:none!important}
+@media(max-width:760px){#practicePanel #rpDaily>h2{font-size:19px}#rpStats{font-size:12px}#rpDaily .rp-hint{font-size:11px}#rpDaily .rp-tools{gap:6px}#rpDaily .rp-tools label{flex:1 1 100%}#rpDaily .rp-tools select{width:100%}#rpDaily .rp-tools button{font-size:12px;padding:8px 10px}#rpDaily .rp-session{padding:16px 12px;margin-top:12px;border-radius:13px}#rpDaily .rp-session>h2{font-size:27px;margin:12px 0}#rpDaily .rp-session button{font-size:12px;padding:8px 10px}#rpDaily .rp-session p{font-size:13px}#rpDaily .rp-session .rr-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}#rpDaily .rp-session .rr-actions button{margin:0;min-width:0;padding:8px 4px}}
 </style>
 <script src="./offline.js"></script>
 </body>

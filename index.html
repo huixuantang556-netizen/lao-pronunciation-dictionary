@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="12838aad1fa092a6">
+  <meta name="lao-app-build" content="b28046a645064e84">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7561,6 +7561,12 @@ function nsCardinalParts(value,tail=false){
  const [base,unit]=units.find(([base])=>n>=base),q=Math.floor(n/base),r=n%base;return [...nsCardinalParts(q),unit,...(r?nsCardinalParts(r,true):[])];
 }
 function nsDigitParts(raw){return [...raw.replace(/\D/g,'')].map(n=>nsDigits[Number(n)]);}
+// Amounts use hundred-thousands plus thousands; keep general place-value readings separate.
+function nsMoneyParts(value){
+ let n=Number(value);if(!Number.isSafeInteger(n)||n<0||n>999999999999)throw Error('金额超出已核对的范围');if(n<1000)return nsCardinalParts(n);
+ const out=[];for(const [base,label]of [[1000000,'ລ້ານ'],[100000,'ແສນ'],[1000,'ພັນ']]){const q=Math.floor(n/base);if(q){out.push(...nsCardinalParts(q),label);n%=base;}}
+ if(n)out.push(...nsCardinalParts(n,true));return out;
+}
 function nsDecimalParts(raw){const [whole,fraction]=raw.split('.');return [...nsCardinalParts(whole),'ຈຸດ',...nsDigitParts(fraction)];}
 function nsContext(text,start,end,hint=''){
  const before=text.slice(Math.max(text.lastIndexOf('\n',start-1)+1,start-55),start),nextLine=text.indexOf('\n',end),after=text.slice(end,Math.min(nextLine<0?text.length:nextLine,end+45));
@@ -7570,7 +7576,7 @@ function nsClassify(raw,c,override=''){
  const after=c.after.trimStart(),before=c.before.trimEnd(),hint=c.hint||'',compact=raw.replace(/[ +()]/g,''),digits=compact.replace(/\D/g,''),unit=after.match(/^(ກິໂລແມັດ|ກິໂລ|ແມັດ|ອົງສາ|ແກ້ວ|ຄົນ|ໂຕ|ອັນ|ກີບ|ໂດລາ|ບາດ|ໂລ|ລິດ|ປີ|ເດືອນ|ມື້)/)?.[0]||'';
  const money=['ກີບ','ບາດ','ໂດລາ'].includes(unit)||!unit&&(/(基普|老币|美元|泰铢|[万千].*(?:可以|便宜|贵|钱))/.test(hint)||/ລາຄາ\s*$/.test(before)||/^\d{1,3}(?:[.,]\d{3})+$/.test(raw)&&/ກີບ/.test(hint));
  const phone=/(?:ເບີ(?:ໂທ)?[^0-9\n]{0,40}|ໂທລະສັບ[^0-9\n]{0,20})$/.test(before)||/(电话号码|电话是|电话为|号码|phone|telephone)/i.test(hint);
- let kind='cardinal',normalized=compact,note='按十进制位值组合读，不把每一位分别念出。',parts=[],alternative='';
+ let kind='cardinal',normalized=compact,note='按十进制位值组合读，不把每一位分别念出。',parts=[],alternative='',currency='';
  if(digits.length>24)return {kind:'unsupported',raw,lao:'',parts:[],note:'这串数字过长，可能是标识符，请人工核对，不生成数量读法。',unit};
  if(override==='phone'||override==='identifier'||phone&&digits.length>=1&&!unit){kind=override||'phone';parts=nsDigitParts(raw);note='这是号码，不表示数量：逐位读，保留前导0；数字1用ໜຶ່ງ，不用复合数量末位的ເອັດ。分隔符仅用于分组。';}
  else if(/^\d{1,2}:\d{2}$/.test(raw)){
@@ -7591,7 +7597,11 @@ function nsClassify(raw,c,override=''){
   if(/\./.test(normalized))note='小数点读ຈຸດ；小数部分逐位读，保留0，数字1仍用ໜຶ່ງ。';
   if(negative)parts.unshift('ລົບ');if(percent){kind='percent';parts.push('ເປີເຊັນ');note+=' 百分数读出数量后接ເປີເຊັນ。';}
   else if(money)kind='money';else if(/ໂມງ/.test(after.slice(0,8)))kind='hour';else if(/ວັນທີ່?\s*$/.test(before))kind='dateDay';else if(/ເດືອນ\s*$/.test(before))kind='month';else if(/ປີ\s*$/.test(before)&&digits.length===4)kind='year';else if(/ທີ່?\s*$/.test(before))kind='ordinal';else if(['ປີ','ເດືອນ','ມື້'].includes(unit))kind='duration';else if(unit)kind='measure';
-  if(kind==='money'){note+=' 数量后接货币单位；ລະ表示“每／每一”。';const n=Number(normalized);if(n>=10000&&n<1000000&&n%1000===0)alternative=nsCardinalParts(n/1000).join('')+'ພັນ';}
+  if(kind==='money'){
+   const [whole,fraction]=normalized.split('.');parts=[...nsMoneyParts(whole),...(fraction?['ຈຸດ',...nsDigitParts(fraction)]:[])];if(negative)parts.unshift('ລົບ');
+   currency=['ກີບ','ບາດ','ໂດລາ'].includes(unit)?unit:'';if(currency)parts.push(currency);
+   note+=' 金额优先按“百万／十万＋多少千＋余数”组合，例如240,000为“两十万＋四十千”，不把“四万”作为本页首选读法。ລະ表示“每／每一”。'+(currency?' 本页完整金额读法与生成发音已包含原句明确写出的货币单位。':' 原句没有明确货币单位，不擅自补“基普”。');
+  }
   if(kind==='month')note+=' ເດືອນ＋数字表示第几个月／月份，不把月份数字逐位念。';
   if(kind==='dateDay'||kind==='ordinal')note+=' ທີ／ທີ່ 后的数字表示日期或顺序；原有标记已经在句子里，不重复补写。';
   if(kind==='year')note+=' 此处按年份的整数量读法展示，不按电话号码逐位读；历法仍须依原文确认。';
@@ -7600,7 +7610,7 @@ function nsClassify(raw,c,override=''){
   if(normalized==='1'&&/(ຄົນ|ແກ້ວ|ໂຕ|ອັນ)\s*$/.test(before)){kind='measure';note+=' 本句把“一”放在量词后，是“名词＋量词＋一”的用法；不要照中文顺序改写。';}
   if(parts.includes('ຊາວ'))note+=' 20用ຊາວ，不按“二＋十”拼。';if(parts.includes('ເອັດ'))note+=' 此复合数末位1用ເອັດ；单独1和号码中的1用ໜຶ່ງ。';
  }
- return {raw,kind,normalized,parts,lao:parts.join(kind==='phone'||kind==='identifier'?' ':' '),compactLao:parts.join(''),unit,note,alternative,breakdown:parts.map(lao=>({lao,meaning:nsGloss[lao]||''}))};
+ return {raw,kind,normalized,parts,lao:parts.join(kind==='money'?'':' '),compactLao:parts.join(''),unit,currency,note,alternative,breakdown:parts.map(lao=>({lao,meaning:({'ກີບ':'基普','ບາດ':'泰铢','ໂດລາ':'美元'})[lao]||nsGloss[lao]||''}))};
 }
 function nsScan(text,hint=''){
  text=String(text||'');const out=[],regex=/\+?\d{4}[-/]\d{1,2}[-/]\d{1,2}|\+?\d+(?:[.,]\d+)*(?::\d+)*(?:[%％])?/g;let m;
@@ -7632,7 +7642,7 @@ async function nsPlay(reading,generate,isCurrent=()=>true){
 async function nsOpen(number,button,override=''){
  scGuard();if(recorder||typeof rpSaving!=='undefined'&&rpSaving)throw Error('请先完成当前保存或录音');const reading=override?{...number,...nsClassify(number.raw,number.context,override)}:number,parent=typeof letterDetailCapture==='function'?letterDetailCapture(button):null;
  stopPracticeAudio();if(parent)letterDetailParents.push(parent);const h=learningEsc,uncertain=!reading.lao;
- learningModal('数字表达 · '+reading.raw,'<section class="ns-study"><p class="ns-kind">'+h(nsLabels[reading.kind]||'数字表达')+'</p><p class="ns-original">原句：<span lang="lo">'+h(number.context.line)+'</span></p>'+(uncertain?'<p class="ns-note">'+h(reading.note)+'</p><div class="ns-actions"><button data-ns-choice="cardinal">按分组数量读</button><button data-ns-choice="identifier">按号码／编号逐位读</button>'+(number.raw.includes('.')?'<button data-ns-choice="decimal">按小数读</button>':'')+'</div>':'<p class="ns-reading" lang="lo">'+h(reading.lao)+'</p><p class="ns-note">生成发音需联网，可能消耗额度；打开本页或点击数字不会自动生成。</p><div class="ns-actions"><button id="nsPlay">▶ 播放已有发音</button><button id="nsGenerate">Gemini 生成读法发音</button></div><h3>构词与语法</h3><div class="ns-breakdown">'+reading.breakdown.map(p=>'<span><strong lang="lo">'+h(p.lao)+'</strong><small>'+h(p.meaning)+'</small></span>').join('')+'</div><p class="ns-note">'+h(reading.note)+'</p>'+(reading.unit?'<p>句中相邻单位：<strong lang="lo">'+h(reading.unit)+'</strong>。以上读法只展开原数字，不重复添加原句已有的单位。</p>':'')+(reading.alternative&&saTextKey(reading.alternative)!==saTextKey(reading.lao)?'<p>金额中也常用“多少千”的组合：<span lang="lo">'+h(reading.alternative)+'</span>。两种组合数值相同。</p>':'')+'<div id="nsPhonetics"></div>')+'<p id="nsStatus" role="status"></p><details class="ns-sources"><summary>读法依据与说明</summary><p>这是按语境生成的数字用法补充，不替换原句、旧解析或录音；推测分类不等于母语者逐条核音。号码不作数量计算。</p>'+nsSources.map(([label,url])=>'<p><a href="'+url+'" target="_blank" rel="noopener noreferrer">'+h(label)+'</a></p>').join('')+'</details></section>');
+ learningModal('数字表达 · '+reading.raw,'<section class="ns-study"><p class="ns-kind">'+h(nsLabels[reading.kind]||'数字表达')+'</p><p class="ns-original">原句：<span lang="lo">'+h(number.context.line)+'</span></p>'+(uncertain?'<p class="ns-note">'+h(reading.note)+'</p><div class="ns-actions"><button data-ns-choice="cardinal">按分组数量读</button><button data-ns-choice="identifier">按号码／编号逐位读</button>'+(number.raw.includes('.')?'<button data-ns-choice="decimal">按小数读</button>':'')+'</div>':'<p class="ns-reading" lang="lo">'+h(reading.lao)+'</p><p class="ns-note">生成发音需联网，可能消耗额度；打开本页或点击数字不会自动生成。</p><div class="ns-actions"><button id="nsPlay">▶ 播放已有发音</button><button id="nsGenerate">Gemini 生成读法发音</button></div><h3>构词与语法</h3><div class="ns-breakdown">'+reading.breakdown.map(p=>'<span><strong lang="lo">'+h(p.lao)+'</strong><small>'+h(p.meaning)+'</small></span>').join('')+'</div><p class="ns-note">'+h(reading.note)+'</p>'+(reading.unit?'<p>句中相邻单位：<strong lang="lo">'+h(reading.unit)+'</strong>。'+(reading.currency?'上方金额读法和发音已包含该币种；原句本身不做替换，不会重复插入。':'以上读法只展开原数字，不重复添加原句已有的单位。')+'</p>':'')+(reading.alternative&&saTextKey(reading.alternative)!==saTextKey(reading.lao)?'<p>金额中也常用“多少千”的组合：<span lang="lo">'+h(reading.alternative)+'</span>。两种组合数值相同。</p>':'')+'<div id="nsPhonetics"></div>')+'<p id="nsStatus" role="status"></p><details class="ns-sources"><summary>读法依据与说明</summary><p>这是按语境生成的数字用法补充，不替换原句、旧解析或录音；推测分类不等于母语者逐条核音。号码不作数量计算。</p>'+nsSources.map(([label,url])=>'<p><a href="'+url+'" target="_blank" rel="noopener noreferrer">'+h(label)+'</a></p>').join('')+'</details></section>');
  learningDialog.classList.add('ns-dialog');if(parent)letterDetailBackButton();const host=learningDialog.querySelector('.ns-study');let request=0;const current=()=>host.isConnected&&learningDialog.open;
  for(const b of host.querySelectorAll('[data-ns-choice]'))b.onclick=async()=>{try{const next={...number,...nsClassify(number.raw,number.context,b.dataset.nsChoice)};if(next.lao){host.querySelector('#nsStatus').textContent='';const parentButton=button;learningClose();await nsOpen(next,parentButton);}else host.querySelector('#nsStatus').textContent=next.note;}catch(e){if(current())host.querySelector('#nsStatus').textContent=e.message;}};
  if(uncertain)return;

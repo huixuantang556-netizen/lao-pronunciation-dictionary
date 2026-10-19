@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c736ec8b52d5b3a9">
+  <meta name="lao-app-build" content="0080b9eb583a5f89">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -432,7 +432,7 @@ async function importCodaClassroom(){
     const selectedDictionaryFields = loadDictionaryFields();
     let activeView = 'dictionary';
     let practiceAudio=null, practiceAudioUrl=null, practiceAudioBlob=null;
-    function stopPracticeAudio() { if(typeof pronListenStop==='function')pronListenStop();if(typeof alphabetListenStop==='function')alphabetListenStop();if(typeof lessonPageStop==='function')lessonPageStop();playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
+    function stopPracticeAudio({preservePageQueue=false}={}) { if(typeof pronListenStop==='function')pronListenStop();if(typeof alphabetListenStop==='function')alphabetListenStop();if(!preservePageQueue&&!(typeof lessonPagePauseForDetail==='function'&&lessonPagePauseForDetail())&&typeof lessonPageStop==='function')lessonPageStop();playbackGeneration++; if(practiceAudio){practiceAudio.pause();practiceAudio.onended=null;practiceAudio.onerror=null;}if(practiceAudioUrl)URL.revokeObjectURL(practiceAudioUrl);practiceAudio=null;practiceAudioUrl=null; }
     function setPracticeAudio(item) { stopPracticeAudio();practiceAudioBlob=item?audioBlobFor(item):null;$('#practiceDetail').disabled=!item;$('#practicePlay').disabled=!item;$('#practicePlay').textContent=!item?'暂无题目':'▶ 播放';$('#practicePlay').title=!item?'暂无题目':'优先播放手录参考发音，其次已有录音或默认发音'; }
     let entryReturnOrigin=null;
     function rememberEntryOrigin(){
@@ -2470,7 +2470,7 @@ const learningPanel=document.createElement('section');learningPanel.id='learning
 $('.grid').append(learningPanel);
 const learningNav=document.createElement('button');learningNav.type='button';learningNav.dataset.view='learning';learningNav.textContent='老挝语学习';$('#viewNav [data-view="dictionary"]').after(learningNav);
 const learningDialog=document.createElement('dialog');learningDialog.id='learningDialog';document.body.append(learningDialog);
-function learningClose(){if(learningRecorder||learningBusy){alert('请先停止录音或等待保存完成。');return;}if((learningDraft?.dirty||learningPendingRecording)&&!confirm('还有未保存的内容，放弃并关闭？'))return;learningDialog.close();learningDraft=null;learningPendingRecording=null;stopPracticeAudio();}
+function learningClose(){if(learningRecorder||learningBusy){alert('请先停止录音或等待保存完成。');return;}if((learningDraft?.dirty||learningPendingRecording)&&!confirm('还有未保存的内容，放弃并关闭？'))return;learningDialog.close();learningDraft=null;learningPendingRecording=null;stopPracticeAudio({preservePageQueue:true});}
 learningDialog.addEventListener('cancel',e=>{e.preventDefault();learningClose();});
 learningDialog.addEventListener('click',e=>{if(e.target===learningDialog){const r=learningDialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)learningClose();}});
 function learningModal(title,html){learningDialog.className=learningSettings?'learn-settings':'';learningDialog.innerHTML='<header><h2>'+learningEsc(title)+'</h2><button type="button" data-learn="close" aria-label="关闭">×</button></header>'+html+'<p id="learningDialogStatus" role="status"></p>';if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;if(!learningDialog.open)learningDialog.showModal();}
@@ -2643,6 +2643,7 @@ async function learningCompare(id){
  if(!completed)return;$('#learningDialogStatus').textContent='🔊 正在播放我的录音';await learningPlayBlob(personal,own?.start||0,own?.end??null);
 }
 async function learningOpenDetail(id){
+ if(typeof lessonPageBeginDetail==='function')lessonPageBeginDetail();
  const resolved=await learningResolve(id),{w,snap,words}=resolved;const place=snap.learningPlacements.find(p=>p.lessonId===learningLesson.id&&p.materialId===resolved.m.id&&!p.deleted);const m={...resolved.m,purpose:place?.purpose||resolved.m.purpose,note:place?.textbookNote||resolved.m.note,translationZh:place?.textbookMeaning||resolved.m.translationZh,tags:[...new Set([...resolved.m.tags,...(place?.tags||[])])]};learningDetail=id;learningDraft=null;learningPendingRecording=null;
  const related=w?await learningRelatedHtml(w):'',h=learningEsc;
  learningModal(w?.word||m.textLao,'<div class="learn-detail learn-detail-compact"><button class="learn-detail-play" data-learn="play" data-id="'+h(id)+'">▶ 播放</button>'+(m.audioNeedsReview?'<p class="learn-audio-warning">文字已修改，已有发音需要核对。</p><button data-learn="v2-review-audio" data-id="'+h(id)+'">已逐一核对：现有录音仍适用</button>':'')+(m.purpose?'<p class="learn-purpose">用途：'+h(m.purpose)+'</p>':'')+'<p class="ipa">'+h(w?.ipa||'')+'</p><p class="learn-meaning">'+h(w?w.meaning:m.translationZh)+'</p>'+(w&&m.translationZh&&m.translationZh!==w.meaning?'<p class="learn-textbook-meaning">教材释义：'+h(m.translationZh)+'</p>':'')+'<div class="learn-chips">'+[...new Set([...(w?tagsFor(w):[]),...m.tags])].map(t=>'<span>'+h(t)+'</span>').join('')+'</div><p class="learn-note">'+h(w?.note||'')+'</p>'+(m.note?'<p class="learn-note">教材备注：'+h(m.note)+'</p>':'')+(w?noteImagesMarkup(w.noteImages):'')+related+'<p class="tag-hint learn-source">来源：'+h(m.source||m.sourceType)+' · '+h(m.contentType==='reading_drill'?'教材朗读练习':m.contentType==='word'?'词典词条':m.unitType==='phrase'?'短语':'句子')+'</p>'+(m.focusLetters.length||m.focusVowels.length?'<p class="learn-focus">训练重点：'+h([...m.focusLetters,...m.focusVowels].join(' · '))+'</p>':'')+'<div class="learn-related letter-examples"><p class="letter-example-status" role="status"></p>'+(m.contentType==='word'?'':'<h3>关联词条</h3><p class="tag-hint">单击听发音 · 双击打开详情（Shift+Enter 也可）</p>'+(m.pendingLinkedWords?.length?'<p class="tag-hint">待关联（词库缺少或有同名词）：'+h(m.pendingLinkedWords.join('、'))+'</p>':'')+m.linkedWordSyncIds.map(ref=>{const x=learningFindWord(ref,words);return x?'<button data-letter-example-word="'+x.id+'">'+h(x.word)+' · '+h(x.meaning)+'</button>':'<span>原关联词已删除或尚未同步</span>';}).join(''))+'</div>'+'<section class="learn-audio-bottom" aria-label="录音与音频管理"><div class="learn-toolbar"><button data-learn="gemini" data-id="'+h(id)+'">Gemini 默认发音</button><button data-learn="record" id="learningRecord">🎙 开始跟读</button>'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改文字资料</button>':'<button data-learn="edit-material" data-id="'+h(id)+'">修改材料</button>')+'</div><p class="tag-hint">手录参考发音优先；没有时复用已有音频或 Gemini 默认发音。参考音与我的跟读分别保存，支持顺序对比。</p><div class="learn-record-controls"><button data-learn="record-reference" id="learningReferenceRecord">🎙 录制参考发音</button><div id="learningRecordingDraft"><button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button></div></div><button data-learn="compare" data-id="'+h(id)+'">参考发音 → 我的跟读</button>'+await learningWordAudioManagerHtml(m,w,snap)+ (m.schemaVersion===2&&typeof lessonV2AudioControls==='function'?lessonV2AudioControls(m):'')+(place?'<button data-learn="unlink" data-id="'+h(id)+'">移除此课关联（保留原资料）</button>':'')+'</section></div>');
@@ -2739,9 +2740,9 @@ async function learningAction(e){
 }
 learningPanel.onclick=learningAction;learningDialog.addEventListener('click',learningAction);
 document.addEventListener('click',e=>{if(e.target.closest('[data-learn]')&&!learningPanel.contains(e.target)&&!learningDialog.contains(e.target))void learningAction(e);});
-learningPanel.ondblclick=e=>{if(learningMulti)return;const g=e.target.closest('[data-learn="glyph"]');if(g){stopPracticeAudio();void learningGlyph(g.dataset.form,true).catch(learningError);return;}const b=e.target.closest('[data-learn="play-card"]');if(b){stopPracticeAudio();void learningOpenDetail(b.dataset.id).catch(learningError);}};
+learningPanel.ondblclick=e=>{if(learningMulti)return;const g=e.target.closest('[data-learn="glyph"]');if(g){stopPracticeAudio();void learningGlyph(g.dataset.form,true).catch(learningError);return;}const b=e.target.closest('[data-learn="play-card"]');if(b){stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);}};
 let learningPress=null,learningSuppressClick=false;
-learningPanel.addEventListener('pointerdown',e=>{if(learningMulti)return;const b=e.target.closest('[data-learn="play-card"]');if(!b||e.pointerType==='mouse')return;learningSuppressClick=false;learningPress={x:e.clientX,y:e.clientY,timer:setTimeout(()=>{learningSuppressClick=true;stopPracticeAudio();void learningOpenDetail(b.dataset.id).catch(learningError);},550)};});
+learningPanel.addEventListener('pointerdown',e=>{if(learningMulti)return;const b=e.target.closest('[data-learn="play-card"]');if(!b||e.pointerType==='mouse')return;learningSuppressClick=false;learningPress={x:e.clientX,y:e.clientY,timer:setTimeout(()=>{learningSuppressClick=true;stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);},550)};});
 function learningCancelPress(){if(learningPress)clearTimeout(learningPress.timer);learningPress=null;}
 learningPanel.addEventListener('pointermove',e=>{if(learningPress&&Math.hypot(e.clientX-learningPress.x,e.clientY-learningPress.y)>10)learningCancelPress();});
 learningPanel.addEventListener('pointerup',learningCancelPress);learningPanel.addEventListener('pointercancel',learningCancelPress);
@@ -3372,6 +3373,12 @@ const lessonPages=new Map();
 let lessonPageBar=null;
 document.addEventListener('change',e=>{if(e.target.matches('[data-page-speed]')&&lessonPageAudio&&e.target.closest('[data-page-key]')===lessonPageBar)lessonPageAudio.playbackRate=Number(e.target.value)||1;});
 let lessonPageRun=0,lessonPageAudio=null,lessonPageURL=null,lessonPageJump=null,lessonPageCardJump=null;
+let lessonPageDetailBar=null;
+function lessonPageBeginDetail(){if(lessonPageBar)lessonPageDetailBar=lessonPageBar;}
+function lessonPagePauseForDetail(){
+ if(!lessonPageBar||lessonPageDetailBar!==lessonPageBar||typeof learningDialog==='undefined'||!learningDialog.open)return false;
+ if(lessonPageAudio&&!lessonPageAudio.paused){lessonPageAudio.pause();const status=lessonPageBar.querySelector('[data-page-status]');if(status)status.textContent='已暂停整页播放，可关闭详情后继续';}return true;
+}
 const lessonDurationCache=new WeakMap(),lessonDurationProbes=new Set();
 const lessonPageMarked=new Map();
 function lessonPageClearMarked(){for(const [card,previous] of lessonPageMarked){card.classList.remove('page-audio-current');if(previous===null)card.removeAttribute('aria-current');else card.setAttribute('aria-current',previous);}lessonPageMarked.clear();}
@@ -3394,7 +3401,7 @@ async function lessonQueueDurations(playlist,current){
  const durations=new Array(playlist.length);let index=0;
  await Promise.all(Array.from({length:Math.min(4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
-function lessonPageStop(){lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+function lessonPageStop(){lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course){
  let blocks=section.blocks;
@@ -3546,7 +3553,10 @@ document.addEventListener('click',async e=>{
 document.addEventListener('click',e=>{
  const b=e.target.closest('.learn-card [data-learn="play-card"],.learn-card [data-learn="play"]');
  if(b&&!(b.dataset.learn==='play-card'&&e.detail>1)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(typeof learningHasWork==='function'&&learningHasWork())&&lessonPageCardJump?.(b.dataset.id,b)){e.preventDefault();e.stopImmediatePropagation();return;}
- if(e.target.closest('[data-learn], [data-view]'))lessonPageStop();
+ const action=e.target.closest('[data-learn]');
+ if(action&&['detail','word-detail','follow','close'].includes(action.dataset.learn)||b&&b.dataset.learn==='play-card'&&e.detail>1)return;
+ if(action&&typeof learningDialog!=='undefined'&&learningDialog.contains(e.target)&&['play','audio','own','gemini','compare','preview-recording','word-audio'].includes(action.dataset.learn)){lessonPagePauseForDetail();return;}
+ if(e.target.closest('[data-learn], [data-view], [data-cf-record], [data-cf-regenerate]'))lessonPageStop();
 },true);
 
 let lessonPageAnchor=null,lessonPageHost=null,lessonPageFollowFrame=false;
@@ -5498,7 +5508,7 @@ function saRenderContent(a){
 async function saOpenNested(id,button){
  if(learningHasWork()||recorder)throw Error('请先保存解析、编辑内容或完成录音。');
  if(!id)throw Error('请先保存解析，再打开点读资料。');
- const parent=letterDetailCapture(button);stopPracticeAudio();await learningOpenDetail(id);
+ const parent=letterDetailCapture(button);stopPracticeAudio({preservePageQueue:true});await learningOpenDetail(id);
  if(parent&&learningDetail===id){letterDetailParents.push(parent);letterDetailBackButton();}
 }
 async function saPlay(id,options={}){

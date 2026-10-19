@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="795c2664f0e04941">
+  <meta name="lao-app-build" content="4ad2b66f821d156e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1146,16 +1146,10 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
  if(!['lao_dictionary_records','lao_learning_records'].includes(table))throw Error('同步表无效。');
  const learning=table==='lao_learning_records',label=learning?'学习资料':'词典',headers={Prefer:'return=representation',...(learning?{'x-learning-schema':'2'}:{})};
  const key=r=>JSON.stringify([r.kind,r.id]),byKey=new Map(rows.map(r=>[key(r),r]));if(byKey.size!==rows.length)throw Error('本次同步有重复记录，已停止。');
- let rpc=false;
- if(rows.length>1){
-  let capabilities=cloudBatchCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudBatchCapabilities.set(api,capabilities);}
-  if(!capabilities.has(table)){
-   status('正在检查批量同步接口…');
-   try{const probe=await api('/rest/v1/rpc/lao_sync_batch_v1',{method:'POST',body:{target_table:table,changes:[]},extraHeaders:headers});if(!Array.isArray(probe)||probe.length)throw Error('批量同步接口返回格式异常。');capabilities.set(table,true);}
-   catch(error){if(error.status!==404)throw error;capabilities.set(table,false);}
-  }
-  rpc=capabilities.get(table);
- }
+ let capabilities=cloudBatchCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudBatchCapabilities.set(api,capabilities);}
+ // First real atomic batch also establishes capability. No extra empty round trip.
+ // Only an explicit endpoint-not-found may fall back; uncertain writes never replay.
+ let rpc=rows.length>1&&capabilities.get(table)!==false;
  // New records can use the existing bulk-insert endpoint without a server upgrade.
  // Existing records retain per-record revision conditions in compatibility mode.
  const batches=rpc?cloudTextBatches(rows):[...cloudTextBatches(rows.filter(r=>r.revision===null)),...cloudTextBatches(rows.filter(r=>r.revision!==null))];
@@ -1174,12 +1168,16 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
   await cloudSyncPool(batch,2,prepare);
   if(rpc){
    const changes=batch.map(r=>({record_kind:r.kind,record_id:r.id,payload:r.payload,expected_revision:r.revision,...(!learning?{deleted:r.deleted}:{})}));
-   const result=await api('/rest/v1/rpc/lao_sync_batch_v1',{method:'POST',body:{target_table:table,changes},extraHeaders:headers});validate(result,batch);completed+=batch.length;status(message,{done:completed,total:rows.length});
-  }else if(batch[0].revision===null){
-   const body=batch.map(r=>({owner_id:uid,record_kind:r.kind,record_id:r.id,payload:r.payload,...(!learning?{deleted:r.deleted}:{})}));
-   const result=await api('/rest/v1/'+table,{method:'POST',body:body.length===1?body[0]:body,extraHeaders:headers});validate(result,batch);completed+=batch.length;status(message,{done:completed,total:rows.length});
-  }else{
-   await cloudSyncPool(batch,4,async r=>{
+   try{const result=await api('/rest/v1/rpc/lao_sync_batch_v1',{method:'POST',body:{target_table:table,changes},extraHeaders:headers});validate(result,batch);capabilities.set(table,true);completed+=batch.length;status(message,{done:completed,total:rows.length});continue;}
+   catch(error){if(error.status!==404)throw error;capabilities.set(table,false);rpc=false;}
+  }
+  const fresh=batch.filter(r=>r.revision===null),updates=batch.filter(r=>r.revision!==null);
+  if(fresh.length){
+   const body=fresh.map(r=>({owner_id:uid,record_kind:r.kind,record_id:r.id,payload:r.payload,...(!learning?{deleted:r.deleted}:{})}));
+   const result=await api('/rest/v1/'+table,{method:'POST',body:body.length===1?body[0]:body,extraHeaders:headers});validate(result,fresh);completed+=fresh.length;status(message,{done:completed,total:rows.length});
+  }
+  if(updates.length){
+   await cloudSyncPool(updates,4,async r=>{
     const body={payload:r.payload,...(!learning?{deleted:r.deleted}:{})};
     const result=await api('/rest/v1/'+table+'?owner_id=eq.'+uid+'&record_kind=eq.'+r.kind+'&record_id=eq.'+encodeURIComponent(r.id)+'&revision=eq.'+r.revision,{method:'PATCH',body,extraHeaders:headers});validate(result,[r]);completed++;status(message,{done:completed,total:rows.length});
    });
@@ -1248,20 +1246,26 @@ async function cloudReadRemote(uid,api,table,known,status){
  const learning=table==='lao_learning_records',kinds=learning?['learningMaterials','learningPlacements','learningAudio']:['entry','default_audio'];if(!['lao_dictionary_records','lao_learning_records'].includes(table))throw Error('同步表无效。');
  const identity=row=>{if(!row||row.owner_id!==uid||!kinds.includes(row.record_kind)||typeof row.record_id!=='string'||!row.record_id.length||row.record_id.length>512||!Number.isSafeInteger(row.revision)||row.revision<1)throw Error('云端记录身份或版本异常。');return row.record_kind+':'+row.record_id;};
  const validate=row=>{const key=identity(row);if(!row.payload||typeof row.payload!=='object'||Array.isArray(row.payload)||(learning?row.payload.id!==row.record_id:typeof row.deleted!=='boolean'))throw Error('云端记录内容格式异常。');return key;};
- const fallback=async()=>{const out=new Map();for(let offset=0;;){const rows=await api('/rest/v1/'+table+'?select=*&owner_id=eq.'+uid+'&order=record_kind.asc,record_id.asc&limit=500&offset='+offset);if(!Array.isArray(rows))throw Error('云端返回格式异常。');for(const row of rows){const key=validate(row);if(out.has(key))throw Error('云端分页发生变化，请重新同步。');out.set(key,row);}status('正在兼容读取'+(learning?'学习资料':'词典')+'：'+out.size+' 项');if(rows.length<500)return out;offset+=rows.length;}};
- let capabilities=cloudReadCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudReadCapabilities.set(api,capabilities);}if(capabilities.get(table)===false)return fallback();
+ // The ordinary REST interface also supports revision-only reads. A missing optional RPC
+ // must not force a 20+ MB full-payload download on every two-word progress update.
+ const restIndex=async()=>{const out=[];for(let offset=0;;){const width=offset===0?1:Math.min(4,Math.max(1,Math.ceil((known.size-offset)/500)+1)),pages=new Array(width);
+  await cloudSyncPool(Array.from({length:width},(_,i)=>i),4,async i=>{const rows=await api('/rest/v1/'+table+'?select=owner_id,record_kind,record_id,revision&owner_id=eq.'+encodeURIComponent(uid)+'&order=record_kind.asc,record_id.asc&limit=500&offset='+(offset+i*500));if(!Array.isArray(rows))throw Error('云端返回格式异常。');pages[i]=rows;});
+  let ended=false;for(const rows of pages){if(ended){if(rows.length)throw Object.assign(Error('云端分页发生变化，请重试。'),{code:'40001'});continue;}out.push(...rows);if(out.length>100000)throw Error('云端版本索引过大。');if(rows.length<500)ended=true;}status('正在兼容并行读取版本索引：'+out.length+' 项');if(ended)return out;offset+=width*500;}};
+ const restRead=async batch=>{const out=[];let keys=[],size=0;const flush=async()=>{if(!keys.length)return;const filter='('+keys.join(',')+')',rows=await api('/rest/v1/'+table+'?select=*&owner_id=eq.'+encodeURIComponent(uid)+'&or='+encodeURIComponent(filter)+'&limit='+keys.length);if(!Array.isArray(rows))throw Error('云端返回格式异常。');out.push(...rows);keys=[];size=0;};
+  for(const r of batch){const key='and(record_kind.eq.'+JSON.stringify(r.record_kind)+',record_id.eq.'+JSON.stringify(r.record_id)+',revision.eq.'+r.revision+')',bytes=encodeURIComponent(key).length;if(keys.length&&(keys.length>=40||size+bytes>6000))await flush();keys.push(key);size+=bytes;}await flush();return out;};
+ let capabilities=cloudReadCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudReadCapabilities.set(api,capabilities);}
  for(let attempt=0;attempt<2;attempt++)try{
   status('正在读取'+(learning?'学习资料':'词典')+'版本索引（不下载未变内容）…');
-  let index;try{index=await api('/rest/v1/rpc/lao_sync_index_v1',{method:'POST',body:{target_table:table}});}catch(error){if(error.status===404){capabilities.set(table,false);return fallback();}throw error;}
-  if(!Array.isArray(index)||index.length>100000)throw Error('云端版本索引无效或过大。');capabilities.set(table,true);
+  let index;if(capabilities.get(table)===false)index=await restIndex();else try{index=await api('/rest/v1/rpc/lao_sync_index_v1',{method:'POST',body:{target_table:table}});capabilities.set(table,true);}catch(error){if(error.status!==404)throw error;capabilities.set(table,false);index=await restIndex();}
+  if(!Array.isArray(index)||index.length>100000)throw Error('云端版本索引无效或过大。');
   const out=new Map(),changed=[],seen=new Set();
   for(const row of index){const key=identity(row);if(seen.has(key))throw Error('云端版本索引有重复编号。');seen.add(key);const cached=known.get(key);if(cached&&cached.revision===row.revision){validate(cached);out.set(key,cached);}else changed.push(row);}
   for(const key of known.keys())if(!seen.has(key))throw Error('云端缺少以前同步过的记录，已停止，避免误删。');
   const batches=[];for(let i=0;i<changed.length;i+=100)batches.push(changed.slice(i,i+100));let done=0;
   status('云端有 '+changed.length+' 项变化，其余 '+out.size+' 项复用上次版本',{done,total:changed.length});
   await cloudSyncPool(batches,2,async batch=>{
-   const rows=await api('/rest/v1/rpc/lao_sync_read_v1',{method:'POST',body:{target_table:table,keys:batch.map(r=>({record_kind:r.record_kind,record_id:r.record_id,revision:r.revision}))}});
-   if(!Array.isArray(rows)||rows.length!==batch.length)throw Error('云端变化记录返回不完整。');const wanted=new Map(batch.map(r=>[r.record_kind+':'+r.record_id,r.revision])),returned=new Set();
+   let rows;if(capabilities.get(table)===false)rows=await restRead(batch);else try{rows=await api('/rest/v1/rpc/lao_sync_read_v1',{method:'POST',body:{target_table:table,keys:batch.map(r=>({record_kind:r.record_kind,record_id:r.record_id,revision:r.revision}))}});}catch(error){if(error.status!==404)throw error;capabilities.set(table,false);rows=await restRead(batch);}
+   if(!Array.isArray(rows)||rows.length!==batch.length)throw Object.assign(Error('云端变化记录返回不完整，可能被其他设备修改。'),{code:'40001'});const wanted=new Map(batch.map(r=>[r.record_kind+':'+r.record_id,r.revision])),returned=new Set();
    for(const row of rows){const key=validate(row);if(returned.has(key)||wanted.get(key)!==row.revision)throw Object.assign(Error('读取期间云端版本变化'),{code:'40001'});returned.add(key);out.set(key,row);}
    done+=rows.length;status('正在读取变化内容 · 复用 '+(index.length-changed.length)+' 项',{done,total:changed.length});
   });return out;
@@ -1655,9 +1659,11 @@ async function cloudReadRemote(uid,api,table,known,status){
         await ensureSession();
         const token=session.token,user=await cloudRequest('/auth/v1/user',{token});
         if(user?.id!==session.user.id){const error=new Error('账号验证不一致，请退出后重新登录。');error.status=401;session=null;clearSaved();throw error;}
-        const rows=await cloudRequest('/rest/v1/lao_dictionary_records?select=record_id&owner_id=eq.'+encodeURIComponent(user.id)+'&limit=1',{token});
+        const [rows,audio]=await Promise.all([
+          cloudRequest('/rest/v1/lao_dictionary_records?select=record_id&owner_id=eq.'+encodeURIComponent(user.id)+'&limit=1',{token}),
+          cloudRequest('/storage/v1/object/list/lao-dictionary-audio',{method:'POST',token,body:{prefix:user.id+'/',limit:1,offset:0}})
+        ]);
         if(!Array.isArray(rows))throw new Error('数据表返回格式异常，请检查项目配置。');
-        const audio=await cloudRequest('/storage/v1/object/list/lao-dictionary-audio',{method:'POST',token,body:{prefix:user.id+'/',limit:1,offset:0}});
         if(!Array.isArray(audio))throw new Error('音频存储返回格式异常，请检查项目配置。');
         status((session.user.id===cloudWorkspace?'已登录，可直接点击“云端同步”。':'已登录，打开账号词典后即可同步。')+'连接检查通过；尚未上传或下载词条。'+storageNotice);
       }
@@ -2887,6 +2893,12 @@ async function learningSeedLessonOne(){
 </script>
 <script data-learning-bundle="cloud">
 /* Learning records use their own cloud table so older dictionary clients remain compatible. */
+function learningApplySyncDelta(t,before,after){
+ for(const kind of learningStores){const old=new Map(before[kind].map(row=>[row.id,row])),next=new Set(after[kind].map(row=>row.id)),store=t.objectStore(kind);
+  for(const row of after[kind]){const previous=old.get(row.id);if(!previous||!cloudSame(previous,row)||kind==='learningAudio'&&previous.blob!==row.blob)store.put(row);}
+  for(const row of before[kind])if(!next.has(row.id))store.delete(row.id);
+ }
+}
 async function learningCloudSync(uid,api,status){
  if(uid!==cloudWorkspace||learningHasWork())throw new Error('请完成学习材料编辑或录音后再同步。');
  learningBusy=true;
@@ -2942,7 +2954,7 @@ async function learningCloudSync(uid,api,status){
   status('正在保存本机学习资料与同步检查点…');
   const checkpoint=Object.fromEntries(plan.filter(p=>p.target).map(p=>[p.key,p.target]));
   const database=await openDB(),t=database.transaction([...learningStores,'cloud_meta'],'readwrite'),done=transactionDone(t);let remaining=learningStores.length;
-  for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{if(!cloudSame(r.result,snap[kind])){t.abort();return;}if(--remaining===0){learningRestoreTransaction(t,merged);t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
+  for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{if(!cloudSame(r.result,snap[kind])){t.abort();return;}if(--remaining===0){learningApplySyncDelta(t,snap,merged);t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
   await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status('学习资料同步完成：学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
  }finally{learningBusy=false;}
 }
@@ -7081,12 +7093,18 @@ async function rrRecords(kind='new'){
  const rows=(kind==='review'?m.todayReview:m.todayNew).slice().sort((a,b)=>b.todayEvents.at(-1).at-a.todayEvents.at(-1).at);
  learningModal('今日学习记录','<div class="rr-records"><div class="rr-record-tabs">'+rrTodayStats(m)+'</div><p class="tag-hint">'+h(reviewDay(Date.now()))+' · 每日清单记录，不含自由练习与章节巩固。按方向计项，同一词句同一方向今天多次回忆只计一项。</p><h3>'+(kind==='review'?'今日复习':'今日新学')+' · '+rows.length+' 项</h3><div id="rrRecordList" class="rr-record-list">'+(rows.map((r,i)=>{
   const ids=new Set((r.item._practiceCourses||[]).map(c=>c.id)),labels=courses.filter(c=>ids.has(c.id)).map(scCourseLabel),last=r.todayEvents.at(-1);
-  return '<article class="rr-item rr-history-item"><div><button type="button" class="rr-record-word" data-rr-record-detail="'+i+'" aria-label="'+h('打开 '+r.item.word+' 的详情')+'"><strong lang="lo">'+h(r.item.word)+'</strong></button><p>'+h(r.item.meaning)+'</p><small>'+h(rrDirections[r.direction])+'</small><small class="rr-source">来源：'+h(labels.join('；')||(ids.size?'原章节不可用':'我的词典（未关联章节）'))+'</small><small>最近评级：'+h(reviewLabels[last.rating])+' · '+h(new Date(last.at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+' · 今日回忆 '+r.todayEvents.length+' 次'+(r.status==='paused'?' · 已暂停':'')+'</small></div><button type="button" data-rr-record-detail="'+i+'">词句详情 ›</button></article>';
+  return '<article class="rr-item rr-history-item"><div><button type="button" class="rr-record-word" data-rr-record-word="'+i+'" aria-label="'+h('单击播放 '+r.item.word+'，双击打开详情')+'"><strong lang="lo">'+h(r.item.word)+'</strong></button><p>'+h(r.item.meaning)+'</p><small>'+h(rrDirections[r.direction])+'</small><small class="rr-source">来源：'+h(labels.join('；')||(ids.size?'原章节不可用':'我的词典（未关联章节）'))+'</small><small>最近评级：'+h(reviewLabels[last.rating])+' · '+h(new Date(last.at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+' · 今日回忆 '+r.todayEvents.length+' 次'+(r.status==='paused'?' · 已暂停':'')+'</small></div><div class="rr-history-actions"><button type="button" data-rr-record-play="'+i+'">▶ 播放</button><button type="button" data-rr-record-detail="'+i+'">词句详情 ›</button></div></article>';
  }).join('')||'<p class="rr-empty">今天还没有'+(kind==='review'?'复习':'新学')+'记录。完成每日清单的评级后，会出现在这里。</p>')+'</div><div class="rr-actions"><button data-rr-manage>清单与目标</button></div></div>');
  learningDialog.classList.add('rr-records-dialog');
  $('#rrRecordList')?.setAttribute('aria-label','今日学习词句');
  const list=learningDialog.querySelector?.('.rr-record-list')||$('#rrRecordList');
- if(list)list.onclick=async e=>{const b=e.target.closest('[data-rr-record-detail]');if(!b)return;const raw=b.dataset.rrRecordDetail;if(!/^\d+$/.test(raw))return;const row=rows[Number(raw)];if(!row)return;b.disabled=true;try{scGuard();const fresh=await rrRead(),item=rrCatalog(fresh.snap,fresh.words).find(w=>reviewKeys(w).some(k=>reviewKeys(row.item).includes(k)));if(!item||rrSignature(item)!==rrSignature(row.item))throw Error('此词句已修改、删除或尚未同步，请刷新学习记录');const id=item._practiceMaterialId||'word:'+item.syncId;if(typeof saOpenNested==='function')await saOpenNested(id,b);else await learningOpenDetail(id);}catch(error){$('#learningDialogStatus').textContent='详情暂时无法打开：'+error.message;}finally{b.disabled=false;}};
+ if(list){let timer=null,sequence=0;
+  const act=async(b,raw,detail)=>{const run=++sequence;if(!/^\d+$/.test(raw||''))return;const row=rows[Number(raw)];if(!row)return;const current=()=>run===sequence&&list.isConnected!==false&&learningDialog.open!==false;b.disabled=true;
+   try{scGuard();stopPracticeAudio();const fresh=await rrRead();if(!current())return;const item=rrCatalog(fresh.snap,fresh.words).find(w=>reviewKeys(w).some(k=>reviewKeys(row.item).includes(k)));if(!item||rrSignature(item)!==rrSignature(row.item))throw Error('此词句已修改、删除或尚未同步，请刷新学习记录');if(detail){const id=item._practiceMaterialId||'word:'+item.syncId;if(typeof saOpenNested==='function')await saOpenNested(id,b);else await learningOpenDetail(id);}else await rrPlay(item,current);
+   }catch(error){if(current())$('#learningDialogStatus').textContent=(detail?'详情暂时无法打开：':'播放未完成：')+error.message;}finally{b.disabled=false;}};
+  list.onclick=e=>{const b=e.target.closest('[data-rr-record-word],[data-rr-record-play],[data-rr-record-detail]');if(!b)return;clearTimeout(timer);sequence++;if(b.dataset.rrRecordDetail!==undefined)return act(b,b.dataset.rrRecordDetail,true);if(b.dataset.rrRecordPlay!==undefined)return act(b,b.dataset.rrRecordPlay,false);if(e.detail>1)return;timer=setTimeout(()=>{if(list.isConnected!==false)void act(b,b.dataset.rrRecordWord,false);},300);};
+  list.ondblclick=e=>{const b=e.target.closest('[data-rr-record-word]');if(!b)return;e.preventDefault();clearTimeout(timer);sequence++;return act(b,b.dataset.rrRecordWord,true);};
+ }
 
 }
 
@@ -7223,6 +7241,11 @@ button.rr-stat-link:hover{background:#eaf4ef}
 .rr-history-item:last-child{border-bottom:0}
 .rr-history-item p{font-size:15px;margin:4px 0 8px;overflow-wrap:anywhere}
 .rr-history-item small{line-height:1.6;overflow-wrap:anywhere}
+.rr-history-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.rr-history-actions{align-self:center}
+.rr-history-actions button{white-space:nowrap;min-height:44px}
+.rr-history-item>.rr-history-actions{flex:0 0 auto;max-width:100%}
+@media(max-width:600px){.rr-history-item{flex-wrap:wrap}.rr-history-item>.rr-history-actions{justify-content:flex-start;flex:1 1 100%}}
 .rr-empty{padding:20px 0;color:#6a8077;line-height:1.7}
 @media(max-width:600px){
  #learningDialog.rr-manager-dialog,#learningDialog.rr-records-dialog{width:calc(100% - 20px);padding:18px 14px;border-radius:18px}
@@ -7649,7 +7672,11 @@ async function nsOpen(number,button,override=''){
  if(uncertain)return;
  const play=async generate=>{const seq=++request;const b=host.querySelector(generate?'#nsGenerate':'#nsPlay');b.disabled=true;try{await nsPlay(reading,generate,()=>seq===request&&current());if(current()&&seq===request)host.querySelector('#nsStatus').textContent='正在播放展开后的老挝语，不是原始阿拉伯数字。';}catch(e){if(current()&&seq===request)host.querySelector('#nsStatus').textContent=e.message;}finally{b.disabled=false;}};
  host.querySelector('#nsPlay').onclick=()=>play(false);host.querySelector('#nsGenerate').onclick=()=>play(true);
- try{if(typeof paReusable==='function'){const snap=await learningSnapshot(),digest=await paDigest(paRules()),saved=paReusable(snap,reading.compactLao||reading.lao,digest);if(current()&&saved)host.querySelector('#nsPhonetics').innerHTML='<details><summary>已保存的老挝语读法语音分析</summary>'+paAnalysisHtml(saved)+'</details>';}}catch(e){if(current())host.querySelector('#nsStatus').textContent='语音分析暂未匹配，读法与语法仍可查看。';}
+ try{if(typeof nsNumberAnalysis==='function'){
+  const analysis=nsNumberAnalysis(reading);if(current()&&analysis){host.querySelector('#nsPhonetics').innerHTML='<details open><summary>数字读法语音分析</summary>'+nsNumberAnalysisHtml(analysis)+'</details><button type="button" id="nsSaveAnalyses">保存本机全部数字语音分析</button><p class="ns-note">直接查看无需保存。保存后会加入学习资料，可随现有云端同步带到其他设备；不改原句、录音或学习进度。</p>';
+   const save=host.querySelector('#nsSaveAnalyses');save.onclick=async()=>{save.disabled=true;try{const result=await nsSaveNumberAnalyses();if(current())host.querySelector('#nsStatus').textContent='已补齐 '+result.covered+' / '+result.total+' 种数字读法，新增保存 '+result.added+' 份分析。跨设备请再执行云端同步。';}catch(e){if(current())host.querySelector('#nsStatus').textContent='未完成保存：'+e.message;}finally{save.disabled=false;}};
+  }
+ }else if(typeof paReusable==='function'){const snap=await learningSnapshot(),digest=await paDigest(paRules()),saved=paReusable(snap,reading.compactLao||reading.lao,digest);if(current()&&saved)host.querySelector('#nsPhonetics').innerHTML='<details><summary>已保存的老挝语读法语音分析</summary>'+paAnalysisHtml(saved)+'</details>';}}catch(e){if(current())host.querySelector('#nsStatus').textContent='语音分析暂未匹配，读法与语法仍可查看：'+e.message;}
 }
 function nsInlineMeaning(reading){
  if(!reading.lao)return reading.raw+' · 读法需确认';
@@ -7680,8 +7707,9 @@ async function nsSelect(number,button){
   card.querySelector('.ns-inline-examples').innerHTML=related.length?'<details><summary>关联例句 · '+related.length+'</summary>'+related.map((m,i)=>'<p><span lang="lo">'+learningEsc(m.textLao)+'</span><br>'+learningEsc(m.translationZh||'')+'<br><button type="button" data-ns-inline-example="'+i+'">例句详情</button></p>').join('')+'</details>':'';
   const examplesFold=card.querySelector('.ns-inline-examples details');if(examplesFold&&typeof appPreference==='function')examplesFold.open=appPreference('expandExamples');
   for(const b of card.querySelectorAll('[data-ns-inline-example]'))b.onclick=async e=>{e.stopPropagation();if(!current())return;try{stopPracticeAudio();await saOpenNested(related[Number(b.dataset.nsInlineExample)].id,b);}catch(error){status.textContent=error.message;}};
-  let saved=null;if(number.lao&&typeof paReusable==='function'){const digest=await paDigest(paRules());if(!current())return;saved=paReusable(snap,number.compactLao||number.lao,digest);}
-  if(current())card.querySelector('.ns-inline-phonetic-body').innerHTML=saved?paAnalysisHtml(saved):'<p>尚无这段老挝语读法的已保存语音分析；不会用原阿拉伯数字的旧解析代替。展开“构词与语法”可查看数字用法。</p>';
+  let saved=number.lao&&typeof nsNumberAnalysis==='function'?nsNumberAnalysis(number):null;const numberAnalysis=!!saved;
+  if(!saved&&number.lao&&typeof paReusable==='function'){const digest=await paDigest(paRules());if(!current())return;saved=paReusable(snap,number.compactLao||number.lao,digest);}
+  if(current())card.querySelector('.ns-inline-phonetic-body').innerHTML=saved?(numberAnalysis?nsNumberAnalysisHtml(saved):paAnalysisHtml(saved)):'<p>尚无这段老挝语读法的已保存语音分析；不会用原阿拉伯数字的旧解析代替。展开“构词与语法”可查看数字用法。</p>';
  }catch(error){if(current())card.querySelector('.ns-inline-phonetic-body').textContent='已有分析暂时无法读取：'+error.message;}
  await audio;
 }
@@ -7726,6 +7754,87 @@ if(typeof MutationObserver==='function'){let pending=false;new MutationObserver(
 .rr-record-word{background:transparent;border:0;padding:0;margin:0;text-align:left;color:#24564a;text-decoration:underline;text-decoration-color:#bfd9cd;text-underline-offset:5px}.rr-history-item>button{align-self:center;min-height:44px}.rr-history-item .rr-record-word strong{font-size:24px}
 @media(max-width:600px){#learningDialog.ns-dialog{padding:18px 14px}.ns-study .ns-reading{padding:12px;font-size:27px}.rr-history-item{flex-wrap:wrap}.rr-history-item>div{flex:1 1 100%}.rr-history-item>button{margin-bottom:4px}}
 </style>
+<script data-learning-bundle="number-phonetics">
+/* Curated number syllables, composed at explicit number-part boundaries. No AI, audio or network requests. */
+const nsPhoneticVersion='number-phonetics-2026-10-19-v1';
+// text, onset, vowel prototype, length, written coda, coda sound, class, actual onset (ho-leading only)
+const nsPhoneticRows=[
+ ['ສູນ','ສ','◌ູ','long','ນ','n','high'],
+ ['ໜຶ່ງ','ໜ','◌ຶ','short','ງ','ŋ','high','ນ'],
+ ['ສອງ','ສ','◌ໍ','long','ງ','ŋ','high'],
+ ['ສາມ','ສ','◌າ','long','ມ','m','high'],
+ ['ສີ່','ສ','◌ີ','long','','','high'],
+ ['ຫ້າ','ຫ','◌າ','long','','','high'],
+ ['ຫົກ','ຫ','ໂ◌ະ','short','ກ','k','high'],
+ ['ເຈັດ','ຈ','ເ◌ະ','short','ດ','t','middle'],
+ ['ແປດ','ປ','ແ◌','long','ດ','t','middle'],
+ ['ເກົ້າ','ກ','ເ◌ົາ','not-applicable','','','middle'],
+ ['ສິບ','ສ','◌ິ','short','ບ','p','high'],
+ ['ຊາວ','ຊ','◌າ','long','ວ','w','low'],
+ ['ເອັດ','ອ','ເ◌ະ','short','ດ','t','middle'],
+ ['ຮ້ອຍ','ຮ','◌ໍ','long','ຍ','j','low'],
+ ['ພັນ','ພ','◌ະ','short','ນ','n','low'],
+ ['ໝື່ນ','ໝ','◌ື','long','ນ','n','high','ມ'],
+ ['ແສນ','ສ','ແ◌','long','ນ','n','high'],
+ ['ລ້ານ','ລ','◌າ','long','ນ','n','low'],
+ ['ໂມງ','ມ','ໂ◌','long','ງ','ŋ','low'],
+ ['ນາ','ນ','◌າ','long','','','low'],
+ ['ທີ','ທ','◌ີ','long','','','low'],
+ ['ເຄິ່ງ','ຄ','ເ◌ິ','short','ງ','ŋ','low'],
+ ['ກີບ','ກ','◌ີ','long','ບ','p','middle'],
+ ['ບາດ','ບ','◌າ','long','ດ','t','middle'],
+ ['ໂດ','ດ','ໂ◌','long','','','middle'],
+ ['ລາ','ລ','◌າ','long','','','low'],
+ ['ຈຸດ','ຈ','◌ຸ','short','ດ','t','middle'],
+ ['ລົບ','ລ','ໂ◌ະ','short','ບ','p','low'],
+ ['ເປີ','ປ','ເ◌ີ','long','','','middle'],
+ ['ເຊັນ','ຊ','ເ◌ະ','short','ນ','n','low']
+];
+const nsPhoneticParts=Object.fromEntries(nsPhoneticRows.map(row=>[row[0],[row[0]]]));
+Object.assign(nsPhoneticParts,{'ນາທີ':['ນາ','ທີ'],'ໂດລາ':['ໂດ','ລາ'],'ເປີເຊັນ':['ເປີ','ເຊັນ']});
+function nsNumberAnalysis(reading,rules=paRules()){
+ if(!reading?.lao||!Array.isArray(reading.parts)||!reading.parts.length)return null;
+ const original=reading.compactLao||reading.parts.join('');
+ if(reading.parts.join('')!==original)throw Error('数字读法与构词边界不一致');
+ const units=[];
+ for(const part of reading.parts){
+  const syllables=nsPhoneticParts[part];if(!syllables)return null;
+  for(const text of syllables){
+   const [,initial,base,length,coda,sound,toneClass,leading]=nsPhoneticRows.find(row=>row[0]===text);
+   const written=(coda?text.slice(0,-coda.length):text).replace(initial,'◌').replace(/[່້໊໋]/gu,'');
+   const life=coda?(['k','p','t'].includes(sound)?'dead':'live'):length==='short'?'dead':'live';
+   const classes={high:'高辅音',middle:'中辅音',low:'低辅音'};
+   let explanation=initial+'为'+classes[toneClass]+(leading?'的前置ຫ合体，ຫ不单独发音，实际首辅音为'+leading:'')+'；'+base+(length==='long'?'为长元音':length==='short'?'为短元音':'为内含 /w/ 韵尾的特殊韵母，不按普通短元音死音节处理')+'。';
+   if(written!==base)explanation+='本音节元音写作'+written+'（去掉声调符号和尾辅音后的形式）。';
+   explanation+=coda?'尾辅音'+coda+'读 /'+sound+'/，'+(['k','p','t'].includes(sound)?'只作收尾阻塞、不另加元音；为死音节。':'为活韵尾，整节为活音节。'):'无独立书写尾辅音；'+(life==='dead'?'短元音直接结尾，按本教材归死音节。':'整节为活音节。');
+   if(text==='ເອັດ')explanation+='用于复合数末位的1；电话号码中的1仍读ໜຶ່ງ，不替换为ເອັດ。';
+   units.push({kind:'syllable',text,onset:{written:initial,sound:leading||initial,mode:leading?'ho-leading':'normal',toneClass},vowel:{base,written,length},coda:{written:coda,sound},shape:coda?'closed':'no-coda',life,toneMark:(text.match(/[່້໊໋]/u)||[])[0]||'none',tone:'',ipa:'',explanation,analysisNeedsReview:false});
+  }
+ }
+ return paValidateAnalysis({format:paFormat,original,notes:'数字读法专项分析：按明确的数词构词边界逐音节展开，声调名称沿用当前教材并实时推导，不等同于普通话声调。电话号码和编号逐位读，保留前导0；金额按语境包含原币种。这里完成的是书写结构、拼读及声调规则分析，未逐条核听录音，不提供未经核实的IPA；借词实际语流仍须参考可靠录音。',units},original,rules);
+}
+function nsNumberAnalysisHtml(analysis){
+ return paAnalysisHtml(analysis).replace('逐音节拼读 · AI分析初稿，结合教材与实际发音核对。','数字专项逐音节拼读 · 按当前教材规则推导；实际语音仍请结合录音核对。');
+}
+function nsCollectNumberReadings(snap,entries=[]){
+ const unique=new Map(),add=(text,hint)=>{for(const reading of nsScan(text||'',hint||''))if(reading.lao)unique.set(reading.compactLao,reading);};
+ for(const m of snap.learningMaterials||[]){if(m.deleted||m.courseDefinition||m.rollingReview||m.accountProfile||!/[0-9]/.test(m.textLao||''))continue;add(m.textLao,nsContextHint(m,snap));}
+ for(const w of entries)add(w.word,w.meaning);
+ return [...unique.values()];
+}
+async function nsSaveNumberAnalyses(){
+ scGuard();if(typeof rpSaving!=='undefined'&&rpSaving)throw Error('请先完成当前题目的保存');
+ const snap=await learningSnapshot(),words=await allEntries(),rules=paRules(),digest=await paDigest(rules),readings=nsCollectNumberReadings(snap,words),rows=[],now=Date.now();let covered=0;
+ for(const reading of readings){const analysis=nsNumberAnalysis(reading,rules);if(!analysis)continue;covered++;
+  const id='phonetic-profile:'+await paDigest({ruleDigest:digest,analysis});
+  if(snap.learningMaterials.some(m=>m.id===id))continue; // Never resurrect a deleted profile or overwrite user annotations.
+  rows.push({...learningBlank(id,'reading_drill',analysis.original),analysisOwner:'phonetic-cache',phoneticProfile:true,phoneticAnalysis:analysis,ruleDigest:digest,updatedAt:now});
+ }
+ scGuard();if(typeof rpSaving!=='undefined'&&rpSaving)throw Error('请先完成当前题目的保存');
+ if(rows.length)await learningWrite({learningMaterials:rows},snap);
+ return {total:readings.length,covered,added:rows.length};
+}
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f741cab26c9e4904">
+  <meta name="lao-app-build" content="69450144360cdaf7">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8169,7 +8169,8 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 }
 /* Keep navigation stable; panel entry transforms also disturb fixed players. */
 .panel:not(.hidden){animation:none!important}
-button,a,summary,[role="button"],label,input,select,textarea{-webkit-tap-highlight-color:transparent}
+/* Native tap highlight can target a focusable article or any delegated-click ancestor. */
+html,body,body *,body *::before,body *::after{-webkit-tap-highlight-color:transparent!important}
 button,a,summary,[role="button"]{touch-action:manipulation}
 @media(hover:none) and (pointer:coarse){button{transition:none}button:not(:disabled):active{filter:brightness(.96)}}
 /* Do not let entry animations turn the panel into a containing block for fixed controls. */

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="fb31a0bcf3df1d93">
+  <meta name="lao-app-build" content="cfaaff5816db5e73">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2510,8 +2510,9 @@ function learningPathCard(route,title,label,description,path){const h=learningEs
 async function renderLearning(){
  if(activeView==='learning')await learningSeedLessonOne();
  const token=++learningRenderToken;const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);if(token!==learningRenderToken||activeView!=='learning')return;
- const courses=learningCourses(snap);learningLesson=courses.find(c=>c.id===learningLesson.id)||courses[0]||learningFirstLesson;
- if(learningRoute==='lesson'&&!courses.some(c=>c.id===learningLesson.id))learningRoute='teaching';
+ const courses=learningCourses(snap),current=courses.find(c=>c.id===learningLesson.id);
+ if(learningRoute==='lesson'&&!current)learningRoute=learningLesson.library==='communication'?'communication':'teaching';
+ learningLesson=current||courses.find(c=>(c.library==='communication')===(learningLesson.library==='communication'))||courses[0]||learningFirstLesson;
  learningPanel.className='panel'+(activeView==='learning'?'':' hidden')+(learningSettings?' learn-settings':'');
  const h=learningEsc,nav='<button class="learn-back" data-learn="home">← 老挝语学习</button>';
  let html='';
@@ -2778,14 +2779,24 @@ function learningValidateLinks(snap){if(typeof paValidateLinks==='function')paVa
 function learningRestoreTransaction(tx,snap){if(snap)for(const kind of learningStores)for(const row of snap[kind])tx.objectStore(kind).put(row);}
 
 function learningCourses(snap,includeDeleted=false){const records=snap.learningMaterials.filter(m=>m.courseDefinition),custom=records.map(m=>m.courseDefinition),hidden=new Set(records.filter(m=>m.courseDeleted).map(m=>m.courseDefinition.id));const purged=new Set(records.filter(m=>m.coursePurged).map(m=>m.courseDefinition.id));return [custom.find(c=>c.id===learningFirstLesson.id)||{...learningFirstLesson,chapterName:'第一章'},...custom.filter(c=>c.id!==learningFirstLesson.id)].filter(c=>!purged.has(c.id)&&(includeDeleted||!hidden.has(c.id)));}
-function learningCourseRemovalHtml(snap,courses){const h=learningEsc,deleted=learningCourses(snap,true).filter(c=>!courses.some(x=>x.id===c.id));return '<details class="learn-knowledge"><summary>管理课程／删除测试课程</summary><p>只移出课程目录，保留词典、学习材料和全部录音，可恢复。</p>'+courses.map(c=>'<p>'+h(c.textbookName+' · '+c.chapterName+' · '+c.title)+' <button data-learn="course-delete" data-id="'+h(c.id)+'">删除课程</button></p>').join('')+'</details>'+(deleted.length?'<details class="learn-knowledge"><summary>已删除课程（'+deleted.length+'）</summary>'+deleted.map(c=>'<p><label><input type="checkbox" data-course-purge="'+h(c.id)+'" style="width:auto"> '+h(c.textbookName+' · '+c.chapterName+' · '+c.title)+'</label>'+' <button data-learn="course-restore" data-id="'+h(c.id)+'">恢复课程</button></p>').join('')+'<button data-learn="course-purge-all">全选</button> <button data-learn="course-purge-none">取消勾选</button> <button data-learn="course-purge">彻底删除所选课程</button><p>从目录和已删除列表移除，不能点恢复。保留底层学习材料、私人词典和全部录音；重新导入可重新建立课程入口。</p></details>':'');}
+function learningCourseRemovalHtml(snap,courses){
+ const h=learningEsc,library=learningRoute==='communication'?'communication':'teaching',book=typeof lbSelected==='function'?lbSelected(library,snap):null,scope=c=>(c.library==='communication')===(library==='communication')&&(!book||lbBook(c).key===book.key),visible=learningCourses(snap),deleted=learningCourses(snap,true).filter(c=>scope(c)&&!visible.some(x=>x.id===c.id));courses=courses.filter(scope);
+ return '<details class="learn-knowledge"><summary>管理课程／删除测试课程</summary><p>'+(book?'当前教材：'+h(book.name)+'。':'当前分类：'+(library==='communication'?'交流型材料':'教学型材料')+'。')+'只移出课程目录，保留词典、学习材料和全部录音，可恢复。</p>'+courses.map(c=>'<p>'+h(c.textbookName+' · '+c.chapterName+' · '+c.title)+' <button data-learn="course-delete" data-id="'+h(c.id)+'">删除课程</button></p>').join('')+'</details>'+(deleted.length?'<details class="learn-knowledge"><summary>已删除课程（'+deleted.length+'）</summary>'+deleted.map(c=>'<p><label><input type="checkbox" data-course-purge="'+h(c.id)+'" style="width:auto"> '+h(c.textbookName+' · '+c.chapterName+' · '+c.title)+'</label>'+' <button data-learn="course-restore" data-id="'+h(c.id)+'">恢复课程</button></p>').join('')+'<button data-learn="course-purge-all">全选</button> <button data-learn="course-purge-none">取消勾选</button> <button data-learn="course-purge">彻底删除所选课程</button><p>从目录和已删除列表移除，不能点恢复。保留底层学习材料、私人词典和全部录音；重新导入可重新建立课程入口。</p></details>':'');
+}
+function learningManagementLibrary(course){return ['teaching','communication'].includes(learningRoute)?learningRoute:course?.library==='communication'?'communication':'teaching';}
+async function learningReturnAfterManagement(library){learningResetMulti();learningRoute=library;if(typeof lbSelection!=='undefined'&&!lbSelected(library,await learningSnapshot())){lbSelection[library]='';if(library==='communication'){communicationFolder='';communicationScene='';}}await renderLearning();}
 async function learningPurgeCourses(ids){
  const snap=await learningSnapshot(),selected=[...new Set(ids)];
  if(!selected.length)throw Error('请先勾选要彻底删除的课程');
  const rows=selected.map(id=>{const row=snap.learningMaterials.find(m=>m.courseDefinition?.id===id);if(!row?.courseDeleted||row.coursePurged)throw Error('课程状态已变化，请刷新后重新勾选');return {...row,coursePurged:true,courseDeleted:true,updatedAt:Date.now()};});
  await learningWrite({learningMaterials:rows},snap);
 }
-async function learningSetCourseDeleted(id,deleted){const snap=await learningSnapshot(),course=learningCourses(snap,true).find(c=>c.id===id);if(!course)throw Error('课程不存在或已变化，请刷新后重试');const old=snap.learningMaterials.find(m=>m.courseDefinition?.id===id);await learningWrite({learningMaterials:[{...learningBlank('course:'+id,'knowledge',course.title),...old,courseDefinition:course,courseDeleted:deleted,updatedAt:Date.now()}]},snap);}
+async function learningSetCoursesDeleted(ids,deleted,snapshot=null){
+ const snap=snapshot||await learningSnapshot(),selected=[...new Set(ids)],courses=learningCourses(snap,true);if(!selected.length)throw Error('请先勾选章节');const now=Date.now();
+ const materials=selected.map(id=>{const course=courses.find(c=>c.id===id);if(!course)throw Error('课程不存在或已变化，请刷新后重试');const old=snap.learningMaterials.find(m=>m.courseDefinition?.id===id);return {...learningBlank('course:'+id,'knowledge',course.title),...old,courseDefinition:course,courseDeleted:deleted,updatedAt:now};});
+ await learningWrite({learningMaterials:materials},snap);return materials.length;
+}
+async function learningSetCourseDeleted(id,deleted){return learningSetCoursesDeleted([id],deleted);}
 function learningResetMulti(){learningMulti=false;learningSelected.clear();learningDrag=null;}
 async function learningBatchRemove(ids,lessonId=learningLesson.id,section=learningTab){const snap=await learningSnapshot(),selected=new Set(ids),rows=snap.learningPlacements.filter(p=>p.lessonId===lessonId&&p.section===section&&!p.deleted&&selected.has(p.materialId));if(!rows.length)return;await learningWrite({learningPlacements:rows.map(p=>({...p,deleted:true,updatedAt:Date.now()}))},snap);}
 async function learningReorder(source,target,after=false,lessonId=learningLesson.id,section=learningTab){if(source===target)return;const snap=await learningSnapshot(),group=p=>section==='reading_drill'?(p.unitType||snap.learningMaterials.find(m=>m.id===p.materialId)?.unitType):'all',all=snap.learningPlacements.filter(p=>p.lessonId===lessonId&&p.section===section&&!p.deleted),from=all.find(p=>p.materialId===source),to=all.find(p=>p.materialId===target);if(!from||!to)throw new Error('卡片已发生变化，请重试。');if(group(from)!==group(to))throw new Error('请在同一朗读分组内拖动。');const rows=all.filter(p=>group(p)===group(from)).sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id)),rest=rows.filter(p=>p.id!==from.id),index=rest.findIndex(p=>p.id===to.id)+(after?1:0);rest.splice(index,0,from);await learningWrite({learningPlacements:rest.map((p,i)=>({...p,position:i,updatedAt:Date.now()}))},snap);}
@@ -2844,9 +2855,9 @@ async function learningAuthorAction(a,b){
   if(!ids.length)throw Error('请先勾选要彻底删除的课程');
   if(selected.some(c=>!c))throw Error('课程状态已变化，请刷新后重试');
   if(!confirm('彻底删除以下 '+ids.length+' 门课程？\\n'+selected.map(c=>c.chapterName+' · '+c.title).join('\\n')+'\\n将从目录和已删除列表移除，不能点恢复。保留底层学习材料、私人词典及全部录音。建议先导出完整备份。'))return true;
-  await learningPurgeCourses(ids);learningRoute='teaching';await renderLearning();$('#learningStatus').textContent='所选课程已从目录和已删除列表彻底移除，不能点恢复；底层材料、词条和录音保留。';return true;
+  const library=learningManagementLibrary(selected[0]);await learningPurgeCourses(ids);await learningReturnAfterManagement(library);$('#learningStatus').textContent='所选课程已从目录和已删除列表彻底移除，不能点恢复；底层材料、词条和录音保留。';return true;
  }
- if(a==='course-delete'||a==='course-restore'){if(!learningSettings)throw Error('请先打开课程设置');if(learningHasWork())throw Error('请先保存或关闭正在编辑的内容／录音');const course=learningCourses(await learningSnapshot(),true).find(c=>c.id===b.dataset.id);if(!course)throw Error('找不到课程');const deleted=a==='course-delete';if(deleted&&!confirm('删除课程“'+course.title+'”？\n只移出目录，保留私人词典、学习材料和所有录音。可在课程设置的“已删除课程”中恢复。'))return true;await learningSetCourseDeleted(course.id,deleted);learningResetMulti();learningRoute='teaching';await renderLearning();$('#learningStatus').textContent=deleted?'课程已移出目录，可在“已删除课程”恢复；词条和录音未删除。':'课程已恢复。';return true;}
+ if(a==='course-delete'||a==='course-restore'){if(!learningSettings)throw Error('请先打开课程设置');if(learningHasWork())throw Error('请先保存或关闭正在编辑的内容／录音');const course=learningCourses(await learningSnapshot(),true).find(c=>c.id===b.dataset.id);if(!course)throw Error('找不到课程');const library=learningManagementLibrary(course),deleted=a==='course-delete';if(deleted&&!confirm('删除课程“'+course.title+'”？\n只移出目录，保留私人词典、学习材料和所有录音。可在课程设置的“已删除课程”中恢复。'))return true;await learningSetCourseDeleted(course.id,deleted);await learningReturnAfterManagement(library);$('#learningStatus').textContent=deleted?'课程已移出目录，可在“已删除课程”恢复；词条和录音未删除。':'课程已恢复。';return true;}
  if(a==='package-open'){await lessonPackageOpen();return true;}
  if(a==='package-preview'){await lessonPackagePreview();return true;}
  if(a==='course-open'){if(learningHasWork())throw Error('请先完成编辑或录音');learningResetMulti();stopPracticeAudio();const snap=await learningSnapshot();const target=learningCourses(snap).find(c=>c.id===b.dataset.id);if(!target)throw Error('课程不存在或已删除');learningLesson=target;if(typeof lbSelectCourse==='function')lbSelectCourse(target);learningRoute='lesson';learningTab='knowledge';await renderLearning();return true;}
@@ -8377,7 +8388,7 @@ if(typeof document!=='undefined'&&typeof learningOpenDetail==='function'){
 @media(max-width:480px){.cw-components{padding:10px}.cw-part{flex-basis:100%}.cw-plus{display:none}.cw-part button{flex-wrap:wrap}}
 </style>
 <script data-learning-bundle="book-library">
-/* Book shelves are a read-only view over existing course identities and audio links. */
+/* Book shelves share existing course identities; management hides course entrances reversibly. */
 const lbSelection={teaching:'',communication:''};
 function lbLibrary(course){return course.library==='communication'?'communication':'teaching';}
 function lbBook(course){
@@ -8399,13 +8410,15 @@ function lbSelected(library,snap){return lbBooks(snap,library).find(book=>book.k
 function lbCurrentName(library,snap){return lbSelected(library,snap)?.name||'';}
 function lbSelectCourse(course){lbSelection[lbLibrary(course)]=lbBook(course).key;}
 function lbEnterLibrary(library){lbSelection[library]='';if(library==='communication'){communicationFolder='';communicationScene='';}}
+function lbManageButton(book){return learningSettings?'<button type="button" class="lb-manage-button" data-learn="book-manage" data-library="'+book.library+'" data-book="'+learningEsc(book.key)+'">管理／删除'+(book.kind==='scenes'?'情景集':'教材')+'</button>':'';}
 function lbShelf(snap,library){
- const h=learningEsc,books=lbBooks(snap,library),card=book=>'<button type="button" class="lb-book lb-'+library+' lb-'+book.kind+'" data-learn="book-open" data-library="'+library+'" data-book="'+h(book.key)+'"><span class="lb-cover" aria-hidden="true"><span class="lb-cover-label">'+(book.kind==='scenes'?'情景集':library==='teaching'?'教学教材':'交流教材')+'</span><span class="lb-cover-title">'+h(book.name)+'</span><span class="lb-cover-rule"></span><span class="lb-cover-footer">老挝语学习</span></span><span class="lb-book-name">'+h(book.name)+'</span><span class="lb-book-count">'+book.courses.length+' 个'+(book.kind==='scenes'?'场景／课程':'章节／课程')+' <span aria-hidden="true">›</span></span></button>';
+ const h=learningEsc,books=lbBooks(snap,library);if(!books.some(b=>b.key===lbSelection[library]))lbSelection[library]='';
+ const card=book=>'<article class="lb-book-tile"><button type="button" class="lb-book lb-'+library+' lb-'+book.kind+'" data-learn="book-open" data-library="'+library+'" data-book="'+h(book.key)+'"><span class="lb-cover" aria-hidden="true"><span class="lb-cover-label">'+(book.kind==='scenes'?'情景集':library==='teaching'?'教学教材':'交流教材')+'</span><span class="lb-cover-title">'+h(book.name)+'</span><span class="lb-cover-rule"></span><span class="lb-cover-footer">老挝语学习</span></span><span class="lb-book-name">'+h(book.name)+'</span><span class="lb-book-count">'+book.courses.length+' 个'+(book.kind==='scenes'?'场景／课程':'章节／课程')+' <span aria-hidden="true">›</span></span></button>'+lbManageButton(book)+'</article>';
  const printed=books.filter(b=>b.kind==='book'),scenes=books.filter(b=>b.kind!=='book');
  return '<section class="lb-shelf"><div class="lb-shelf-heading"><p>选择一本教材，查看章节</p>'+(library==='communication'?'<button type="button" data-learn="comm-import">＋ 导入新教材</button>':'')+'</div><div class="lb-book-grid">'+printed.map(card).join('')+'</div>'+(scenes.length?'<h3 class="lb-scenes-heading">自编情景与其他材料</h3><div class="lb-book-grid">'+scenes.map(card).join('')+'</div>':'')+(!books.length?'<p class="lb-empty">还没有教材，导入后会显示在这里。</p>':'')+'</section>';
 }
 const lbOriginalCatalog=learningCatalog;
-learningCatalog=function(snap){const book=lbSelected('teaching',snap);return book?'<button type="button" class="lb-back" data-learn="book-shelf" data-library="teaching">← 教学型材料 · 全部教材</button>'+lbOriginalCatalog(snap,book.courses):lbShelf(snap,'teaching');};
+learningCatalog=function(snap){const book=lbSelected('teaching',snap);return book?'<div class="lb-catalog-heading"><button type="button" class="lb-back" data-learn="book-shelf" data-library="teaching">← 教学型材料 · 全部教材</button>'+lbManageButton(book)+'</div>'+lbOriginalCatalog(snap,book.courses):lbShelf(snap,'teaching');};
 function lbFolderSnapshot(snap,book){
  const folders=snap.learningMaterials.filter(m=>m.communicationFolder),ids=new Set(book.courses.map(c=>c.folderId).filter(Boolean));
  for(const folder of folders)if(folder.bookShelfKey===book.key)ids.add(folder.id);
@@ -8418,17 +8431,40 @@ communicationHtml=function(snap){
  const book=lbSelected('communication',snap),h=learningEsc;lbTemplateBook=book;
  if(!book)return '<div class="comm-home"><button class="comm-back" data-learn="home">← 老挝语学习</button><h2>交流型材料</h2>'+lbShelf(snap,'communication')+'</div>';
  const scoped=lbFolderSnapshot(snap,book),folderIds=new Set(scoped.learningMaterials.filter(m=>m.communicationFolder).map(m=>m.id));if(communicationFolder&&!folderIds.has(communicationFolder))communicationFolder='';
- return lbOriginalCommunication(scoped,book.courses).replace('<button class="comm-back" data-learn="home">← 老挝语学习</button>','<button class="comm-back" data-learn="book-shelf" data-library="communication">← 交流型材料 · 全部教材</button>').replace('<h2>交流型材料</h2>','<h2>'+h(book.name)+'</h2>').replace('场景筛选会查找所有文件夹','场景筛选只查找本书／本情景集内的文件夹');
+ return lbOriginalCommunication(scoped,book.courses).replace('<button class="comm-back" data-learn="home">← 老挝语学习</button>','<button class="comm-back" data-learn="book-shelf" data-library="communication">← 交流型材料 · 全部教材</button>').replace('<h2>交流型材料</h2>','<h2>'+h(book.name)+'</h2>'+lbManageButton(book)).replace('场景筛选会查找所有文件夹','场景筛选只查找本书／本情景集内的文件夹');
 };
 const lbOriginalTemplate=communicationTemplate;
 communicationTemplate=function(){const d=lbOriginalTemplate(),book=lbTemplateBook;if(book){d.course.textbookId=book.courses[0].textbookId;d.course.textbookName=book.kind==='book'?book.name:book.courses[0].textbookName;d.course.sourceLabel=book.kind==='scenes'&&book.key==='communication:original'?'AI 原创':d.course.sourceLabel;}else{d.course.textbookId='REPLACE_WITH_NEW_BOOK_ID';d.course.textbookName='请填写新教材名称';}return d;};
 async function lbAction(action,button){
- if(!['book-open','book-shelf'].includes(action))return false;
+ if(!['book-open','book-shelf','book-manage'].includes(action))return false;
  if(learningHasWork()||recorder)throw Error('请先完成编辑或录音，再切换教材');
  const library=button.dataset.library;if(!['teaching','communication'].includes(library))throw Error('材料类型无效');
+ if(action==='book-manage'){await lbManageBook(library,button.dataset.book);return true;}
  if(action==='book-open'){const snap=await learningSnapshot(),book=lbBooks(snap,library).find(b=>b.key===button.dataset.book);if(!book)throw Error('教材已变化，请重新打开');lbSelection[library]=book.key;}else lbSelection[library]='';
  if(library==='communication'){communicationFolder='';communicationScene='';}
  learningResetMulti();stopPracticeAudio();learningRoute=library;await renderLearning();return true;
+}
+async function lbManageBook(library,key){
+ if(!learningSettings)throw Error('请先打开课程设置');
+ const initial=await learningSnapshot(),book=lbBooks(initial,library).find(b=>b.key===key);if(!book)throw Error('教材已变化，请重新打开');
+ const h=learningEsc,initialIds=new Set(book.courses.map(c=>c.id));learningDraft={kind:'book-management',dirty:false};
+ learningModal('管理教材 · '+book.name,'<section class="lb-management"><p>'+book.courses.length+' 个章节／课程，勾选需要删除的章节。</p><div class="lb-selection-tools"><button type="button" id="lbSelectAll">全选</button><button type="button" id="lbSelectNone">取消勾选</button><span id="lbSelectionCount" role="status"></span></div><div class="lb-chapter-rows" id="lbChapterRows">'+book.courses.map(c=>'<label class="lb-chapter-row"><input type="checkbox" data-lb-course="'+h(c.id)+'"><span><strong>'+h(c.title)+'</strong><small>'+h(c.chapterName||'')+'</small></span></label>').join('')+'</div><div class="lb-delete-actions"><button type="button" id="lbDeleteSelected" disabled>删除所选章节</button><button type="button" class="lb-delete-book" id="lbDeleteBook">删除整'+(book.kind==='scenes'?'个情景集':'本教材')+'（'+book.courses.length+'章）</button></div><p class="tag-hint">删除后可在当前材料分类的“已删除课程”中恢复。词典、学习材料和全部录音保留。</p></section>');
+ const boxes=()=>[...learningDialog.querySelectorAll('[data-lb-course]')],update=()=>{const count=boxes().filter(b=>b.checked).length;$('#lbSelectionCount').textContent='已选 '+count+' / '+book.courses.length;$('#lbDeleteSelected').textContent='删除所选章节（'+count+'）';$('#lbDeleteSelected').disabled=!count;};
+ $('#lbSelectAll').onclick=()=>{if(learningBusy)return;boxes().forEach(b=>b.checked=true);update();};$('#lbSelectNone').onclick=()=>{if(learningBusy)return;boxes().forEach(b=>b.checked=false);update();};$('#lbChapterRows').onchange=update;
+ const remove=async entire=>{
+  if(learningBusy)return;
+  try{
+   if(!learningSettings||learningHasWork()||recorder)throw Error('请先完成编辑或录音，并保持课程设置开启');
+   learningBusy=true;
+   const snap=await learningSnapshot(),current=lbBooks(snap,library).find(b=>b.key===key),ids=entire?[...initialIds]:boxes().filter(b=>b.checked).map(b=>b.dataset.lbCourse);
+   if(!ids.length)throw Error('请先勾选章节');
+   if(!current||ids.some(id=>!initialIds.has(id)||!current.courses.some(c=>c.id===id))||entire&&(current.courses.length!==initialIds.size||current.courses.some(c=>!initialIds.has(c.id))))throw Error('教材章节已变化，请关闭后重新打开管理');
+   const selected=current.courses.filter(c=>ids.includes(c.id));
+   if(!confirm((entire?'删除整本“'+book.name+'”？':'删除“'+book.name+'”中选中的 '+ids.length+' 个章节？')+'\n\n'+selected.map(c=>c.title).join('\n')+'\n\n可在“已删除课程”中恢复，词典和录音保留。'))return;
+   stopPracticeAudio();await learningSetCoursesDeleted(ids,true,snap);learningDraft=null;learningDialog.close();await learningReturnAfterManagement(library);$('#learningStatus').textContent=(entire?'教材已移出书架。':'已删除 '+ids.length+' 个章节。')+'可在“已删除课程”中恢复。';
+  }catch(error){$('#learningDialogStatus').textContent=error.message;}finally{learningBusy=false;}
+ };
+ $('#lbDeleteSelected').onclick=()=>remove(false);$('#lbDeleteBook').onclick=()=>remove(true);update();
 }
 async function lbImportCourse(data,name,snap){
  const d={...data,course:{...data.course}},c=d.course,book=lbSelected('communication',snap),newName=String(name||'').trim(),existing=learningCourses(snap,true).find(x=>x.textbookId===c.textbookId&&x.chapterId===c.chapterId&&x.lessonId===c.lessonId);
@@ -8443,6 +8479,7 @@ async function lbImportCourse(data,name,snap){
 </script>
 <style data-learning-bundle="book-library">
 .lb-shelf{margin:22px 0 10px}.lb-shelf-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}.lb-shelf-heading p{margin:0;color:#75887e;font-size:14px}.lb-shelf-heading button{font-size:13px;min-height:40px;padding:8px 14px}.lb-book-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,250px));gap:32px 34px;align-items:start}
+.lb-book-tile{min-width:0}.lb-manage-button{font-size:13px;min-height:40px;margin:6px 4px 0;padding:8px 12px}.lb-catalog-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.lb-catalog-heading .lb-back{margin:0}.lb-selection-tools,.lb-delete-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0}.lb-selection-tools>span{font-size:13px;color:#708578}.lb-chapter-rows{max-height:48vh;overflow:auto;overscroll-behavior:contain;border:1px solid #d8e5dd;border-radius:14px}.lb-chapter-row{display:flex;align-items:flex-start;gap:12px;margin:0;padding:14px 16px;min-height:48px;border-bottom:1px solid #e5ede7;cursor:pointer}.lb-chapter-row:last-child{border-bottom:0}.lb-chapter-row input[type=checkbox]{flex:none;width:20px;height:20px;margin:3px 0 0;accent-color:#087f70}.lb-chapter-row span{min-width:0}.lb-chapter-row strong{display:block;font-size:15px;font-weight:550;line-height:1.6;overflow-wrap:anywhere}.lb-chapter-row small{display:block;color:#789084;margin-top:3px}.lb-delete-actions button{min-height:44px}.lb-delete-book{color:#9c4a42;border-color:#dfc4bf;background:#fffaf8}
 #learningPanel .lb-book{display:flex;flex-direction:column;align-items:stretch;gap:0;box-sizing:border-box;min-width:0;width:100%;padding:0 8px 12px;text-align:left;background:transparent;border:0;border-radius:12px;box-shadow:none;cursor:pointer;color:#214c40;white-space:normal}
 .lb-cover{position:relative;display:flex;flex-direction:column;box-sizing:border-box;min-height:260px;padding:25px 20px 22px 28px;border-radius:4px 14px 14px 4px;border:1px solid #c8d9cc;border-left:9px solid #3c6b57;background:linear-gradient(110deg,#d1e2d2,#eaf1e6 22%,#e2ecdc);box-shadow:4px 6px 0 #f3f2e9,5px 7px 0 #d5dcd0,9px 12px 23px #264c3a16;overflow:hidden}
 .lb-cover::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:1px;background:#fff8}.lb-cover::after{content:'';position:absolute;right:16px;bottom:47px;width:38px;height:38px;border:1px solid #6e958544;border-radius:50%}

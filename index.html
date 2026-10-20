@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c17bd41c8e10a291">
+  <meta name="lao-app-build" content="e256a6c4d85a5cac">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8245,6 +8245,71 @@ button,a,summary,[role="button"]{touch-action:manipulation}
  #learningPanel .page-player-floating .page-player-controls button{min-height:40px;padding:7px 9px}
  #learningPanel .page-player-floating .page-progress{margin:0;gap:6px}
 }
+</style>
+<script data-learning-bundle="compound-words">
+/* Read-only lexical component links. Syllables alone are never promoted to words. */
+function cwNorm(x){return String(x||'').normalize('NFC').trim();}
+function cwLexical(text,meaning){return /^[\u0e80-\u0eff\s]+$/u.test(text)&&text.length>=2&&text.length<=80&&!!meaning.trim()&&!/^(?:教材)?(?:朗读|拼读|练习)?音节[：:（(\s]|^字母[：:（(\s]/u.test(meaning);}
+function cwIndex(entries,materials){
+ const lexicon=new Map(),wordTargets=new Map(),materialTargets=new Map(materials.filter(m=>!m.deleted).map(m=>[m.id,m])),nameTargets=new Set();
+ for(const m of materials)if(!m.deleted&&cwNorm(m.sentenceAnalysis?.original)===cwNorm(m.textLao))for(const s of m.sentenceAnalysis?.segments||[])for(const w of s.words||[])if((w.isName||w.kind==='name')&&w.target)nameTargets.add(w.target);
+ for(const w of entries){for(const id of [w.syncId,...(w.syncAliases||[])])if(id)wordTargets.set('word:'+id,w);}
+ function add(text,meaning,target,source){text=cwNorm(text);meaning=String(meaning||'').trim();if(!cwLexical(text,meaning))return;
+  const row={text,meaning,target:target||'',source},rows=lexicon.get(text)||[];if(!rows.some(r=>r.meaning===meaning&&r.target===row.target))rows.push(row);lexicon.set(text,rows);
+ }
+ for(const w of entries)add(w.word,w.meaning,w.syncId?'word:'+w.syncId:'','dictionary');
+ const validTarget=(id,text)=>{const w=wordTargets.get(id);if(w&&cwNorm(w.word)===text)return 'word:'+w.syncId;const m=materialTargets.get(id);return m&&!m.phoneticProfile&&cwNorm(m.textLao)===text?id:'';};
+ for(const m of materials){if(m.deleted||m.phoneticProfile)continue;
+  if(m.analysisUnitType==='word'&&!nameTargets.has(m.id))add(m.textLao,m.translationZh,m.id,'saved-analysis');
+  const a=m.sentenceAnalysis;if(!a||cwNorm(a.original)!==cwNorm(m.textLao))continue;
+  for(const s of a.segments||[])for(const w of s.words||[]){const text=cwNorm(w.lao);if(w.isName||w.kind==='name'||!cwNorm(s.lao).includes(text))continue;add(text,w.meaning,validTarget(w.target,text),'saved-analysis');}
+ }
+ return {lexicon,materials,wordTargets,materialTargets};
+}
+function cwBoundaries(text,index){
+ // Prefer saved orthographic boundaries, but do not infer lexical status from them.
+ const profiles=index.materials.filter(m=>!m.deleted&&m.phoneticProfile&&cwNorm(m.phoneticAnalysis?.original)===text);
+ const boundaries=new Set([0,text.length]);let found=false;
+ for(const p of profiles){const units=p.phoneticAnalysis?.units||[];if(!units.length||units.some(u=>!['syllable','separator'].includes(u.kind))||units.map(u=>u.text||'').join('').normalize('NFC')!==text)continue;found=true;let at=0;for(const u of units){at+=(u.text||'').normalize('NFC').length;boundaries.add(at);}}
+ if(!found&&typeof Intl.Segmenter==='function')for(const u of new Intl.Segmenter('lo',{granularity:'grapheme'}).segment(text)){boundaries.add(u.index);boundaries.add(u.index+u.segment.length);}
+ return boundaries;
+}
+function cwSplits(raw,index){
+ const text=cwNorm(raw);if(!/^[\u0e80-\u0eff]+$/u.test(text)||text.length>80)return [];
+ const bounds=cwBoundaries(text,index),ends=[...bounds].sort((a,b)=>b-a),memo=new Map();
+ function walk(at){if(at===text.length)return [[]];if(memo.has(at))return memo.get(at);const results=[];
+  for(const end of ends){if(end<=at||at===0&&end===text.length)continue;const word=text.slice(at,end);if(!index.lexicon.has(word))continue;
+   for(const tail of walk(end)){if(tail.length>=5)continue;results.push([word,...tail]);if(results.length>=20)break;}if(results.length>=20)break;
+  }results.sort((a,b)=>a.length-b.length);memo.set(at,results.slice(0,8));return memo.get(at);
+ }return walk(0).filter(p=>p.length>1).slice(0,4);
+}
+function cwOptions(text,index){
+ const rows=index.lexicon.get(text)||[],formal=rows.filter(r=>r.source==='dictionary'),base=formal.length?formal:rows;
+ const out=[];for(const r of base){let target=r.target;if(!target){const exact=rows.filter(x=>x.target&&x.meaning===r.meaning);if(exact.length===1)target=exact[0].target;}if(!out.some(x=>x.meaning===r.meaning&&x.target===target))out.push({...r,target});}
+ return out;
+}
+if(typeof document!=='undefined'&&typeof learningOpenDetail==='function'){
+ const cwPreviousDetail=learningOpenDetail;
+ learningOpenDetail=async function(id){
+  await cwPreviousDetail(id);if(learningDetail!==id)return;
+  const [resolved,entries]=await Promise.all([learningResolve(id),allEntries()]);if(learningDetail!==id)return;
+  const {m,w,snap}=resolved;if(!w&&m.contentType!=='word'&&m.analysisUnitType!=='word')return;
+  const detail=learningDialog.querySelector('.learn-detail'),text=w?.word||m.textLao;if(!detail||detail.querySelector('.cw-components'))return;
+  const index=cwIndex(entries,snap.learningMaterials),splits=cwSplits(text,index);if(!splits.length)return;
+  const h=learningEsc,section=document.createElement('section');section.className='cw-components';
+  section.innerHTML='<h3>组成词 · 点击查看</h3><p class="cw-hint">按已保存词条／句子解析匹配的候选拆分，词义需结合整个词语核对；不是把每个音节当作单词。</p>'+splits.map((parts,i)=>'<div class="cw-split" aria-label="候选拆分 '+(i+1)+'">'+parts.map(part=>'<div class="cw-part">'+cwOptions(part,index).map(r=>'<button type="button" '+(r.target?'data-cw-target="'+h(r.target)+'"':'disabled')+'><strong lang="lo">'+h(part)+'</strong><span>'+h(r.meaning)+'</span><small>'+(r.source==='dictionary'?'词条详情':r.target?'解析词卡 · 待核对':'未关联词卡')+' ›</small></button>').join('')+'</div>').join('<span class="cw-plus" aria-hidden="true">＋</span>')+'</div>').join('')+'<p class="cw-status" role="status"></p>';
+  const main=detail.querySelector('.ss-reading')||detail,meaning=main.querySelector('.learn-meaning');if(meaning)meaning.after(section);else main.prepend(section);
+  section.addEventListener('click',e=>{const b=e.target.closest('[data-cw-target]');if(!b||!section.contains(b))return;e.preventDefault();e.stopPropagation();b.disabled=true;void saOpenNested(b.dataset.cwTarget,b).catch(error=>{if(section.isConnected)section.querySelector('.cw-status').textContent=error.message;}).finally(()=>b.disabled=false);});
+ };
+}
+</script>
+<style data-learning-bundle="compound-words">
+.cw-components{margin:18px 0;padding:14px;background:#f5faf7;border:1px solid #dce8e1;border-radius:14px}
+.cw-components h3{margin:0 0 8px;font-size:15px}.cw-hint,.cw-status{font-size:12px;color:#627c71;line-height:1.7}
+.cw-split{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}.cw-part{flex:1 1 130px;min-width:0;padding:10px;border:1px solid #d6e6dc;border-radius:10px;background:white}
+.cw-part button strong{display:block;font-size:25px;font-weight:500;flex-basis:100%}.cw-part button{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;box-sizing:border-box;width:100%;text-align:left;font-size:13px;margin:4px 0;padding:8px;min-height:44px}
+.cw-part button span{overflow-wrap:anywhere}.cw-part small{font-size:11px;color:#627c71;flex-shrink:0}.cw-plus{color:#698077}.cw-part button:disabled{opacity:.65}
+@media(max-width:480px){.cw-components{padding:10px}.cw-part{flex-basis:100%}.cw-plus{display:none}.cw-part button{flex-wrap:wrap}}
 </style>
 <script src="./offline.js"></script>
 </body>

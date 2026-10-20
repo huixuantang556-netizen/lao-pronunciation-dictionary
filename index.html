@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="952129bcf94f15fe">
+  <meta name="lao-app-build" content="fb31a0bcf3df1d93">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3081,6 +3081,7 @@ function lessonV2Parse(value){
  const list=(v,n)=>{if(!Array.isArray(v)||v.length>100||v.some(s=>typeof s!=='string'||s.length>200))throw Error(n+' 必须是文字数组');};
  const id=(v,n)=>{if(typeof v!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(v))throw Error(n+' 必须使用英文、数字、短横线或下划线');};
  if(d?.format!=='lao-lesson-v2')throw Error('不是 V2 课程');
+ if(d.importMode!==undefined&&!['merge','replace-course'].includes(d.importMode))throw Error('importMode 必须为 merge 或 replace-course');
  if(new Blob([JSON.stringify(d)]).size>1500000)throw Error('单课超过 1.5 MB，请拆分');
  const c=d.course;if(!c||typeof c!=='object')throw Error('缺少 course');
  for(const k of ['textbookId','chapterId','lessonId'])id(c[k],k);
@@ -3130,7 +3131,7 @@ function lessonV2MatchTitle(data,snap){
  const exact=snap.learningMaterials.find(m=>m.id==='course:v2:'+lessonPackageKey(d)&&m.courseDefinition?.schemaVersion===2);
  if(d.course.library==='communication'){
   if(exact&&exact.courseDefinition.library!=='communication')throw Error('此 ID 属于教学课程，请用交流材料模板的新 ID，不能覆盖教学课');
-  return {data:d,replace:false};
+  return {data:d,replace:Boolean(exact&&d.importMode==='replace-course')};
  }
  if(exact?.courseDefinition.library==='communication')throw Error('此 ID 属于交流材料，请从交流区导入');
  const matches=exact?[exact]:snap.learningMaterials.filter(m=>m.courseDefinition&&!m.courseDeleted&&!m.coursePurged&&m.courseDefinition.library!=='communication'&&m.courseDefinition.textbookId===d.course.textbookId&&norm(m.courseDefinition.title)===norm(d.course.title));
@@ -3235,6 +3236,24 @@ function communicationHtml(snap,scope=null){
  return '<div class="comm-home"><button class="comm-back" data-learn="home">← 老挝语学习</button><h2>交流型材料</h2><details class="comm-manage"><summary>整理／导入</summary><div class="learn-chips"><button data-learn="comm-folder" data-id="">全部来源</button>'+(current?'<button data-learn="comm-folder" data-id="'+h(current.parentFolder||'')+'">↑ 上一级</button><strong>'+h(current.textLao)+'</strong>':'')+'<button data-learn="comm-new">＋ 新建文件夹</button><button data-learn="comm-import">导入到这里</button><details class="comm-more"><summary>更多工具</summary><button data-learn="comm-template">下载新材料模板</button><button data-learn="comm-prompt">下载 AI 要求</button></details></div></details><label>适用场景<select id="communicationScene"><option value="">全部场景</option>'+scenes.map(s=>'<option '+(s===communicationScene?'selected':'')+'>'+h(s)+'</option>').join('')+'</select></label><div class="learn-course-grid">'+folders.filter(m=>(m.parentFolder||'')===communicationFolder).map(m=>'<button class="learn-lesson" data-learn="comm-folder" data-id="'+h(m.id)+'"><h3>📁 '+h(m.textLao)+'</h3></button>').join('')+courses.filter(c=>(communicationScene?c.sceneMetadata?.scenes?.includes(communicationScene):(c.folderId||'')===communicationFolder)).map(c=>'<article class="learn-course-tile" data-course-card="'+h(c.id)+'">'+(typeof learningSettings!=='undefined'&&learningSettings?'<div class="learn-course-handles"><button data-course-handle="'+h(c.id)+'" aria-label="拖动课程排序">⠿ 拖动</button><button data-learn="comm-card-edit" data-id="'+h(c.id)+'">编辑标题／副标题</button></div>':'')+'<button class="learn-lesson" data-learn="course-open" data-id="'+h(c.id)+'"><small>'+h(c.sourceLabel||'未填写来源')+'</small><h3>'+h(c.title)+'</h3><p>'+h((c.sceneMetadata?.scenes||[]).join(' · '))+'</p></button><details class="comm-more"><summary>管理材料</summary><button data-learn="comm-append" data-id="'+h(c.id)+'">追加／更新内容</button><button data-learn="comm-export" data-id="'+h(c.id)+'">导出带 ID 文件</button></details></article>').join('')+'</div><p class="tag-hint">场景筛选会查找所有文件夹；同名不覆盖，相同 ID 更新需在预览中确认，未提供内容保留。</p></div>';
 }
 function communicationTemplate(){const d={"format":"lao-lesson-v2","course":{"library":"communication","folderId":"","sourceLabel":"请填写真实来源；原创写 AI 原创","textbookId":"communication","textbookName":"交流材料","chapterId":"collection","chapterName":"材料集","lessonId":"REPLACE_WITH_UNIQUE_NEW_LESSON_ID","title":"请填写本课标题","description":"请填写简介","sceneMetadata":{"scenes":[],"participants":[],"goal":[],"context":"","register":"日常口语"}},"sections":[{"id":"words","title":"核心词汇","topics":[],"roles":["交流型材料"],"blocks":[{"id":"words-main","title":"词汇","contentType":"word-ref","displayType":"word-cards","topics":[],"roles":["交流型材料"],"tags":[],"content":{"items":[{"itemId":"word-001","textLao":"ນ້ຳ","translationZh":"水","linkedWordText":"ນ້ຳ","note":"结构示例，请替换为实际材料"}]}}]},{"id":"dialogues","title":"情景对话","topics":[],"roles":["交流型材料"],"blocks":[{"id":"dialogue-main","title":"对话一","contentType":"dialogue","displayType":"dialogue","topics":[],"roles":["交流型材料"],"tags":[],"content":{"items":[{"itemId":"dialogue-001","speaker":"甲","textLao":"ສະບາຍດີ","translationZh":"你好","linkedWords":[],"note":"结构示例，请替换为实际材料"}]}}]}],"uncertain":[]};d.course.folderId=communicationFolder;d.course.lessonId="material-"+crypto.randomUUID();return d;}
+async function communicationImportData(raw,{target=null,name='',folder='',snap}={}){
+ const root=typeof raw==='string'?JSON.parse(raw.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')):lessonV2Clone(raw);
+ if(new Blob([JSON.stringify(root)]).size>5000000)throw Error('整批导入最多 5 MB');
+ const bundled=root?.format==='lao-lesson-bundle-v2',values=bundled?root.lessons:[root];
+ if(!Array.isArray(values)||!values.length||values.length>20)throw Error('每批需要 1–20 课');
+ if(target&&values.length!==1)throw Error('追加到单章时请选择单课文件；整本教材请返回书架使用“导入教材／章节”');
+ // Validate every chapter before opening the shared preview; no records are saved here.
+ const lessons=values.map(value=>lessonV2Parse(value)),seen=new Set();
+ for(let i=0;i<lessons.length;i++){
+  let d=lessons[i];
+  if(d.course.library&&d.course.library!=='communication')throw Error('第 '+(i+1)+' 课属于教学型材料，请使用教学材料入口');
+  if(!lessonV2Rows(d).length&&!d.sections.some(s=>s.blocks.some(b=>b.contentType==='knowledge'&&b.content.body.trim())))throw Error('第 '+(i+1)+' 课没有学习内容');
+  if(target){for(const k of ['textbookId','textbookName','chapterId','chapterName','lessonId','title','description','sourceLabel','folderId','sceneMetadata'])if(target[k]!==undefined)d.course[k]=target[k];}
+  else{if(typeof lbImportCourse==='function')d=await lbImportCourse(d,name,snap);d.course.folderId=folder;}
+  d.course.library='communication';const key=lessonPackageKey(d);if(seen.has(key))throw Error('同一批课程 ID 重复，请先合并');seen.add(key);lessons[i]=d;
+ }
+ return bundled?{format:'lao-lesson-bundle-v2',lessons}:lessons[0];
+}
 async function communicationAction(a,b){
  if(!a.startsWith('comm-'))return false;
  if(a==='comm-dialogue'){communicationDialogs.set(b.dataset.section,b.dataset.key);stopPracticeAudio();await renderLearning();return true;}
@@ -3254,10 +3273,10 @@ async function communicationAction(a,b){
  if(a==='comm-export'){if(!target)throw Error('材料不存在');communicationDownload(target.lessonId+'.json',JSON.stringify(lessonV2Export(snap,target),null,2));return true;}
  if(a==='comm-import'||a==='comm-append'){
   if(a==='comm-append'&&!target)throw Error('材料不存在');
-  learningDraft={kind:'communication-import',dirty:false};learningModal(target?'交流材料 · 追加导入':'交流材料 · 导入教材／章节','<p>目标：'+learningEsc(target?.title||snap.learningMaterials.find(m=>m.id===communicationFolder)?.textLao||(typeof lbCurrentName==='function'?lbCurrentName('communication',snap):'')||'交流教材书架')+'。未提供内容保留，不按同名覆盖。更新已有项目请沿用导出 ID。</p>'+(!target?'<label>教材名称（文件未填写时）<input id="commBookName" placeholder="例如：老挝语培训系列教材（二）对话教材"></label><p class="tag-hint">同一本书各章使用相同教材名称与教材 ID；新教材会单独出现在书架。</p>':'')+'<input id="commFile" type="file" accept=".json,application/json"><textarea id="commJson" rows="10" placeholder="粘贴 V2 JSON"></textarea><button id="commPreview">预览并核对</button>');
-  $('#commFile').onchange=async e=>{try{$('#commJson').value=await e.target.files[0].text();learningDraft.dirty=true;}catch(e){$('#learningDialogStatus').textContent=e.message;}};
+  learningDraft={kind:'communication-import',dirty:false};learningModal(target?'交流材料 · 追加导入':'交流材料 · 导入教材／章节','<p>目标：'+learningEsc(target?.title||snap.learningMaterials.find(m=>m.id===communicationFolder)?.textLao||(typeof lbCurrentName==='function'?lbCurrentName('communication',snap):'')||'交流教材书架')+'。更新已有项目请沿用导出 ID；完整章节的覆盖展示会在预览中单独确认。</p>'+(!target?'<label>教材名称（文件未填写时）<input id="commBookName" placeholder="例如：老挝语培训系列教材（二）对话教材"></label><p class="tag-hint">支持单课或整本教材文件，每批最多20课、5 MB。一次预览后可导入全部勾选章节。同一本书各章使用相同教材名称与教材 ID。</p>':'')+'<input id="commFile" type="file" accept=".json,application/json"><textarea id="commJson" rows="10" placeholder="粘贴单课或多课 V2 JSON"></textarea><button id="commPreview">预览并核对</button>');
+  $('#commFile').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>5000000)throw Error('整批导入最多 5 MB');$('#commJson').value=await file.text();learningDraft.dirty=true;}catch(e){$('#learningDialogStatus').textContent=e.message;}};
   $('#commJson').oninput=()=>{learningDraft.dirty=true;};
-  $('#commPreview').onclick=async()=>{try{let d=lessonV2Parse($('#commJson').value);if(!lessonV2Rows(d).length&&!d.sections.some(s=>s.blocks.some(b=>b.contentType==='knowledge'&&b.content.body.trim())))throw Error('模板没有学习内容，请先让 AI 填写');if(target){for(const k of ['textbookId','textbookName','chapterId','chapterName','lessonId','title','description','sourceLabel','folderId','sceneMetadata'])if(target[k]!==undefined)d.course[k]=target[k];}else{if(typeof lbImportCourse==='function')d=await lbImportCourse(d,$('#commBookName')?.value,snap);d.course.folderId=communicationFolder;}d.course.library='communication';await lessonV2Preview(d);}catch(e){$('#learningDialogStatus').textContent=e.message;}};return true;
+  $('#commPreview').onclick=async()=>{const button=$('#commPreview');button.disabled=true;try{const data=await communicationImportData($('#commJson').value,{target,name:$('#commBookName')?.value,folder:communicationFolder,snap});await lessonV2Preview(data);}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{button.disabled=false;}};return true;
  }
  return false;
 }

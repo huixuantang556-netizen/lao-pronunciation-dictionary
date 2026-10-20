@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="0080b9eb583a5f89">
+  <meta name="lao-app-build" content="c17bd41c8e10a291">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3551,6 +3551,7 @@ document.addEventListener('click',async e=>{
  try{if(button.dataset.pageAction==='pause'){if(lessonPageAudio&&lessonPageBar===bar){if(lessonPageAudio.paused){await lessonPageAudio.play();bar.querySelector('[data-page-status]').textContent='继续播放';}else{lessonPageAudio.pause();bar.querySelector('[data-page-status]').textContent='已暂停';}}}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPagePrepare(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
 });
 document.addEventListener('click',e=>{
+ if(e.target.closest('.cf-tape')?.dataset.cfTapeLanguage)return;
  const b=e.target.closest('.learn-card [data-learn="play-card"],.learn-card [data-learn="play"]');
  if(b&&!(b.dataset.learn==='play-card'&&e.detail>1)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(typeof learningHasWork==='function'&&learningHasWork())&&lessonPageCardJump?.(b.dataset.id,b)){e.preventDefault();e.stopImmediatePropagation();return;}
  const action=e.target.closest('[data-learn]');
@@ -7539,7 +7540,7 @@ rpToggle();if(activeView==='practice')void rpRender().catch(error=>{$('#rpStatus
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandExamples:false,revealAudio:true});
+const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandExamples:false,revealAudio:true,selfTestEnabled:false,selfTestHideLao:false});
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.entries(appPreferenceDefaults).map(([key,value])=>[key,typeof saved?.[key]==='boolean'?saved[key]:value]));}
 function appPreference(key){return apReadPreferences()[key];}
@@ -7554,6 +7555,10 @@ const apContent=document.createElement('div');apContent.className='ap-content';
 apContent.innerHTML='<nav class="ap-sections" aria-label="设置分类"><button type="button" data-ap-section="apAccount">账号</button><button type="button" data-ap-section="apPreferences">偏好</button><button type="button" data-ap-section="apLearning">学习</button><button type="button" data-ap-section="apData">资料</button><button type="button" data-ap-section="apOffline">更新</button></nav><section id="apAccount" class="ap-card ap-wide"><h3>账号与同步</h3><div id="apAccountIdentity" class="ap-account-identity"></div><details id="apAvatarFold"><summary>头像与个人资料</summary><div id="apAvatarHost"></div></details><div id="apAccountHost"></div></section><section id="apPreferences" class="ap-card"><h3>阅读与播放偏好</h3><label class="ap-switch-row"><span><strong>语音分析默认展开</strong><small>打开单词／句子详情时，展开语音分析或分段拼读。</small></span><input type="checkbox" role="switch" data-ap-preference="expandPronunciation"></label><label class="ap-switch-row"><span><strong>关联例句默认展开</strong><small>打开词条详情时，直接显示关联例句。</small></span><input type="checkbox" role="switch" data-ap-preference="expandExamples"></label><label class="ap-switch-row"><span><strong>揭晓答案时自动播放录音</strong><small>适用于每日清单与自由练习；关闭后仍可手动播放。</small></span><input type="checkbox" role="switch" data-ap-preference="revealAudio"></label><p class="ap-note">偏好即时保存，按当前账号／本机空间区分，仅保存在此浏览器，不自动同步或随词典备份导出。展开分析不会自动生成或播放音频。</p><button type="button" id="apResetPreferences" class="ap-secondary">恢复这三项默认偏好</button><p id="apPreferenceStatus" role="status" aria-live="polite"></p></section><section id="apLearning" class="ap-card"><h3>学习与复习</h3><button type="button" data-ap-action="goals" class="ap-link-row"><span><strong>清单与每日目标</strong><small>查看待新学、来源章节、到期复习与暂停项。</small></span><span aria-hidden="true">›</span></button><p class="ap-note">口述、认词、书写分别排期。调整目标、移出或恢复词句，沿用学习中心的同一份清单。</p><h3>在线发音</h3><div id="apSpeechHost"></div><p class="ap-note">Gemini 生成需要联网，可能消耗额度；不会因为打开设置而自动生成。</p></section><section id="apData" class="ap-card"><h3>资料与备份</h3><p class="ap-note">完整备份、全部资料（不含音频）、词表导出与同步导入，继续使用原有流程。</p><div id="apDataActions" class="ap-data-actions"></div><p class="ap-note">程序更新与学习资料分开保存。更新前请先备份；请勿清除网站数据或卸载后再尝试找回录音。</p></section><section id="apOffline" class="ap-card"><h3>离线、安装与更新</h3><div id="apOfflineHost"><p id="apOfflinePlaceholder" class="ap-note">此页面暂未加载安装组件。部署完整离线程序包后，这里会显示版本检查、安装和保留本机资料功能。</p></div></section><section id="apAbout" class="ap-card ap-wide"><h3>关于与本机资料</h3><p class="ap-note">不登录也能使用本机资料。已保存的文字与录音可离线使用；首次生成发音、登录和同步仍需联网。离线资料未加密，共享设备请勿记住登录。</p><p id="apBuildVersion" class="ap-note"></p><div id="apCompatibility"></div></section><p id="apSettingsStatus" role="status" aria-live="polite"></p>';
 apDialog.append(apContent);const apAccountSymbol=document.createElement('span');apAccountSymbol.className='ap-account-symbol';apAccountSymbol.setAttribute('aria-hidden','true');document.querySelector('#apAccountIdentity').append(apAccountSymbol,apIdentity);document.querySelector('#apAvatarHost').append(apAvatar);document.querySelector('#apAccountHost').append(accountSettings);document.querySelector('#apSpeechHost').append(speechSettings);accountSettings.open=false;
 document.querySelector('#personalSettings')?.remove();
+const apSelfTest=document.createElement('div');apSelfTest.className='ap-self-test';apSelfTest.innerHTML='<h4>章节自测</h4><label class="ap-switch-row"><span><strong>默认开启自测</strong><small>遮住答案，点击遮挡条只揭晓这一处。</small></span><input type="checkbox" role="switch" data-ap-preference="selfTestEnabled"></label><label class="ap-self-test-language">默认隐藏<select id="apSelfTestLanguage"><option value="zh">中文</option><option value="lo">老挝语</option></select></label>';document.querySelector('#apPreferences').prepend(apSelfTest);
+document.querySelector('#apResetPreferences').textContent='恢复默认偏好';
+function apRefreshSelfTest(){document.querySelector('#apSelfTestLanguage').value=appPreference('selfTestHideLao')?'lo':'zh';}
+document.querySelector('#apSelfTestLanguage').onchange=e=>{try{apSavePreferences({...apReadPreferences(),selfTestHideLao:e.target.value==='lo'});if(typeof cfDecorate==='function'){for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope,true);cfMaskRefresh(scope);}}document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){apRefreshSelfTest();document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 // Move the original controls, preserving sync handlers, busy state and progress reporting.
 const apSyncHost=document.createElement('div');apSyncHost.className='ap-account-heading';apSyncHost.id='apSyncHost';const apAccountTitle=document.querySelector('#apAccount').querySelector('h3');apAccountTitle.before(apSyncHost);apSyncHost.append(apAccountTitle);
 const apSyncResult=document.createElement('div');apSyncResult.id='apSyncResult';apSyncResult.hidden=true;apSyncHost.after(apSyncResult);
@@ -7567,8 +7572,9 @@ updateProfileUser=function(...args){const result=apPreviousUpdateProfile(...args
 function apOpenSettings(){try{apGuard();updateProfileUser();if(typeof appCloseMore==='function')appCloseMore();document.querySelector('#apSettingsStatus').textContent='';if(!apDialog.open){if(typeof window.laoResetSyncFeedback==='function'&&window.laoResetSyncFeedback())apSyncResult.hidden=true;apDialog.showModal();}apDialog.scrollTop=0;}catch(error){alert(error.message);}}
 accountButton.onclick=apOpenSettings;
 const apEntry=document.createElement('button');apEntry.type='button';apEntry.className='ap-more-entry';apEntry.textContent='⚙ 设置与个人中心';apEntry.onclick=apOpenSettings;if(typeof appMorePanel!=='undefined')appMorePanel.append(apEntry);
-apContent.addEventListener('change',e=>{const key=e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:e.target.checked});apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
-document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复这三项阅读与播放偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
+function apApplyMaskPreferences(){if(typeof cfDecorate==='function')for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope,true);cfMaskRefresh(scope);}}
+apContent.addEventListener('change',e=>{const key=e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:e.target.checked});apApplyDetail(learningDialog.querySelector('.ss-detail'));if(key==='selfTestEnabled')apApplyMaskPreferences();document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
+document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和自测偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();apApplyDetail(learningDialog.querySelector('.ss-detail'));apApplyMaskPreferences();document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 let apTransition=false;
 apContent.addEventListener('click',async e=>{const section=e.target.closest('[data-ap-section]');if(section){document.querySelector('#'+section.dataset.apSection)?.scrollIntoView({block:'start',behavior:'smooth'});return;}const action=e.target.closest('[data-ap-action]');if(!action||apTransition)return;try{apGuard();apTransition=true;apDialog.close();if(action.dataset.apAction==='goals')await rrManage();}catch(error){if(!apDialog.open)apDialog.showModal();document.querySelector('#apSettingsStatus').textContent=error.message;}finally{apTransition=false;}});
 document.querySelector('#apDataActions').addEventListener('click',e=>{if(!e.target.closest('button'))return;try{apGuard();apDialog.close();}catch(error){e.preventDefault();e.stopImmediatePropagation();document.querySelector('#apSettingsStatus').textContent=error.message;}},true);
@@ -7577,6 +7583,8 @@ const apExistingOffline=document.querySelector('.app-offline');if(apExistingOffl
 const apPreviousDetail=learningOpenDetail;
 learningOpenDetail=async function(id,...args){const result=await apPreviousDetail(id,...args);if(learningDetail===id)apApplyDetail(learningDialog.querySelector('.ss-detail'));return result;};
 window.addEventListener('storage',e=>{if(e.key===apPreferenceKey()||e.key===null){apRefreshSettings();apApplyDetail(learningDialog.querySelector('.ss-detail'));}});
+const apRefreshBeforeSelfTest=apRefreshSettings;
+apRefreshSettings=function(){apRefreshBeforeSelfTest();apRefreshSelfTest();};
 apRefreshSettings();
 </script>
 <style data-learning-bundle="app-settings">
@@ -7584,6 +7592,9 @@ apRefreshSettings();
 @media(max-width:650px){#personalCenter.ap-settings{width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0;border:0;padding:0 16px calc(24px + env(safe-area-inset-bottom));margin:0}#personalCenter .ap-header{padding-top:calc(12px + env(safe-area-inset-top));padding-bottom:10px}#personalCenter .ap-header h2{font-size:22px}#personalCenter .ap-content{grid-template-columns:minmax(0,1fr);gap:12px}#personalCenter .ap-wide{grid-column:auto}#personalCenter .ap-card{padding:16px;border-radius:14px}#personalCenter .ap-sections{flex-wrap:nowrap;overflow:auto;gap:6px;padding-bottom:4px}#personalCenter .ap-sections button{flex:none;padding:8px 16px}#personalCenter .ap-switch-row{gap:14px}#personalCenter .ap-card h3{font-size:16px}#personalCenter .ap-card input,#personalCenter .ap-card select{min-width:0}#personalCenter .ap-account-identity p{font-size:15px}}
 #personalCenter .ap-account-identity{display:flex;align-items:center;gap:14px}#personalCenter .ap-account-symbol{display:grid;place-items:center;flex:none;width:48px;height:48px;background:#eff6ec;border-radius:14px;font-size:29px}#personalCenter .ap-account-identity p{margin:0}
 #personalCenter .ap-account-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}#personalCenter .ap-account-heading h3{margin:0;min-width:0}#personalCenter .ap-account-heading #cloudSyncButton{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:0;min-height:40px;margin:0;padding:8px 14px;border:1px solid #cee1d8;border-radius:10px;background:#edf6f1;color:#176956;font-size:13px;font-weight:550;line-height:1.4;box-shadow:none;transform:none}#personalCenter .ap-account-heading #cloudSyncButton:disabled{opacity:.5}#personalCenter #apSyncResult{margin:0 0 14px}#personalCenter #apSyncResult #cloudStatus{margin:0;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.ap-self-test{padding-bottom:16px;border-bottom:1px solid #dce8e1;margin-bottom:16px}
+.ap-self-test h4{margin:0 0 8px}.ap-self-test-language{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0}
+.ap-self-test-language select{flex:0 0 140px;width:140px;min-width:0;min-height:44px;margin:0}
 </style>
 <script data-learning-bundle="profile-personalization">
 /* Compact profile cache and image editor; account sync transports compressed avatars, never original photos. */
@@ -8097,7 +8108,31 @@ async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.le
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
 function cfMaskButtons(){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button></div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
-document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset')n.textContent=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');}});
+const cfTapeAttributes=new WeakMap();
+function cfMaskRefresh(scope){
+ const selectors={lo:'[lang="lo"],.cf-table-lo',zh:'.cf-table-zh,.cf-meaning,.learn-card-main>span,.learn-meaning'};
+ for(const [language,selector] of Object.entries(selectors))for(const n of scope.querySelectorAll(selector)){
+  if(n.closest('.lesson-page-player')||!n.textContent.trim())continue;
+  const hidden=scope.classList.contains('cf-hide-'+language)&&n.dataset.cfRevealed!=='true';
+  n.classList.toggle('cf-tape',hidden);n.dataset.cfTapeLanguage=language;
+  if(hidden){if(!cfTapeAttributes.has(n))cfTapeAttributes.set(n,['tabindex','role','aria-label'].map(k=>[k,n.getAttribute(k)]));n.setAttribute('tabindex','0');n.setAttribute('role','button');n.setAttribute('aria-label','点击揭晓'+(language==='zh'?'中文':'老挝语'));}
+  else if(cfTapeAttributes.has(n)){for(const [k,value] of cfTapeAttributes.get(n))if(value===null)n.removeAttribute(k);else n.setAttribute(k,value);cfTapeAttributes.delete(n);}
+ }
+ for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset'){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
+}
+function cfMaskDefaults(scope,force=false){
+ const key=typeof apPreferenceKey==='function'?apPreferenceKey():'local';if(!force&&scope.dataset.cfMaskWorkspace===key)return;
+ scope.dataset.cfMaskWorkspace=key;scope.classList.remove('cf-hide-zh','cf-hide-lo');
+ for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;
+ if(typeof appPreference==='function'&&appPreference('selfTestEnabled'))scope.classList.add(appPreference('selfTestHideLao')?'cf-hide-lo':'cf-hide-zh');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;cfMaskRefresh(scope);b.closest('details').open=false;});
+function cfRevealTape(e){const n=e.target.closest('.cf-tape');if(!n)return;if(e.type==='keydown'&&!['Enter',' '].includes(e.key))return;e.preventDefault();e.stopImmediatePropagation();n.dataset.cfRevealed='true';const scope=cfMaskScope(n);if(scope)cfMaskRefresh(scope);}
+document.addEventListener('click',cfRevealTape,true);
+document.addEventListener('dblclick',e=>{if(e.target.closest('[data-cf-tape-language]')){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('keydown',cfRevealTape,true);
+document.addEventListener('pointerdown',e=>{if(e.target.closest('.cf-tape'))e.stopImmediatePropagation();},true);
+document.addEventListener('ap-preferences-changed',()=>{for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope,true);cfMaskRefresh(scope);}});
 async function cfFavoritePlaylist(rows,bar){
  fvGuard();stopPracticeAudio();const token=lessonPageRun,workspace=fvWorkspace();lessonPageBar=bar;const playlist=[],status=bar.querySelector('[data-page-status]');status.textContent='正在核对收藏音频…';const snap=await learningSnapshot(),cache=new Map();for(const r of await cloudCacheRows())try{cache.set(JSON.parse(r.key)[1],r.blob);}catch(_){}
  for(const row of rows){if(token!==lessonPageRun||workspace!==fvWorkspace()||!bar.isConnected)return;const current=await fvCurrent(row.item);let audio=null;if(current){const resolved=await learningReadResolved(current.target);audio=lessonPageAsset({m:resolved.m,entry:resolved.w,word:row.item.text},snap,cache);}else if(cache.has(row.item.text))audio={blob:cache.get(row.item.text)};if(!audio){status.textContent='第 '+(playlist.length+1)+' 项暂无当前正文的已保存音频，请先补齐；不会自动生成。';return;}playlist.push({...audio,at:playlist.length,count:1});}
@@ -8134,6 +8169,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record]
 function cfDecorate(){
  for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
+ for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
 }
 let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver(()=>{if(cfQueued)return;cfQueued=true;queueMicrotask(()=>{cfQueued=false;cfDecorate();});}).observe(document.body,{childList:true,subtree:true});cfDecorate();
@@ -8142,7 +8178,9 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 .cf-mask-controls,.cf-word-controls,.page-progress{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin:.8rem 0}
 .page-progress label{flex:1;min-width:180px}.page-progress input{display:block;width:100%}.page-progress span{font-variant-numeric:tabular-nums}
 .cf-regenerate{display:none}.learn-settings .cf-regenerate{display:inline-block}
-.cf-hide-lo [lang="lo"],.cf-hide-lo .cf-table-lo,.cf-hide-zh .cf-table-zh,.cf-hide-zh .cf-meaning,.cf-hide-zh .learn-card-main>span,.cf-hide-zh .learn-meaning{visibility:hidden!important}
+.cf-tape,.cf-tape *{color:transparent!important;text-shadow:none!important;-webkit-text-fill-color:transparent!important;user-select:none!important}
+.cf-tape{visibility:visible!important;background:#dbe7df!important;border-radius:5px;cursor:pointer!important;box-decoration-break:clone;-webkit-box-decoration-break:clone;outline-offset:3px}
+.cf-tape:focus-visible{outline:2px solid #087e6d}
 .cf-mask-controls button[aria-pressed="true"]{background:#deeee6;border-color:#078578}
 [data-fv-list] .lesson-page-player{position:static;display:block}[data-fv-list] select{max-width:100%;min-width:0}
 [data-fv-list] .fv-filters{align-items:end}[data-fv-list] .fv-item{gap:1rem}[data-fv-list] .fv-actions label{max-width:180px}
@@ -8156,7 +8194,7 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 .page-progress button,#learningPanel .page-progress button{width:30px;min-width:30px;min-height:30px;height:30px;padding:0;flex:0 0 30px;font-size:24px;border:0;background:transparent;color:#087e6d;border-radius:6px}
 .page-progress span{font-size:12px;white-space:nowrap;color:#537368}
 .page-progress[hidden]{display:none!important}
-@media(max-width:640px){.page-progress label{order:0;flex-basis:auto}.cf-mask-menu{min-width:145px}}
+@media(max-width:640px){.page-progress label{order:0;flex-basis:auto}.cf-mask-menu{left:0;right:auto;min-width:145px;max-width:calc(100vw - 48px)}}
 /* Current audio card: a calm, visible state without moving the reading surface. */
 #learningPanel .learn-card.page-audio-current{background:#e4f4ed;border-color:#087e6d;box-shadow:inset 0 0 0 1px #087e6d,0 3px 12px #087e6d16;transition:background-color .16s,border-color .16s}
 #learningPanel .learn-card.page-audio-current .learn-card-main{background:transparent}

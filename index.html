@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="070fa0e3da17e90e">
+  <meta name="lao-app-build" content="a7904940891a9880">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2655,7 +2655,7 @@ async function learningStartRecording(role='follow'){
  learningBusy=true;let stream;
  try{stopPracticeAudio();stream=await navigator.mediaDevices.getUserMedia({audio:true});learningStream=stream;const chunks=[],r=learningRecorder=new MediaRecorder(stream);r.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};r.onstop=()=>{stream.getTracks().forEach(t=>t.stop());learningRecorder=null;learningStream=null;learningPendingRecording=new Blob(chunks,{type:r.mimeType||'audio/webm'});$('#learningRecord').textContent='🎙 开始跟读';$('#learningReferenceRecord').textContent='🎙 录制参考发音';$('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording">▶ 试听本次</button><button data-learn="save-recording" class="primary">保存录音</button><p class="tag-hint">本次录制：'+(learningRecordingRole==='reference'?'参考发音':'我的跟读')+'。旧音频保留。</p>';};r.start();learningRecordingRole=role;learningPendingRecording=null;$('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button>';$(role==='reference'?'#learningReferenceRecord':'#learningRecord').textContent='■ 停止录音';}catch(e){stream?.getTracks().forEach(t=>t.stop());learningRecorder=null;throw e;}finally{learningBusy=false;}
 }
-async function learningSaveRecording(){if(!learningPendingRecording?.size)throw new Error('请先录音。');const {m,w,snap}=await learningResolve(learningDetail),asset={id:learningUid(),name:(learningRecordingRole==='reference'?'手录参考发音 ':'跟读 ')+new Date().toLocaleString(),blob:learningPendingRecording,updatedAt:Date.now()};await learningWrite({learningAudio:[asset],learningMaterials:[{...m,...(m.schemaVersion===2&&learningRecordingRole==='reference'?{defaultAudioKey:'user:'+asset.id}:{}),audioSources:[...m.audioSources,{source:'user',role:learningRecordingRole,recordedText:w?.word||m.textLao,assetId:asset.id,start:0,end:null}],updatedAt:Date.now()}]},snap);await learningOpenDetail(m.id);}
+async function learningSaveRecording({closeAfterSave=false}={}){if(!learningPendingRecording?.size)throw new Error('请先录音。');const {m,w,snap}=await learningResolve(learningDetail);if(m.deleted)throw Error('词条已移除，录音尚未保存');const asset={id:learningUid(),name:(learningRecordingRole==='reference'?'手录参考发音 ':'跟读 ')+new Date().toLocaleString(),blob:learningPendingRecording,updatedAt:Date.now()};await learningWrite({learningAudio:[asset],learningMaterials:[{...m,...(m.schemaVersion===2&&learningRecordingRole==='reference'?{defaultAudioKey:'user:'+asset.id}:{}),audioSources:[...m.audioSources,{source:'user',role:learningRecordingRole,recordedText:w?.word||m.textLao,assetId:asset.id,start:0,end:null}],updatedAt:Date.now()}]},snap);if(closeAfterSave){learningPendingRecording=null;learningDraft=null;learningDialog.close();$('#learningStatus').textContent='参考发音已保存';return;}await learningOpenDetail(m.id);}
 async function learningAudioFields(){const assets=await learningRows('learningAudio');return '<label>上传教材音频<input id="learnAudioFile" type="file" accept="audio/*"></label><label>或使用已保存音轨<select id="learnAudioAsset"><option value="">不添加／保留已有音频</option>'+assets.map(a=>'<option value="'+learningEsc(a.id)+'">'+learningEsc(a.name)+'</option>').join('')+'</select></label><p class="tag-hint">同一音轨可供多条材料使用。每段音频不超过 20 MiB。</p>';}
 async function learningAudioChoice(){const file=$('#learnAudioFile')?.files[0];if(file){if(!file.size||file.size>20971520||!file.type.startsWith('audio/'))throw new Error('请选择不超过 20 MiB 的音频文件。');return {id:learningUid(),name:file.name,blob:file,updatedAt:Date.now()};}const id=$('#learnAudioAsset')?.value;return id?(await learningRows('learningAudio')).find(a=>a.id===id):null;}
 function learningSegment(start,end){const parse=v=>{if(String(v).trim()==='')return null;const n=Number(v);if(!Number.isFinite(n)||n<0)throw new Error('起止时间请填写非负秒数。');return n;};const s=parse(start)??0,e=parse(end);if(e!==null&&e<=s)throw new Error('结束时间必须大于开始时间。');return {start:s,end:e};}
@@ -2718,7 +2718,7 @@ async function learningAction(e){
   if(a==='unlink'){if(!confirm('只移除此课关联，保留原词条、材料和全部录音？'))return;await learningUnlink(id);learningDialog.close();await renderLearning();return;}
   if(a==='word-detail'){const w=await getEntry(Number(b.dataset.word));if(w&&b.isConnected){const parent=typeof letterDetailCapture==='function'?letterDetailCapture(b):null;await learningOpenDetail('word:'+w.syncId);if(parent&&learningDetail==='word:'+w.syncId){letterDetailParents.push(parent);letterDetailBackButton();}}return;}
   if(a==='detail'||a==='follow'){await learningOpenDetail(id);if(a==='follow')$('#learningRecord').focus();return;}
-  if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true});return;}
+  if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
   if(a==='play'||a==='play-card'){await learningPlay(id);$('#learningStatus').textContent='🔊 正在播放整项发音';return;}
   if(a==='gemini'){const {m,w}=await learningResolve(id);await learningDefaultSpeech(m,w?.word||m.textLao);return;}
@@ -2729,7 +2729,7 @@ async function learningAction(e){
   if(a==='audio-delete-selected'){await learningDeleteSelectedWordAudio(id);return;}
   if(a==='compare'){await learningCompare(id);return;}
   if(a==='record'||a==='record-reference'){await learningStartRecording(a==='record-reference'?'reference':'follow');return;}
-  if(a==='save-recording'){learningBusy=true;try{await learningSaveRecording();}finally{learningBusy=false;}return;}
+  if(a==='save-recording'){learningBusy=true;try{await learningSaveRecording({closeAfterSave:!!learningDialog.querySelector('[data-quick-reference]')});}finally{learningBusy=false;}return;}
   if(a==='preview-recording'){await learningPlayBlob(learningPendingRecording);return;}
   if(a==='attach'){await learningAttach(id);return;}
   if(a==='import'&&learningTab==='reading_drill'){await learningDrillImporter();return;}
@@ -8283,8 +8283,16 @@ fvOpen=async function(button){
  get('[data-cf-rows]').onchange=async e=>{const b=e.target.closest('[data-cf-move]');if(!b)return;b.disabled=true;try{lessonPageStop();await cfMove(filtered[Number(b.dataset.cfMove)].item,b.value);if(host.isConnected)draw();}catch(e){fail(e);}finally{b.disabled=false;}};
  get('[data-cf-rows]').onclick=async e=>{const b=e.target.closest('[data-cf-play],[data-cf-detail],[data-cf-remove]');if(!b)return;const row=filtered[Number(b.dataset.cfPlay??b.dataset.cfDetail??b.dataset.cfRemove)];if(!row)return;b.disabled=true;const run=++seq;try{if(b.dataset.cfPlay!==undefined)await fvPlay(row.item,()=>run===seq&&host.isConnected);else if(b.dataset.cfDetail!==undefined)await fvDetail(row.item,b);else{lessonPageStop();await fvSetRemoved(row.item);if(host.isConnected)draw();}}catch(e){fail(e);}finally{b.disabled=false;}};draw();
 };
-async function cfRecord(target,{autoStart=true,button=null}={}){
+async function cfRecord(target,{autoStart=true,button=null,quick=false}={}){
  if(learningHasWork()||recorder||batchAudioBusy)throw Error('请先完成编辑或录音');
+ if(quick){
+  // Start the permission request in this click; do not wait for snapshots, analysis or the full detail renderer.
+  learningDetail=target;learningDraft=null;learningPendingRecording=null;
+  const card=button?.closest('.learn-card'),text=card?.querySelector('strong')?.textContent||'本条参考发音',h=learningEsc;
+  learningModal('录制参考发音','<section data-quick-reference><p lang="lo">'+h(text)+'</p><p class="tag-hint">首次使用请允许麦克风。按钮显示“停止录音”时正在录音；停止后可试听和保存。旧录音保留。</p><button id="learningReferenceRecord" data-learn="record-reference" class="primary">🎙 开始录音</button><button id="learningRecord" hidden></button><div id="learningRecordingDraft"></div></section>');
+  try{if(autoStart)await learningStartRecording('reference');}catch(error){$('#learningDialogStatus').textContent=error.message;throw error;}
+  return;
+ }
  const resolved=await learningReadResolved(target);if(resolved.m.deleted)throw Error('词条已移除');
  if(button)await saOpenNested(target,button);else await learningOpenDetail(target);
  if(learningDetail!==target)return;

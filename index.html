@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="8244d30efc140f5f">
+  <meta name="lao-app-build" content="af4d1550f344321e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2575,6 +2575,10 @@ async function learningPlayBlob(blob,start=0,end=null){
  stopPracticeAudio();const generation=playbackGeneration;practiceAudioUrl=URL.createObjectURL(blob);const a=practiceAudio=new Audio(practiceAudioUrl);
  try{await new Promise((resolve,reject)=>{a.onloadedmetadata=resolve;a.onerror=()=>reject(new Error('这段音频无法解码，请换用 MP3、M4A 或 WAV。'));});if(generation!==playbackGeneration)return;if(start>=a.duration)throw new Error('片段开始时间超出音轨长度。');a.currentTime=start;if(end!==null)a.ontimeupdate=()=>{if(a.currentTime>=end&&practiceAudio===a)stopPracticeAudio();};a.onended=()=>{if(practiceAudio===a)stopPracticeAudio();};await a.play();}catch(e){if(generation===playbackGeneration)stopPracticeAudio();throw e;}
 }
+async function learningReviewChangedAudio(m){
+ const h=learningEsc,id=h(m.id),refs=m.audioSources||[];learningDetail=m.id;learningDraft=null;
+ learningModal('文字已修改 · 核对原录音','<p>录音没有丢失。请先试听，只有读音仍适用时才确认；文字确实变了可重新录制。</p><p lang="lo">当前：'+h(m.textLao)+'</p>'+refs.map((a,i)=>'<section><p>原录音文字：<span lang="lo">'+h(a.recordedText||a.text||'未记录')+'</span></p><button data-learn="audio" data-id="'+id+'" data-index="'+i+'">▶ 试听这份旧录音</button>'+(a.needsReview?'<button data-learn="v2-confirm-audio" data-id="'+id+'" data-index="'+i+'">这份录音仍适用</button>':'')+'</section>').join('')+'<button data-learn="record-card-reference" data-id="'+id+'">🎙 重新录制当前文字</button>');
+}
 async function learningPlay(id,source='reference',index=null){
  const {m,w,snap}=await learningResolve(id),text=w?.word||m.textLao,refs=m.audioSources||[];
  // An explicit audio-row choice must be resolved before any word-level fallback.
@@ -2587,6 +2591,7 @@ async function learningPlay(id,source='reference',index=null){
   referencePlaybackNotice((selected.role==='reference'?'手录参考发音':selected.role==='follow'?'我的跟读':'指定音频')+' · '+(asset.name||selected.assetId));
   await learningPlayBlob(asset.blob,selected.start||0,selected.end??null);return;
  }
+ if(index===null&&source==='reference'&&m.audioNeedsReview){const current=refs.findLastIndex(a=>learningIsReference(a)&&!a.needsReview&&(a.recordedText===text||a.source==='gemini'&&a.text===text));if(current>=0)return learningPlay(id,source,current);await learningReviewChangedAudio(m);return;}
  if(index===null&&source==='reference'){const clip=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
  if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred);return;}}
  if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
@@ -3527,6 +3532,7 @@ function lessonPageAsset(w,snap,cache){
  const m=w.m,refs=m.audioSources||[];
  // A course card and its dictionary word can be different material records.
  // Resolve the same manual references used by single-word playback, before Gemini.
+ if(m.audioNeedsReview&&!refs.some(a=>a.source==='user'&&a.role==='reference'&&!a.needsReview&&a.recordedText===(w.word||m.textLao)))return null;
  const recording=(typeof recordedReference==='function'?recordedReference(m,snap):null)||(w.entry&&typeof recordedReferenceForWordSnapshot==='function'?recordedReferenceForWordSnapshot(w.entry,snap):null);
  if(recording)return recording;
  if(m.audioNeedsReview)return null;
@@ -5496,9 +5502,10 @@ learningRelatedHtml=async function(word){
 </script>
 <script data-reference-priority>
 function recordedReference(material,snap){
- const ref=(material.audioSources||[]).filter(a=>a.source==='user'&&a.role==='reference').at(-1);
+ const matches=a=>typeof material.textLao==='string'&&material.textLao.length>0&&a.recordedText===material.textLao;
+ const refs=(material.audioSources||[]).filter(a=>a.source==='user'&&a.role==='reference'),ref=refs.filter(a=>!a.needsReview&&(!material.audioNeedsReview||matches(a))).at(-1)||refs.at(-1);
  if(!ref)return null;
- if(ref.needsReview||material.audioNeedsReview)throw Error('手录参考发音需要核对，请在详情中确认后播放。');
+ if(ref.needsReview||material.audioNeedsReview&&!matches(ref))throw Error('手录参考发音需要核对，请在详情中确认后播放。');
  const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
  if(!asset?.blob)throw Error('手录参考发音尚未同步到本机，请先同步；不会改播默认发音。');
  return {blob:asset.blob,start:ref.start||0,end:ref.end??null,label:'手录参考发音 · '+(asset.name||ref.assetId)};
@@ -8328,6 +8335,8 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 </script>
 <style data-learning-bundle="study-comfort">
 .cf-mask-controls,.cf-word-controls,.page-progress{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin:.8rem 0}
+#learningPanel .comm-detail .v2-sentences .learn-card>small{grid-column:1/-1;grid-row:2;display:block;max-width:100%;box-sizing:border-box;margin:0;padding:0 14px 10px;font-size:12px;line-height:1.5;color:#8a6b31;overflow-wrap:anywhere}
+@media(min-width:601px){#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-main{grid-column:1;grid-row:1;min-width:0}#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-actions{grid-column:2;grid-row:1}}
 .page-progress label{flex:1;min-width:180px}.page-progress input{display:block;width:100%}.page-progress span{font-variant-numeric:tabular-nums}
 .cf-regenerate{display:none}.learn-settings .cf-regenerate{display:inline-block}
 .cf-tape,.cf-tape *{color:transparent!important;text-shadow:none!important;-webkit-text-fill-color:transparent!important;user-select:none!important}

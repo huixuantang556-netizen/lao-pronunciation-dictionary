@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="8d53d570e75dba9a">
+  <meta name="lao-app-build" content="c0d67eaf4f725af4">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -167,6 +167,13 @@
 </style>
 <style data-page-audio-styles>
 /* Compact lesson navigation and page listening controls. */
+.page-player-mobile{display:none}
+.lesson-page-player [data-page-status]:empty{display:none}
+@media(max-width:760px){
+ #learningPanel .lesson-page-player .page-player-label,#learningPanel .lesson-page-player .page-player-hint{display:none}
+ #learningPanel .lesson-page-player .page-player-mobile{display:inline;font-size:22px}
+ #learningPanel .lesson-page-player [data-page-action="play"],#learningPanel .lesson-page-player [data-page-action="pause"],#learningPanel .lesson-page-player [data-page-action="stop"]{display:inline-flex;align-items:center;justify-content:center;width:46px;min-width:46px;height:46px;min-height:46px;padding:10px;box-sizing:border-box}
+}
 #learningPanel .v2-section-tabs{gap:6px;padding:10px 0 16px;margin:12px 0 16px}
 #learningPanel .v2-section-tabs button{font-size:13px;font-weight:500;padding:7px 12px;min-height:34px;line-height:1.4;border-radius:9px;border:1px solid transparent;background:#edf3f0;color:#536a63;box-shadow:none}
 #learningPanel .v2-section-tabs button:hover{background:#dfeee8;color:#087e6d}
@@ -3532,6 +3539,13 @@ function lessonPageToolbarFor(words,title,key){
  const h=learningEsc;
  return '<div class="lesson-page-player" data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="终止整页播放" title="终止播放并收起进度条">'+lessonIcon('stop')+'</button><details class="page-player-more"><summary>更多</summary><div><label><span>语速</span><select data-page-speed><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select></label><label><span>循环播放</span><input type="checkbox" data-page-loop></label>'+'<button data-page-action="prepare">'+lessonIcon('audio')+'本页生成／重做／切分</button>'+'</div></details></div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
 }
+// Keep the existing player actions and status channel; compact labels are presentation only.
+const lessonPageFullToolbar=lessonPageToolbarFor;
+lessonPageToolbarFor=function(...args){return lessonPageFullToolbar(...args)
+ .replace('class="page-play">','class="page-play" aria-label="播放整页" title="播放整页">')
+ .replace('播放整页</button>','<span class="page-player-label">播放整页</span></button>')
+ .replace('aria-label="暂停／继续">暂停／继续</button>','aria-label="暂停／继续" title="暂停／继续"><span class="page-player-mobile" aria-hidden="true">⏯</span><span class="page-player-label">暂停／继续</span></button>')
+ .replace('<p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p>','<p class="page-player-hint">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p><p data-page-status role="status"></p>');};
 function lessonIcon(type){
  const paths={play:'<path d="m8 5 11 7-11 7Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',audio:'<path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/>'};
  return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[type]+'</svg>';
@@ -5129,6 +5143,7 @@ if(typeof learningClose==='function'){
   learningDialog.className=parent.className;learningDialog.replaceChildren(...parent.nodes);
   parent.button.focus({preventScroll:true});learningDialog.scrollTop=parent.scroll;
   for(const [node,top,left] of parent.nested){node.scrollTop=top;node.scrollLeft=left;}
+  if(typeof parent.onRestore==='function')parent.onRestore();
   letterDetailBackButton();
  };
  const parentModal=learningModal;
@@ -6085,7 +6100,16 @@ function courseCheckSession(queue,course,direction,snap){
   learningModal('检测 · '+(index+1)+' / '+queue.length,'<p class="tag-hint">'+h(r.group)+'</p><div class="course-recall">'+studyRecallCardHtml({question:direction==='lao'?r.lao:r.zh,reverse:direction==='zh',examples:exampleHtml,favorite:typeof fvMarkup==='function'?fvMarkup({target:r.reviewWord?'word:'+r.reviewWord.syncId:r.id}):'',h})+'</div>');
   const card=$('[data-recall-card]'),answer=$('[data-recall-answer]'),reveal=$('[data-recall-reveal]'),status=$('[data-recall-status]');
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
-  const current=()=>run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);
+  let suspended=false;
+  const current=()=>!suspended&&run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);
+  async function openDetail(target,button){
+   if(!flow.revealed||!current())return;
+   const parent=typeof letterDetailCapture==='function'?letterDetailCapture(button):null;
+   stopPracticeAudio();suspended=true;
+   if(parent){parent.onRestore=()=>{suspended=false;};letterDetailParents.push(parent);}
+   try{await learningOpenDetail(target);if(parent)letterDetailBackButton();}
+   catch(error){if(parent)letterDetailBackButton();else suspended=false;learningError(error);}
+  }
   async function play(id=r.id){if(!flow.revealed||!current())return;try{await saPlay(id,{isCurrent:current});}catch(e){if(current())status.textContent='未能播放：'+e.message+'；可点击播放重试。';}}
   async function show(){if(!current())return;await flow.reveal(async()=>{
    card.classList.add('study-revealed');answer.hidden=false;answer.textContent=direction==='lao'?r.zh:r.lao;if(direction==='zh')answer.lang='lo';
@@ -6099,9 +6123,9 @@ function courseCheckSession(queue,course,direction,snap){
   // The question itself is keyboard-revealable without making embedded controls nested buttons.
   const question=card.querySelector('.question-ipa');question.tabIndex=0;question.setAttribute('role','button');question.setAttribute('aria-label','揭晓答案');question.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void show();}};
   $('[data-recall-play]').onclick=()=>play();
-  $('[data-recall-detail]').onclick=async()=>{if(!flow.revealed||!current())return;stopPracticeAudio();courseCheckRun++;try{await learningOpenDetail(r.id);}catch(e){learningError(e);}};
+  $('[data-recall-detail]').onclick=e=>openDetail(r.id,e?.currentTarget||$('[data-recall-detail]'));
   for(const b of card.querySelectorAll('[data-cc-example]'))b.onclick=()=>play(b.dataset.ccExample);
-  for(const b of card.querySelectorAll('[data-cc-detail]'))b.onclick=async()=>{if(!flow.revealed||!current())return;stopPracticeAudio();courseCheckRun++;try{await learningOpenDetail(b.dataset.ccDetail);}catch(e){learningError(e);}};
+  for(const b of card.querySelectorAll('[data-cc-detail]'))b.onclick=()=>openDetail(b.dataset.ccDetail,b);
   for(const b of grades())b.onclick=()=>flow.grade(async()=>{
    if(!current()||ratings.has(at))return;for(const n of grades())n.disabled=true;
    try{await pendingReviewRecord(r,course,direction,b.dataset.recallGrade,attempts[at],{practice:true});await markPracticeEntry(r.reviewWord?.id||'material:'+r.id,b.dataset.recallGrade);ratings.set(at,b.dataset.recallGrade);if(current()){index++;draw();}}
@@ -6584,7 +6608,10 @@ function paResolve(id,snap,entries,lookup=paLookup(snap,entries)){
 }
 function paBasis(target){
  const {m,w,text}=target,a=m.sentenceAnalysis;
- if(a&&(!w||saTextKey(a.original)===saTextKey(text)&&saTextKey(a.translation||'')===saTextKey(w.meaning||''))){if(saTextKey(a.original)!==saTextKey(text))throw Error('语法解析原文已变化，请先更新语法分段');return {mode:'grammar',original:text,segments:a.segments.map((s,i)=>({index:i,original:s.lao,chinese:s.chinese||'',words:(s.words||[]).map(w=>({lao:w.lao,meaning:w.meaning||'',role:w.role||'',target:w.target||''}))}))};}
+ // Dictionary words always use their whole current spelling and meaning. Saved
+ // grammar remains intact, but is not a substitute for a word pronunciation link.
+ if(w)return {mode:'word',original:text,segments:[{index:0,original:text,chinese:String(w.meaning??''),words:[]}]};
+ if(a){if(saTextKey(a.original)!==saTextKey(text))throw Error('语法解析原文已变化，请先更新语法分段');return {mode:'grammar',original:text,segments:a.segments.map((s,i)=>({index:i,original:s.lao,chinese:s.chinese||'',words:(s.words||[]).map(w=>({lao:w.lao,meaning:w.meaning||'',role:w.role||'',target:w.target||''}))}))};}
  if(!w&&!m.analysisOwner&&!['reading_drill','word'].includes(m.contentType))throw Error('请先完成句子的语法分段，再生成逐段发音分析');
  return {mode:'word',original:text,segments:[{index:0,original:text,chinese:w?.meaning||m.translationZh||'',words:[]}]};
 }
@@ -6791,7 +6818,7 @@ function paAnalysisHtml(raw){
 return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> · '+h(u.tone||'声调未定')+paReviewLabel(u)+'</summary><dl class="pa-facts"><dt>首辅音</dt><dd lang="lo">'+h(u.onset.written)+'</dd><dt>实际发音辅音</dt><dd>'+h(u.onset.sound||'未填写')+' · '+h(labels[u.onset.mode])+'</dd><dt>声调类别</dt><dd>'+h(labels[u.onset.toneClass])+'</dd><dt>元音原型</dt><dd lang="lo">'+h(u.vowel.base)+'</dd><dt>本词书写</dt><dd lang="lo">'+h(u.vowel.written)+'</dd><dt>元音类别</dt><dd>'+h(u.vowel.category==='special'?'特殊韵母':'普通元音')+'</dd><dt>元音长度</dt><dd>'+h(labels[u.vowel.length])+'</dd><dt>尾辅音</dt><dd>'+h(u.coda.written||'无')+(u.coda.sound?' /'+h(u.coda.sound)+'/':'')+'</dd><dt>内含韵尾</dt><dd>'+h(u.embeddedFinal?'/'+u.embeddedFinal+'/':'无')+'</dd><dt>音节结构</dt><dd>'+h(u.embeddedFinal?'无独立书写尾辅音，韵母内含活韵尾':u.shape==='closed'?(u.life==='dead'?'死闭音节':u.life==='live'?'活闭音节':'闭音节，死活待核对'):u.vowel.length==='short'?'死音节（本教材：短元音直接结尾）':u.vowel.length==='long'?'开音节（本教材：长元音直接结尾）':'无尾辅音，类型待核对')+' · '+h(labels[u.life])+'性质</dd><dt>声调符号</dt><dd>'+h(u.toneMark==='none'?'无':u.toneMark)+'</dd><dt>教材推导</dt><dd>'+h(u.ruleTone||'当前规则不能可靠推导')+'</dd>'+(u.ipa?'<dt>IPA（AI初稿）</dt><dd>'+h(u.ipa)+'</dd>':'')+'</dl>'+paExplanationHtml(u)+(u.warnings.length?'<p class="pa-pending">'+h(u.warnings.join('；'))+'</p>':'')+(u.ruleKey?'<button type="button" data-pa-rule="'+h(u.ruleKey)+'">查看已有教材声调规则</button>':'')+'</details>';
  }).join('')+'</div>';
 }
-function paProfile(snap,id){return snap.learningMaterials.find(m=>m.id===id&&!m.deleted&&m.phoneticProfile);}
+function paProfile(snap,id){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return snap.learningMaterials.find(m=>m.id===id&&!m.deleted&&m.phoneticProfile);if(scope.paProfileSnapshot!==snap){scope.paProfileSnapshot=snap;scope.paProfileIndex=new Map(snap.learningMaterials.filter(m=>!m.deleted&&m.phoneticProfile).map(m=>[m.id,m]));}return scope.paProfileIndex.get(id);}
 function paSegmentTokens(parent,index,snap,entries){
  const segment=parent.sentenceAnalysis?.segments?.[index],saved=parent.pronunciationAnalysis?.segments?.[index];if(!segment)return [];
  const tokens=(segment.words?.length?segment.words:[{lao:segment.lao,meaning:segment.chinese,target:segment.target}]);
@@ -8309,7 +8336,7 @@ function fvDecorate(){
  fvPaint();
 }
 let fvQueued=false;
-function fvQueue(){if(fvQueued)return;fvQueued=true;queueMicrotask(()=>{fvQueued=false;try{fvDecorate();}catch(error){console.warn('收藏入口暂未更新：',error.message);}});}
+function fvQueue(){if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;if(fvQueued)return;fvQueued=true;queueMicrotask(()=>{fvQueued=false;if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;try{fvDecorate();}catch(error){console.warn('收藏入口暂未更新：',error.message);}});}
 const fvOldWsl=typeof wslCardHtml==='function'?wslCardHtml:null;
 if(fvOldWsl)wslCardHtml=function(token,target,entry,related){return fvOldWsl(token,target,entry,related)+fvMarkup({target:target||'',text:token.lao,meaning:token.meaning||'',kind:'word',parentId:fvParent(),context:document.querySelector('.wsl-sentence')?.textContent||''});};
 const fvOldNumber=typeof nsInlineHtml==='function'?nsInlineHtml:null;
@@ -8444,6 +8471,7 @@ wslCardHtml=function(token,target,entry,related){
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();b.disabled=true;void (b.dataset.cfRecord?cfRecord(b.dataset.cfRecord,{button:b}):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
 function cfDecorate(){
+ if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
  for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
  for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
@@ -8556,6 +8584,12 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 }
 .cf-inline-recorder{margin-top:12px;padding:14px;border:1px solid #8ebbad;border-radius:12px;background:#f2faf6}
 .cf-inline-recorder button{min-height:44px;margin:4px}
+@media(max-width:760px){
+ #learningDialog [data-quick-reference]>#learningReferenceRecord,.cf-inline-recorder>[data-cf-control="learningReferenceRecord"]{display:block;width:100%;min-height:52px;margin:16px 0 22px!important}
+ #learningDialog #learningRecordingDraft,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;padding-top:16px;margin-top:12px;border-top:1px solid #dce8e2}
+ #learningDialog #learningRecordingDraft>button,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]>button{min-height:52px;width:100%;margin:0!important;padding:12px 8px}
+ #learningDialog #learningRecordingDraft>p,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]>p{grid-column:1/-1;margin-top:4px}
+}
 #learningDialog .wsl-card .wsl-word-actions.cf-word-controls{display:grid;grid-template-columns:minmax(70px,1fr) minmax(60px,1fr) minmax(76px,1fr) 40px;gap:8px;align-items:center;max-width:560px;margin:12px 0 4px}
 #learningDialog .wsl-card .wsl-word-actions.cf-word-controls>button{margin:0!important;min-height:40px;height:40px;padding:6px 10px!important;font-size:14px!important;border-radius:9px;border:1px solid #d6e5df;background:#fff;white-space:nowrap}
 #learningDialog .wsl-card .wsl-word-actions.cf-word-controls>.fv-button{width:40px!important;min-width:40px!important;max-width:40px;height:40px;min-height:40px;flex:none;color:#69827a;background:transparent;border-color:transparent;font-size:20px!important}

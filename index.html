@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="059a29ce590cae9d">
+  <meta name="lao-app-build" content="4f0b13b0727026f0">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3254,10 +3254,16 @@ async function lessonV2StudyWrites(writes,snap,entries,chosen){
  const digest=await paDigest(paRules());
  for(const parent of pending){
   const data=lessonV2StudyValidate(parent.v2Data.studyAnalysis,parent.textLao);
+  for(const s of data.grammar.segments)for(const text of [s.lao,...s.words.map(w=>w.lao)])if(!paSlice(data.pronunciation,text))throw Error('发音音节与语法分段边界不一致：'+text);
+  // A word-ref still resolves to the user's dictionary word in the actual UI.
+  // Align the analysis identity with that word, without changing its meaning.
+  const word=parent.contentType==='word'?(entries.find(w=>parent.linkedWordSyncIds?.includes(w.syncId))||entries.find(w=>(w.syncAliases||[]).some(id=>parent.linkedWordSyncIds?.includes(id)))):null;
+  if(word&&word.word!==parent.textLao)throw Error('关联词典原文与教材分析不符，请重新预览');
+  if(word)data.grammar={...data.grammar,translation:String(word.meaning||'')};
   const parsed=saMakeWrites(data.grammar,parent,{...snap,learningMaterials:[...map.values()]},entries,new Map());
   for(const m of parsed)put(m);
   const saved={...map.get(parent.id),studyWordAnalysis:data.kind==='word'};put(saved);
-  const target={m:saved,w:null,text:saved.textLao},basis=paBasis(target);
+  const target={m:saved,w:word,text:saved.textLao},basis=paBasis(target);
   const segments=basis.segments.map(s=>{const analysis=paSlice(data.pronunciation,s.original);if(!analysis)throw Error('发音音节与语法分段边界不一致：'+s.original);return {...s,analysis:paValidateAnalysis(analysis,s.original)};});
   const result=await paPlan([{target,basis,digest,segments}],{...snap,learningMaterials:[...map.values()]});for(const m of result.materials)put(m);
   // Each component remains independently recordable and receives its own complete analysis.
@@ -3274,7 +3280,8 @@ function lessonV2StudyExport(m,snap,row){
  if(!row.studyAnalysis)return row;
  const a=m.sentenceAnalysis;if(!a||saTextKey(a.original)!==saTextKey(m.textLao)){delete row.studyAnalysis;return row;}
  const p=m.pronunciationAnalysis,profiles=new Map(snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted).map(m=>[m.id,m]));
- if(!p||p.basisKey!==cloudStable(paBasis({m,w:null,text:m.textLao}))){delete row.studyAnalysis;return row;}
+ const basis=paBasis({m,w:null,text:m.textLao}),wordBasis=m.contentType==='word'&&m.studyWordAnalysis?paBasis({m,w:{meaning:a.translation||''},text:m.textLao}):null;
+ if(!p||p.basisKey!==cloudStable(basis)&&(!wordBasis||p.basisKey!==cloudStable(wordBasis))){delete row.studyAnalysis;return row;}
  const units=p.segments.flatMap(s=>profiles.get(s.profileId)?.phoneticAnalysis.units||[]);
  if(units.map(u=>u.text).join('')!==m.textLao){delete row.studyAnalysis;return row;}
  row.studyAnalysis=lessonV2StudyValidate({format:'lao-item-study-v1',kind:m.studyWordAnalysis?'word':'sentence',grammar:a,pronunciation:{format:'lao-pronunciation-analysis-v1',original:m.textLao,notes:row.studyAnalysis?.pronunciation.notes||'',units}},m.textLao);return row;

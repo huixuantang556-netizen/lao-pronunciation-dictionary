@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="fcf532b38cddf0ee">
+  <meta name="lao-app-build" content="3f535c7381513eca">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -462,12 +462,14 @@ async function importCodaClassroom(){
     }
     let navigationTouched=false;
     function rememberCurrentPage(){
-      try{const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;if(['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(view))sessionStorage.setItem(workspaceName('lao-current-page-v1'),JSON.stringify({view,y:window.scrollY||0}));}catch(_){}
+      try{const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;if(['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(view))sessionStorage.setItem(workspaceName('lao-current-page-v1'),JSON.stringify({view,y:window.scrollY||0,...(view==='learning'&&typeof learningPagePosition==='function'?{learning:learningPagePosition()}: {})}));}catch(_){}
     }
     async function restoreCurrentPage(){
       if(navigationTouched)return;
       let saved;try{saved=JSON.parse(sessionStorage.getItem(workspaceName('lao-current-page-v1')));}catch(_){return;}
       if(!saved||!['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(saved.view))return;
+      if(saved.view==='learning'&&typeof learningRestorePosition==='function')await learningRestorePosition(saved.learning);
+      if(navigationTouched)return;
       await showView(saved.view);
       requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study')window.scrollTo({top:Number.isFinite(saved.y)?Math.max(0,saved.y):0,behavior:'instant'});});
     }
@@ -2525,6 +2527,19 @@ function learningLegacySectionHtml(rows,words,title,key,empty){
 }
 async function learningOpenReference(view){if(!['alphabet','pronunciation'].includes(view))throw Error('未知参考表');if(learningHasWork()||recorder)throw Error('请先保存或取消编辑并结束录音，再打开参考表');stopPracticeAudio();if(view==='pronunciation')pronunciationRoute='home';await showView(view);}
 function learningPathCard(route,title,label,description,path){const h=learningEsc;return '<button type="button" data-learn="'+h(route)+'"><span class="learn-path-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="'+path+'"/></svg></span><span class="learn-path-body"><small>'+h(label)+'</small><h3>'+h(title)+'</h3><p>'+h(description)+'</p></span><span class="learn-path-arrow" aria-hidden="true">›</span></button>';}
+function learningPagePosition(){
+ return {route:learningRoute,courseId:learningLesson.id,tab:learningTab,group:typeof learningGroupState!=='undefined'?learningGroupState.get(learningLesson.id):null,section:typeof lessonV2Sections!=='undefined'?lessonV2Sections.get(learningLesson.id):'',mode:typeof lessonV2Mode!=='undefined'?lessonV2Mode:'order',filter:typeof lessonV2Filter!=='undefined'?lessonV2Filter:'all',dialogues:typeof communicationDialogs!=='undefined'?[...communicationDialogs].filter(([key])=>key.startsWith(learningLesson.id+':')):[]};
+}
+async function learningRestorePosition(saved){
+ if(!saved||saved.route!=='lesson'||typeof saved.courseId!=='string')return;
+ const course=learningCourses(await learningSnapshot()).find(c=>c.id===saved.courseId);if(!course)return;
+ learningLesson=course;learningRoute='lesson';learningTab=['knowledge','word','reading_drill','sentence'].includes(saved.tab)?saved.tab:'knowledge';
+ if(saved.group&&['words','dialogue','original'].includes(saved.group.kind))learningGroupState.set(course.id,{kind:saved.group.kind,category:typeof saved.group.category==='string'?saved.group.category:''});
+ if(typeof lbSelectCourse==='function')lbSelectCourse(course);
+ if(typeof saved.section==='string')lessonV2Sections.set(course.id,saved.section);
+ lessonV2Mode=saved.mode==='category'?'category':'order';lessonV2Filter=typeof saved.filter==='string'?saved.filter:'all';
+ if(Array.isArray(saved.dialogues))for(const pair of saved.dialogues.slice(0,100)){if(Array.isArray(pair)&&pair.length===2&&pair.every(x=>typeof x==='string')&&pair[0].startsWith(course.id+':'))communicationDialogs.set(...pair);}
+}
 async function renderLearning(){
  if(activeView==='learning')await learningSeedLessonOne();
  const token=++learningRenderToken;const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);if(token!==learningRenderToken||activeView!=='learning')return;
@@ -3574,7 +3589,7 @@ lessonPageToolbarFor=function(...args){return lessonPageFullToolbar(...args)
  .replace('class="page-play">','class="page-play" aria-label="播放整页" title="播放整页">')
  .replace('播放整页</button>','<span class="page-player-label">播放整页</span></button>')
  .replace('aria-label="暂停／继续">暂停／继续</button>','aria-label="暂停／继续" title="暂停／继续"><span class="page-player-mobile" aria-hidden="true">⏯</span><span class="page-player-label">暂停／继续</span></button>')
- .replace('<p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p>','<p class="page-player-hint">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p><p data-page-status role="status"></p>');};
+ .replace(/<p data-page-status role="status">[^<]*<\/p>/,'<p data-page-status role="status"></p>');};
 function lessonIcon(type){
  const paths={play:'<path d="m8 5 11 7-11 7Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',audio:'<path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/>'};
  return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[type]+'</svg>';
@@ -7835,13 +7850,17 @@ function lcChoiceRows(options,courses,query='',current=''){
  const byId=new Map(courses.map(c=>[c.id,c])),q=query.normalize('NFKC').trim().toLocaleLowerCase();
  return options.filter(o=>o.value).map(o=>{const c=byId.get(o.value);return {id:o.value,title:c?.title||o.text,meta:c?[c.textbookName,c.chapterName].filter(Boolean).join(' · '):'',search:o.text};}).filter(c=>!q||[c.title,c.meta,c.search].join(' ').normalize('NFKC').toLocaleLowerCase().includes(q)).map(c=>({...c,current:c.id===current}));
 }
+function lcRevealCurrent(){
+ const list=$('#lcCourseRows'),row=list?.querySelector('[aria-current="true"]');if(!row)return;
+ const box=list.getBoundingClientRect(),item=row.getBoundingClientRect();list.scrollTop+=item.top-box.top-(list.clientHeight-item.height)/2;
+}
 async function lcOpenChooser(button){
  if(learningBusy||learningHasWork()||recorder)throw Error('请先保存编辑或结束录音，再选择章节');
  const select=button.closest('.lc-course-picker')?.querySelector('[data-course-jump]');if(!select)return;
  const options=[...select.options].map(o=>({value:o.value,text:o.textContent})),current=select.value,snap=await learningSnapshot(),courses=learningCourses(snap),h=learningEsc;if(button.isConnected===false)return;
  learningModal('选择章节／课程','<div class="lc-chooser"><label class="lc-search-label">搜索章节<input id="lcCourseSearch" type="search" placeholder="章节名称、教材或关键词" autocomplete="off"></label><p id="lcCourseCount" role="status"></p><div id="lcCourseRows" class="lc-choice-list"></div></div>');
  const draw=()=>{const rows=lcChoiceRows(options,courses,$('#lcCourseSearch').value,current);$('#lcCourseCount').textContent='共 '+rows.length+' 个章节／课程';$('#lcCourseRows').innerHTML=rows.map(c=>'<button type="button" data-lc-course="'+h(c.id)+'" '+(c.current?'aria-current="true"':'')+'><span><strong>'+h(c.title)+'</strong>'+(c.meta?'<small>'+h(c.meta)+'</small>':'')+'</span><span class="lc-choice-mark" aria-hidden="true">'+(c.current?'✓':'›')+'</span></button>').join('')||'<p class="lc-choice-empty">没有匹配的章节，请换个关键词。</p>';};
- let opening=false;$('#lcCourseSearch').oninput=draw;$('#lcCourseRows').onclick=async e=>{const row=e.target.closest('[data-lc-course]');if(!row||opening)return;opening=true;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');await learningAuthorAction('course-open',{dataset:{id:row.dataset.lcCourse}});learningDialog.close();}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{opening=false;}};draw();
+ let opening=false;$('#lcCourseSearch').oninput=draw;$('#lcCourseRows').onclick=async e=>{const row=e.target.closest('[data-lc-course]');if(!row||opening)return;opening=true;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');await learningAuthorAction('course-open',{dataset:{id:row.dataset.lcCourse}});learningDialog.close();}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{opening=false;}};draw();requestAnimationFrame(lcRevealCurrent);
 }
 function lcScenePickerHtml(select,current=''){return '<span class="lc-scene-picker">'+select+'<button type="button" class="lc-picker-button" data-scene-choose aria-haspopup="dialog"><span>'+learningEsc(current||'全部场景')+'</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button></span>';}
 function lcSceneRows(options,query='',current=''){const q=query.normalize('NFKC').trim().toLocaleLowerCase(),seen=new Set();return options.filter(o=>{if(seen.has(o.value))return false;seen.add(o.value);return !o.value||!q||o.text.normalize('NFKC').toLocaleLowerCase().includes(q);}).map(o=>({...o,current:o.value===current}));}

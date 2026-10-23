@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="dfe977499a8c5ba2">
+  <meta name="lao-app-build" content="17527f5dced78b9e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1708,10 +1708,10 @@ async function cloudReadRemote(uid,api,table,known,status){
         switchCloudWorkspace(session.user.id);
       }
       $('#cloudEnterButton').onclick=()=>{if(!busy)enterAccount();};
-      $('#cloudSyncButton').textContent='云端更新（不上传）';
+      $('#cloudSyncButton').textContent='云端同步';
       const learningSyncButton=document.createElement('button');learningSyncButton.type='button';learningSyncButton.textContent='只下载学习资料';$('#cloudSyncButton').after(learningSyncButton);
-      const bidirectionalSyncButton=document.createElement('button');bidirectionalSyncButton.type='button';bidirectionalSyncButton.id='cloudBidirectionalSync';bidirectionalSyncButton.textContent='双向同步（允许上传）';learningSyncButton.after(bidirectionalSyncButton);
-      const syncDirectionNotice=document.createElement('p');syncDirectionNotice.className='tag-hint';syncDirectionNotice.textContent='默认只下载，禁止上传。本机独有资料保留；云端版本会更新本机对应资料。只有主动选择“双向同步”并确认后，才允许上传。';bidirectionalSyncButton.after(syncDirectionNotice);
+      const downloadSyncButton=document.createElement('button');downloadSyncButton.type='button';downloadSyncButton.id='cloudDownloadOnlySync';downloadSyncButton.textContent='仅下载，不上传';$('#cloudSyncButton').after(downloadSyncButton);
+      const syncDirectionNotice=document.createElement('p');syncDirectionNotice.className='tag-hint';syncDirectionNotice.textContent='上方“云端同步”会上传本机修改并接收云端更新，上传前会列出数量供确认。旧设备只想获取云端资料时，请选择“仅下载，不上传”；云端版本会更新本机对应资料，本机独有资料保留。';learningSyncButton.after(syncDirectionNotice);
       window.laoSyncAccountProfile=async()=>{
         if(busy)throw Error('正在同步或处理账号，请稍后重试');
         if(!session||session.user.id!==cloudWorkspace)throw Error('请先登录并进入此账号词典，再同步昵称与头像');
@@ -1727,12 +1727,12 @@ async function cloudReadRemote(uid,api,table,known,status){
         try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status,{direction:'download'});if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
         catch(e){status('学习资料下载未完成：'+e.message+'。本次没有上传；已完成的下载可能已保存，请保留本机资料。');}finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
-      const startCloudSync=async(direction='download')=>{
+      const startCloudSync=async(direction='bidirectional')=>{
         if(busy)return;
         if(!session){status('请先登录。');return;}
         if(session.user.id!==cloudWorkspace){status('请先点击“进入此账号词典”；原本机词典保留不变。');return;}
-        if(direction!=='download'&&!confirm('你选择了“双向同步”，允许本机资料上传并修改云端。\n旧设备若只想获取最新资料，请取消，改用“云端更新（不上传）”。\n继续后，词典和学习资料阶段仍会分别列出上传数量供确认。允许进入双向同步吗？'))return;
-        busy=true;learningSyncButton.disabled=true;bidirectionalSyncButton.disabled=true;updateUI();beginProgress();
+        if(direction!=='download'&&!confirm('云端同步会上传本机修改并接收云端更新。\n词典和学习资料阶段会分别列出上传数量供确认。\n旧设备若只想获取云端资料，请取消，改用“仅下载，不上传”。继续同步吗？'))return;
+        busy=true;learningSyncButton.disabled=true;downloadSyncButton.disabled=true;updateUI();beginProgress();
         try{
           await checkConnection();
           const uid=session.user.id;
@@ -1740,10 +1740,10 @@ async function cloudReadRemote(uid,api,table,known,status){
           if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
           else await task();
         }catch(error){status((direction==='download'?'云端下载未完成：':'双向同步未完成：')+error.message+(direction==='download'?' 本次没有上传；已完成的下载可能已保存，请保留本机数据。':' 已确认并成功上传的项目可能已保存，请保留本机数据。'));}
-        finally{endProgress();busy=false;learningSyncButton.disabled=false;bidirectionalSyncButton.disabled=false;updateUI();}
+        finally{endProgress();busy=false;learningSyncButton.disabled=false;downloadSyncButton.disabled=false;updateUI();}
       };
-      $('#cloudSyncButton').onclick=()=>startCloudSync('download');
-      bidirectionalSyncButton.onclick=()=>startCloudSync('bidirectional');
+      $('#cloudSyncButton').onclick=()=>startCloudSync('bidirectional');
+      downloadSyncButton.onclick=()=>startCloudSync('download');
       $('#cloudLoginForm').onsubmit=async event=>{
         event.preventDefault();if(busy)return;
         const email=$('#cloudEmail').value.trim(),password=$('#cloudPassword').value;
@@ -8162,7 +8162,7 @@ document.querySelector('#apSelfTestLanguage').onchange=e=>{try{apSavePreferences
 // Move the original controls, preserving sync handlers, busy state and progress reporting.
 const apSyncHost=document.createElement('div');apSyncHost.className='ap-account-heading';apSyncHost.id='apSyncHost';const apAccountTitle=document.querySelector('#apAccount').querySelector('h3');apAccountTitle.before(apSyncHost);apSyncHost.append(apAccountTitle);
 const apSyncResult=document.createElement('div');apSyncResult.id='apSyncResult';apSyncResult.hidden=true;apSyncHost.after(apSyncResult);
-const apSyncButton=document.querySelector('#cloudSyncButton'),apSyncStatus=document.querySelector('#cloudStatus');if(apSyncButton){apSyncButton.textContent='云端更新（不上传）';apSyncHost.append(apSyncButton);apSyncButton.addEventListener('click',()=>{if(apSyncStatus)apSyncResult.append(apSyncStatus);apSyncResult.hidden=false;},true);}
+const apSyncButton=document.querySelector('#cloudSyncButton'),apSyncStatus=document.querySelector('#cloudStatus');if(apSyncButton){apSyncButton.textContent='云端同步';apSyncHost.append(apSyncButton);apSyncButton.addEventListener('click',()=>{if(apSyncStatus)apSyncResult.append(apSyncStatus);apSyncResult.hidden=false;},true);}
 const apSyncBadge=document.createElement('aside');apSyncBadge.hidden=true;apSyncBadge.setAttribute('aria-label','云端同步状态');apSyncBadge.style.cssText='position:fixed;right:12px;bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:40;max-width:min(320px,85vw);padding:10px 14px;border:1px solid #c8ded6;border-radius:12px;background:#f4faf7;color:#176956;box-shadow:0 3px 14px #0002;font-size:13px';
 const apSyncBadgeText=document.createElement('span'),apSyncBadgeClose=document.createElement('button');apSyncBadgeClose.type='button';apSyncBadgeClose.textContent='×';apSyncBadgeClose.setAttribute('aria-label','收起同步状态（不取消同步）');apSyncBadgeClose.style.cssText='margin-left:8px;padding:2px 8px';apSyncBadgeClose.onclick=()=>apSyncBadge.hidden=true;apSyncBadge.append(apSyncBadgeText,apSyncBadgeClose);document.body.append(apSyncBadge);
 window.laoSyncFeedback=({running,message})=>{apSyncBadge.hidden=false;apSyncBadge.dataset.running=String(running);apSyncBadgeText.textContent=running?'云端同步中，可继续浏览':message.includes('未完成')||message.includes('取消')?'同步未完成，请在设置中查看原因':'本次云端同步已结束；详情见设置';apSyncBadge.title=message;};

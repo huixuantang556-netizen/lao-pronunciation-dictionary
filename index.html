@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="49d35e53cbb83c6b">
+  <meta name="lao-app-build" content="4ea61719c3a4ce0b">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3209,6 +3209,10 @@ function lessonV2MatchTitle(data,snap){
 }
 async function lessonV2Save(d,preview,options={}){
  d=lessonV2Clone(d);
+ if(d.sourceRevision!==undefined){
+  const ref=d.sourceRevision,course=learningCourses(preview.snap).find(c=>c.id===ref?.courseId&&c.packageKey===lessonPackageKey(d));
+  if(!course||typeof ref.hash!=='string'||!/^[a-f0-9]{64}$/.test(ref.hash)||await lessonV2SourceRevision(preview.snap,course,preview.entries)!==ref.hash)throw Error('这份课程自导出后已变化，未覆盖。请重新导出后整理，不要删除原资料绕过检查。');
+ }
  if(options.replace)options={...options,changes:lessonV2Incoming(d).map(x=>x.id),order:true,course:true};
  const approved=new Set(options.changes||[]),packageKey=lessonPackageKey(d);
  // Rejected edits must not create new dictionary words or change the item's owner.
@@ -3299,8 +3303,14 @@ async function lessonV2StudyWrites(writes,snap,entries,chosen){
  }
  paValidateLinks({...snap,learningMaterials:[...map.values()]});
 }
+async function lessonV2SourceRevision(snap,course,entries){
+ const lesson=lessonV2Export(snap,course),links=new Set();
+ for(const {r}of lessonV2Rows(lesson)){delete r.studyAnalysis;const old=snap.learningMaterials.find(m=>m.id===lessonV2Id(course.packageKey,'item',r.itemId));for(const id of old?.linkedWordSyncIds||[])links.add(id);}
+ const words=entries.filter(w=>[w.syncId,...(w.syncAliases||[])].some(id=>links.has(id))).map(w=>({syncId:w.syncId,word:w.word,meaning:w.meaning||''})).sort((a,b)=>a.syncId.localeCompare(b.syncId));
+ return paDigest({lesson,words});
+}
 function lessonV2StudyExport(m,snap,row){
- if(!row.studyAnalysis)return row;
+ if(!row.studyAnalysis&&!m.pronunciationAnalysis)return row;
  const a=m.sentenceAnalysis;if(!a||saTextKey(a.original)!==saTextKey(m.textLao)){delete row.studyAnalysis;return row;}
  const p=m.pronunciationAnalysis,profiles=new Map(snap.learningMaterials.filter(m=>m.phoneticProfile&&!m.deleted).map(m=>[m.id,m]));
  const basis=paBasis({m,w:null,text:m.textLao}),wordBasis=m.contentType==='word'&&m.studyWordAnalysis?paBasis({m,w:{meaning:a.translation||''},text:m.textLao}):null;
@@ -6819,9 +6829,18 @@ async function paPreview(root,snap,entries){
 }
 async function paPlan(results,snap){
  const writes=new Map(),now=Date.now();
+ // Same reading/structure and review state can share a saved profile even when
+ // explanatory notes differ. Never merge different IPA, tones or unknown spans.
+ const available=new Map(),reused=new Map(),reviewKey=a=>cloudStable(a.units.map(u=>({kind:u.kind,needsReview:!!u.needsReview,analysisNeedsReview:!!u.analysisNeedsReview,warnings:u.warnings||[],nested:u.kind==='reading'?reviewKey(u.analysis):''}))),resolved=a=>a.units.every(u=>u.kind!=='unresolved'&&(u.kind!=='reading'||resolved(u.analysis)));
+ for(const m of snap.learningMaterials)if(m.phoneticProfile&&!m.deleted&&paCompatibleDigest(m.ruleDigest,results[0]?.digest)){if(!available.has(m.textLao))available.set(m.textLao,[]);available.get(m.textLao).push(m);}
  for(const p of results){if(p.error)throw Error('请取消勾选无效项');
   const profile=async analysis=>{const id='phonetic-profile:'+await paDigest({ruleDigest:p.digest,analysis});const previous=snap.learningMaterials.find(m=>m.id===id),old=previous&&!previous.deleted?previous:null;
    if(previous?.deleted){const replacement=snap.learningMaterials.find(m=>m.id===previous.repairRedirectTo&&!m.deleted&&m.phoneticProfile);if(replacement&&replacement.textLao===analysis.original&&paReadingKey(replacement.phoneticAnalysis)===paReadingKey(analysis))return replacement.id;throw Error('这份同内容分析已移除，请先恢复或重新核对；不会静默恢复已归档记录。');}
+   if(!old&&resolved(analysis)){
+    const key=cloudStable([p.digest,analysis.original,paReadingKey(analysis),reviewKey(analysis)]);if(reused.has(key))return reused.get(key);
+    for(const candidate of available.get(analysis.original)||[])try{if(!paCompatibleDigest(candidate.ruleDigest,p.digest))continue;const a=paValidateAnalysis(candidate.phoneticAnalysis,analysis.original);if(resolved(a)&&paReadingKey(a)===paReadingKey(analysis)&&reviewKey(a)===reviewKey(analysis)){reused.set(key,candidate.id);return candidate.id;}}catch(_){}
+    reused.set(key,id);
+   }
    if(!old&&!writes.has(id))writes.set(id,{...learningBlank(id,'reading_drill',analysis.original),analysisOwner:'phonetic-cache',phoneticProfile:true,phoneticAnalysis:analysis,ruleDigest:p.digest,updatedAt:now});return id;};
   const segments=[];for(const s of p.segments){const profileId=await profile(s.analysis),words=[];for(const w of s.words){const part=paSlice(s.analysis,w.lao);if(part)words.push({...w,profileId:await profile(part)});}segments.push({index:s.index,original:s.original,chinese:s.chinese,profileId,words});}
   writes.set(p.target.m.id,{...p.target.m,pronunciationAnalysis:{format:'lao-segment-pronunciation-v1',original:p.target.text,basisKey:cloudStable(p.basis),ruleDigest:p.digest,segments,savedAt:now},updatedAt:now});

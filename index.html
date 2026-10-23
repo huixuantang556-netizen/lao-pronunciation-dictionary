@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="984b9a9b37965314">
+  <meta name="lao-app-build" content="b0d9fd77055250f3">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6534,7 +6534,9 @@ let paLegacyRuleDigest='',paV2RuleDigest='';
 async function paDigest(rules){if(!paLegacyRuleDigest)paLegacyRuleDigest=await cloudHash(new Blob([cloudStable(paLegacyRules())]));if(!paV2RuleDigest)paV2RuleDigest=await cloudHash(new Blob([cloudStable(paRulesV2())]));return cloudHash(new Blob([cloudStable(rules)]));}
 function paCompatibleDigest(saved,current){return saved===current||!!paLegacyRuleDigest&&saved===paLegacyRuleDigest||!!paV2RuleDigest&&saved===paV2RuleDigest;}
 function paText(v,label,max=3000){if(typeof v!=='string'||v.length>max)throw Error(label+'必须为不超过'+max+'字符的文字');return v;}
-function paKnownClass(initial,rules){return Object.keys(rules.initialClasses).find(k=>rules.initialClasses[k].includes(initial));}
+function paKnownClass(initial,rules){return Object.keys(rules.initialClasses).find(k=>rules.initialClasses[k].includes(initial))||(initial==='ຣ'?'low':undefined);}
+function paClusterSound(initial){return ({'ກວ':'kw','ຂວ':'kʰw','ຄວ':'kʰw'})[initial]||'';}
+function paVowelVariant(base,written){return base==='◌ຳ'&&written==='◌ໍາ'||base==='◌ົວ'&&written==='◌ວາ';}
 function paValidateAnalysis(value,original,rules=paRules()){
  if(value?.format!==paFormat||value.original!==original)throw Error('发音分析格式或原文不一致');
  if(!Array.isArray(value.units)||!value.units.length||value.units.length>200)throw Error('每段须有1～200个音节或标点单位');
@@ -6545,6 +6547,20 @@ function paValidateAnalysis(value,original,rules=paRules()){
   const end=at+text.length;if(original.slice(at,end)!==text||!boundaries.has(at)||!boundaries.has(end))throw Error('音节未完整覆盖原文或切断了组合字符：'+text);at=end;
   if(u.kind==='separator'){if(!/^[\s\p{P}\p{S}]+$/u.test(text))throw Error('标点单位中不能藏入字母或数字');return {kind:'separator',text};}
   if(u.kind==='unresolved'){const explanation=paText(u.explanation||'','待核对原因',2000);if(!explanation.trim())throw Error('无法确定的音节必须说明原因');return {kind:'unresolved',text,explanation,needsReview:true};}
+  if(u.kind==='notation'){
+   const notationType=u.notationType,explanation=paText(u.explanation||'','符号说明',2000),form=text.replaceAll('x','◌'),isConsonant=!!paKnownClass(text,rules)||Object.values(rules.compoundInitials).some(a=>a.includes(text)),isVowel=[...rules.vowels.flatMap(v=>[v.base,v.closed]),...rules.specialVowels].filter(Boolean).some(v=>v===form)||form==='◌ໍາ';
+   if(!explanation.trim()||!(notationType==='consonant'&&isConsonant||notationType==='vowel-pattern'&&isVowel))throw Error('字母／元音模板必须对应现有教材形式');
+   return {kind:'notation',text,notationType,explanation,needsReview:false};
+  }
+  if(u.kind==='reading'){
+   const readingType=u.readingType,reading=paText(u.reading,'展开读法',1000),explanation=paText(u.explanation||'','读法依据',2000);
+   if(!['number','repetition','spelling-variant'].includes(readingType)||!reading||!explanation.trim()||!Array.isArray(u.analysis?.units)||u.analysis.units.some(v=>!['syllable','separator'].includes(v.kind)))throw Error('展开读法类型或音节资料无效');
+   if(readingType==='number'&&!/^\+?[0-9][0-9 +().,:/%％-]*$/u.test(text))throw Error('数字读法的原字形无效');
+   if(readingType==='repetition'&&(text!=='ໆ'||value.units[i-1]?.text!==reading))throw Error('重复符号须准确复读前一完整音节');
+   if(readingType==='spelling-variant'&&!(text==='ຝຣັ່ງ'&&reading==='ຝະລັ່ງ'))throw Error('未登记的旧拼写展开，不能用新字串代替未知读法');
+   const analysis=paValidateAnalysis(u.analysis,reading,rules);
+   return {kind:'reading',text,readingType,reading,explanation,analysis,needsReview:analysis.units.some(v=>v.needsReview)};
+  }
   if(u.kind!=='syllable')throw Error('单位类型须为 syllable、separator 或 unresolved');
   const onset={written:paText(u.onset?.written,'首辅音',20),sound:paText(u.onset?.sound||'','实际发音辅音',40),mode:u.onset?.mode,toneClass:u.onset?.toneClass};
   if(!onset.written||!text.includes(onset.written)||!['normal','ho-leading','cluster','unknown'].includes(onset.mode)||!['middle','low','high','unknown'].includes(onset.toneClass))throw Error('首辅音、结构或决定声调的类别无效：'+text);
@@ -6572,10 +6588,10 @@ function paValidateAnalysis(value,original,rules=paRules()){
   if(leadingSound&&onset.sound&&onset.sound!==leadingSound)throw Error('前置ຫ的实际辅音与已核对规则不符：'+text);
   const toneClass=onset.mode==='normal'?knownClass:leadingSound&&compoundClass==='high'?'high':onset.mode==='cluster'&&rules.toneClusters?.includes(onset.written)?compoundClass:null;
   if(!toneClass||onset.toneClass==='unknown')warnings.push('决定声调的辅音类别或结构尚不能自动核实');
-  if(onset.mode!=='normal'&&!leadingSound)soundWarnings.push('复合／前置辅音的实际读音需结合录音核对');
+  if(onset.mode!=='normal'&&!leadingSound&&!(onset.mode==='cluster'&&paClusterSound(onset.written)&&onset.sound===paClusterSound(onset.written)))soundWarnings.push('复合／前置辅音的实际读音需结合录音核对');
   if(!rhyme&&knownVowels.length&&vowel.length!=='unknown'&&!knownVowels.some(v=>v.length===vowel.length))throw Error('基本元音的长短与教材不符：'+vowel.base);
   if(!rhyme&&(!knownVowels.length||vowel.length==='unknown'))warnings.push('元音基本形式或长短待核对');
-  if(vowel.base!==vowel.written&&!knownVowels.some(v=>v.closed===vowel.written)&&!rules.vowelChart.some(row=>row[0]===vowel.base&&row[2]===vowel.written))warnings.push('元音书写变化未在当前表中确认');
+  if(vowel.base!==vowel.written&&!paVowelVariant(vowel.base,vowel.written)&&!knownVowels.some(v=>v.closed===vowel.written)&&!rules.vowelChart.some(row=>row[0]===vowel.base&&row[2]===vowel.written))warnings.push('元音书写变化未在当前表中确认');
   if(special&&!rhyme)warnings.push('特殊元音的韵尾归类需人工核对');
   if(coda.written&&!cod)warnings.push('尾辅音尚未登记在规则表');
   if(cod&&coda.sound!==cod.sound)throw Error('尾辅音读音与教材不一致：'+coda.written);
@@ -6627,11 +6643,11 @@ function paCandidates(snap,entries,sentences=[]){
  for(const row of sentences)add(row.m.id,row.label);
  return [...rows.values()];
 }
-function paReadingKey(a){return cloudStable(a.units.map(u=>u.kind==='syllable'?{kind:u.kind,text:u.text,onset:u.onset,vowel:u.vowel,coda:u.coda,shape:u.shape,life:u.life,toneMark:u.toneMark,tone:u.tone,ipa:u.ipa||''}:{kind:u.kind,text:u.text}));}
+function paReadingKey(a){return cloudStable(a.units.map(u=>u.kind==='syllable'?{kind:u.kind,text:u.text,onset:u.onset,vowel:u.vowel,coda:u.coda,shape:u.shape,life:u.life,toneMark:u.toneMark,tone:u.tone,ipa:u.ipa||''}:u.kind==='reading'?{kind:u.kind,text:u.text,readingType:u.readingType,reading:u.reading,analysis:paReadingKey(u.analysis)}:u.kind==='notation'?{kind:u.kind,text:u.text,notationType:u.notationType}:{kind:u.kind,text:u.text}));}
 function paSingleReading(analyses){return analyses.length&&analyses.every(a=>paReadingKey(a)===paReadingKey(analyses[0]))?analyses[0]:null;}
 function paSlice(analysis,text){
  const spans=[];let offset=0;for(const u of analysis.units){spans.push({start:offset,end:offset+u.text.length,u});offset+=u.text.length;}
- const found=[];for(let start=analysis.original.indexOf(text);start>=0;start=analysis.original.indexOf(text,start+1)){const end=start+text.length,parts=spans.filter(s=>s.start>=start&&s.end<=end);if(parts.length&&parts[0].start===start&&parts.at(-1).end===end)found.push({format:paFormat,original:text,notes:'',units:parts.map(p=>p.u)});}
+ const found=[];for(let start=analysis.original.indexOf(text);start>=0;start=analysis.original.indexOf(text,start+1)){const end=start+text.length,parts=spans.filter(s=>s.start>=start&&s.end<=end);if(parts.length&&parts[0].start===start&&parts.at(-1).end===end&&!parts.some((p,i)=>p.u.kind==='reading'&&p.u.readingType==='repetition'&&parts[i-1]?.u.text!==p.u.reading))found.push({format:paFormat,original:text,notes:'',units:parts.map(p=>p.u)});}
  return paSingleReading(found);
 }
 function paReusable(snap,text,digest){
@@ -6730,7 +6746,7 @@ function paAuditProfile(row,rules,digest){
  const flags=new Set(),reasons=[],syllables=[];let fingerprint='';
  if(!paCompatibleDigest(row.ruleDigest,digest)){flags.add('stale');reasons.push('教材规则版本已不兼容，需重新导出核对。');}
  try{const a=paValidateAnalysis(row.phoneticAnalysis,row.textLao,rules);fingerprint=paAuditFingerprint(cloudStable([paCompatibleDigest(row.ruleDigest,digest)?'compatible':row.ruleDigest,paReadingKey(a)]));
-  for(const u of a.units){const tags=[];if(u.kind==='unresolved'){flags.add('unresolved');tags.push('尚未确定音节／读法');}else if(u.kind==='syllable'){if(u.toneNeedsReview){flags.add('tone');tags.push('声调推导待核对');}if(u.soundNeedsReview){flags.add('sound');tags.push('实际读音待核对');}if(u.analysisNeedsReview){flags.add('pending');tags.push('原分析保留核对标记');}if(u.warnings?.length&&!tags.length){flags.add('pending');tags.push('存在分析警告');}}
+  for(const u of a.units){const tags=[];if(u.kind==='unresolved'){flags.add('unresolved');tags.push('尚未确定音节／读法');}else if(u.kind==='reading'&&u.needsReview){flags.add('pending');tags.push('展开读法仍有音节核对项');}else if(u.kind==='syllable'){if(u.toneNeedsReview){flags.add('tone');tags.push('声调推导待核对');}if(u.soundNeedsReview){flags.add('sound');tags.push('实际读音待核对');}if(u.analysisNeedsReview){flags.add('pending');tags.push('原分析保留核对标记');}if(u.warnings?.length&&!tags.length){flags.add('pending');tags.push('存在分析警告');}}
    if(tags.length&&syllables.length<12)syllables.push({text:u.text,reasons:tags});
   }
   if(/组合.*草稿|草稿.*组合/u.test(a.notes||'')){flags.add('pending');reasons.push('保存资料包含组合草稿提示，需确认整词边界与读法。');}
@@ -6889,6 +6905,8 @@ function paAnalysisHtml(raw){
  return '<div class="pa-section"><p class="pa-muted">逐音节拼读 · AI分析初稿，结合教材与实际发音核对。</p>'+(a.notes?'<details class="pa-original-notes"><summary>原分析补充备注</summary><p>'+h(a.notes)+'</p></details>':'')+a.units.map(u=>{
   if(u.kind==='separator')return '<span class="pa-separator">'+h(u.text)+'</span>';
   if(u.kind==='unresolved')return '<p class="pa-pending"><span lang="lo">'+h(u.text)+'</span> · 待核对：'+h(u.explanation)+'</p>';
+  if(u.kind==='notation')return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> · '+(u.notationType==='consonant'?'辅音书写形式':'元音模板')+'</summary><p>'+h(u.explanation)+'</p><p class="pa-muted">这不是完整单词音节，不虚构独立声调。</p></details>';
+  if(u.kind==='reading')return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> → <span lang="lo">'+h(u.reading)+'</span></summary><p>'+h(u.explanation)+'</p>'+paAnalysisHtml(u.analysis)+'</details>';
 return '<details class="pa-syllable"><summary><span lang="lo">'+h(u.text)+'</span> · '+h(u.tone||'声调未定')+paReviewLabel(u)+'</summary><dl class="pa-facts"><dt>首辅音</dt><dd lang="lo">'+h(u.onset.written)+'</dd><dt>实际发音辅音</dt><dd>'+h(u.onset.sound||'未填写')+' · '+h(labels[u.onset.mode])+'</dd><dt>声调类别</dt><dd>'+h(labels[u.onset.toneClass])+'</dd><dt>元音原型</dt><dd lang="lo">'+h(u.vowel.base)+'</dd><dt>本词书写</dt><dd lang="lo">'+h(u.vowel.written)+'</dd><dt>元音类别</dt><dd>'+h(u.vowel.category==='special'?'特殊韵母':'普通元音')+'</dd><dt>元音长度</dt><dd>'+h(labels[u.vowel.length])+'</dd><dt>尾辅音</dt><dd>'+h(u.coda.written||'无')+(u.coda.sound?' /'+h(u.coda.sound)+'/':'')+'</dd><dt>内含韵尾</dt><dd>'+h(u.embeddedFinal?'/'+u.embeddedFinal+'/':'无')+'</dd><dt>音节结构</dt><dd>'+h(u.embeddedFinal?'无独立书写尾辅音，韵母内含活韵尾':u.shape==='closed'?(u.life==='dead'?'死闭音节':u.life==='live'?'活闭音节':'闭音节，死活待核对'):u.vowel.length==='short'?'死音节（本教材：短元音直接结尾）':u.vowel.length==='long'?'开音节（本教材：长元音直接结尾）':'无尾辅音，类型待核对')+' · '+h(labels[u.life])+'性质</dd><dt>声调符号</dt><dd>'+h(u.toneMark==='none'?'无':u.toneMark)+'</dd><dt>教材推导</dt><dd>'+h(u.ruleTone||'当前规则不能可靠推导')+'</dd>'+(u.ipa?'<dt>IPA（AI初稿）</dt><dd>'+h(u.ipa)+'</dd>':'')+'</dl>'+paExplanationHtml(u)+(u.warnings.length?'<p class="pa-pending">'+h(u.warnings.join('；'))+'</p>':'')+(u.ruleKey?'<button type="button" data-pa-rule="'+h(u.ruleKey)+'">查看已有教材声调规则</button>':'')+'</details>';
  }).join('')+'</div>';
 }
@@ -8685,6 +8703,72 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 function cwNorm(x){return String(x||'').normalize('NFC').trim();}
 // Reviewed phrase structures. These are lexical components, not syllable cuts.
 const cwReviewedParts={
+ 'ເຕັມຖັງ':[['ເຕັມ','满；充满'],['ຖັງ','桶；罐；箱；加油场景指油箱']],
+ 'ຫ້ອງວ່າງ':[['ຫ້ອງ','房间'],['ວ່າງ','空着；有空']],
+ 'ດິນແດນ':[['ດິນ','土地'],['ແດນ','地域；疆界']],
+ 'ເກີບສົ້ນສູງ':[['ເກີບ','鞋'],['ສົ້ນ','脚跟；鞋跟'],['ສູງ','高']],
+ 'ທອດເອັນໄກ່':[['ທອດ','炸'],['ເອັນ','筋；腱'],['ໄກ່','鸡']],
+ 'ຕຸ້ມຫູ':[['ຕຸ້ມ','耳坠饰件'],['ຫູ','耳朵']],
+ 'ກ້ອຍປາ':[['ກ້ອຍ','老挝式拌制菜肴'],['ປາ','鱼']],
+ 'ກວ້າງຂວາງ':[['ກວ້າງ','宽'],['ຂວາງ','横向；此处与前词组合表示宽阔']],
+ 'ປັດກວາດ':[['ປັດ','拂；掸；扫除'],['ກວາດ','扫；打扫']],
+ 'ເປັນໄຂ້':[['ເປັນ','处于某状态；患'],['ໄຂ້','发热；病']],
+ 'ສາຍຮັດນິລະໄພ':[['ສາຍ','带；绳'],['ຮັດ','束紧；系紧'],['ນິລະໄພ','安全']],
+ 'ເກີບໜັງ':[['ເກີບ','鞋'],['ໜັງ','皮；皮革']],
+ 'ສະເຕັກງົວ':[['ສະເຕັກ','排餐；steak音译'],['ງົວ','牛']],
+ 'ບົດຮຽນ':[['ບົດ','篇章；课文'],['ຮຽນ','学习']],
+ 'ຫິມະຕົກ':[['ຫິມະ','雪'],['ຕົກ','落；下']],
+ 'ເຂົ້າໜຽວ':[['ເຂົ້າ','米；饭'],['ໜຽວ','黏；糯']],
+ 'ໜໍ່ໄມ້':[['ໜໍ່','嫩芽；笋'],['ໄມ້','树木；此处与前词组成竹笋名称']],
+ 'ເສື້ອຢືດ':[['ເສື້ອ','衣服；上衣'],['ຢືດ','伸展；弹性']],
+ 'ເກີບແຕະ':[['ເກີບ','鞋'],['ແຕະ','拖鞋式；开放鞋型']],
+ 'ແມ່ຮັກ':[['ແມ່','母亲'],['ຮັກ','爱；此处参与组成非血缘亲属称呼']],
+ 'ພໍ່ຮັກ':[['ພໍ່','父亲'],['ຮັກ','爱；此处参与组成非血缘亲属称呼']],
+ 'ອ້າຍຮັກ':[['ອ້າຍ','哥哥'],['ຮັກ','爱；此处参与组成非血缘亲属称呼']],
+ 'ນ້ອງຮັກ':[['ນ້ອງ','弟妹；年幼者'],['ຮັກ','爱；此处参与组成非血缘亲属称呼']],
+ 'ໜັງສືຜ່ານແດນ':[['ໜັງສື','文件；书'],['ຜ່ານ','通过'],['ແດນ','边境；疆界']],
+ 'ສີມ່ວງ':[['ສີ','颜色'],['ມ່ວງ','紫色']],
+ 'ປອກແຂນ':[['ປອກ','套；环状物'],['ແຂນ','手臂']],
+ 'ເຮັດບຸນ':[['ເຮັດ','做'],['ບຸນ','功德；福德']],
+ 'ເຂົ້າຈ້າວ':[['ເຂົ້າ','米；饭'],['ຈ້າວ','非糯性的；普通米类']],
+ 'ເຕະບານ':[['ເຕະ','踢'],['ບານ','球']],
+ 'ຮ້ອງເພັງ':[['ຮ້ອງ','唱；发声'],['ເພັງ','歌曲']],
+ 'ຄວາມຮັກ':[['ຄວາມ','抽象名词化成分'],['ຮັກ','爱']],
+ 'ຄວາມຝັນ':[['ຄວາມ','抽象名词化成分'],['ຝັນ','梦；做梦']],
+ 'ຄວາມສົນໃຈ':[['ຄວາມ','抽象名词化成分'],['ສົນໃຈ','感兴趣；关注']],
+ 'ເຂັນລົດ':[['ເຂັນ','推'],['ລົດ','车']],
+ 'ຮ້ານຄ້າ':[['ຮ້ານ','店'],['ຄ້າ','买卖；经商']],
+ 'ຈັກຊັກເຄື່ອງ':[['ຈັກ','机器'],['ຊັກ','洗涤'],['ເຄື່ອງ','衣物；物品']],
+ 'ຫ່າງໄກ':[['ຫ່າງ','相隔；距离'],['ໄກ','远']],
+ 'ນະຄອນຫຼວງ':[['ນະຄອນ','城市'],['ຫຼວງ','大的；主要的；此处组成首都称谓']],
+ 'ຜ້າຫົ່ມ':[['ຜ້າ','布；织物'],['ຫົ່ມ','盖；裹']],
+ 'ຊາຍແດນ':[['ຊາຍ','边缘；边界'],['ແດນ','疆域；地域']],
+ 'ເຂົ້າເປົ່າ':[['ເຂົ້າ','饭'],['ເປົ່າ','空的；未配其他东西的']],
+ 'ລອຍນ້ຳ':[['ລອຍ','浮；游'],['ນ້ຳ','水']],
+ 'ລົດກະບະ':[['ລົດ','车'],['ກະບະ','敞口货斗；托盘']],
+ 'ເຂົ້າລາດໜ້າ':[['ເຂົ້າ','饭'],['ລາດ','浇；淋'],['ໜ້າ','上面；表面']],
+ 'ບັດແຂງ':[['ບັດ','卡片；证件'],['ແຂງ','硬']],
+ 'ລູກເຂີຍ':[['ລູກ','孩子'],['ເຂີຍ','姻亲男性称谓成分']],
+ 'ອ້າຍເຂີຍ':[['ອ້າຍ','兄长'],['ເຂີຍ','姻亲男性称谓成分']],
+ 'ລູກໄພ້':[['ລູກ','孩子'],['ໄພ້','姻亲女性称谓成分']],
+ 'ນ້ອງໄພ້':[['ນ້ອງ','年幼的弟妹'],['ໄພ້','姻亲女性称谓成分']],
+ 'ເອື້ອຍໄພ້':[['ເອື້ອຍ','姐姐；年长女性'],['ໄພ້','姻亲女性称谓成分']],
+ 'ຄ່າເຊົ່າ':[['ຄ່າ','费用；价钱'],['ເຊົ່າ','租']],
+ 'ປ້ຳນ້ຳມັນ':[['ປ້ຳ','泵；加注装置'],['ນ້ຳມັນ','油；燃油']],
+ 'ນາຍບ້ານ':[['ນາຍ','负责人；长官'],['ບ້ານ','村庄']],
+ 'ສາຍແອວ':[['ສາຍ','带；绳'],['ແອວ','腰']],
+ 'ຊີ້ນສັນ':[['ຊີ້ນ','肉'],['ສັນ','脊背；里脊部位']],
+ 'ຫ້ອງຄົວ':[['ຫ້ອງ','房间'],['ຄົວ','厨房；烹饪事务']],
+ 'ຕິດປ້າຍ':[['ຕິດ','贴；附着'],['ປ້າຍ','牌子；标志']],
+ 'ນິ້ວມື':[['ນິ້ວ','指；趾'],['ມື','手']],
+ 'ເຕົາແກັດ':[['ເຕົາ','炉；灶'],['ແກັດ','燃气；gas音译']],
+ 'ໃບທະບຽນລົດ':[['ໃບ','纸张；证书量词'],['ທະບຽນ','登记；注册'],['ລົດ','车辆']],
+ 'ໃບກວດເຕັກນິກ':[['ໃບ','单据；纸张'],['ກວດ','检查'],['ເຕັກນິກ','技术']],
+ 'ບັດປະຈຳຕົວ':[['ບັດ','卡；证件'],['ປະຈຳຕົວ','个人专属的；身份证明的']],
+ 'ພາກຕາເວັນອອກ':[['ພາກ','地区；部分'],['ຕາເວັນ','太阳'],['ອອກ','出；此处与太阳组成东方']],
+ 'ພາກຕາເວັນຕົກ':[['ພາກ','地区；部分'],['ຕາເວັນ','太阳'],['ຕົກ','落；此处与太阳组成西方']],
+ 'ປາລາດພິກ':[['ປາ','鱼'],['ລາດ','浇；淋'],['ພິກ','辣椒（菜名借词）']],
+ 'ໃຈຮ້າຍ':[['ໃຈ','心；情绪'],['ຮ້າຍ','坏；凶；此处表达生气']],
  'ໝູ່ຮ່ວມຮຽນ':[['ໝູ່','朋友；同伴'],['ຮ່ວມ','共同；一起'],['ຮຽນ','学习']],
  'ໝູ່ຮ່ວມງານ':[['ໝູ່','朋友；同伴'],['ຮ່ວມ','共同；一起'],['ງານ','工作；事务']],
  'ໝູ່ຮ່ວມວຽກ':[['ໝູ່','朋友；同伴'],['ຮ່ວມ','共同；一起'],['ວຽກ','工作']],
@@ -8757,7 +8841,12 @@ if(typeof document!=='undefined'&&typeof learningOpenDetail==='function'){
   const [resolved,entries]=await Promise.all([learningResolve(id),allEntries()]);if(learningDetail!==id)return;
   const {m,w,snap}=resolved;if(!w&&m.contentType!=='word'&&m.analysisUnitType!=='word')return;
   const detail=learningDialog.querySelector('.learn-detail'),text=w?.word||m.textLao;if(!detail||detail.querySelector('.cw-components'))return;
+  const savedPanel=detail.querySelector('.ss-word-parts'),savedParts=(m.sentenceAnalysis?.segments||[]).flatMap(s=>s.words||[]).filter(p=>cwNorm(p.lao)!==cwNorm(text));
+  // A current, explicit composition already rendered by the main detail must
+  // not receive a second candidate panel with the same components.
+  if(savedPanel&&new Set(savedParts.map(p=>cwNorm(p.lao))).size>=2)return;
   const index=cwIndex(entries,snap.learningMaterials),splits=cwSplits(text,index);if(!splits.length)return;
+  if(savedPanel)savedPanel.remove(); // replaces a self-only visual card, not saved data
   const h=learningEsc,section=document.createElement('section');section.className='cw-components';
   section.innerHTML='<h3>组成词</h3><p class="cw-hint">'+(cwReviewedParts[text]?'按词义组成拆分；带 ທີ່ 的表达属于关系从句短语，不是每个音节都是单词。':'以下为已有词义匹配的候选拆分，仍需结合整词核对。')+'</p>'+splits.map((parts,i)=>'<div class="cw-split" aria-label="候选拆分 '+(i+1)+'">'+parts.map(part=>cwPartHtml(part,index,h)).join('<span class="cw-plus" aria-hidden="true">＋</span>')+'</div>').join('')+'<p class="cw-status" role="status"></p>';
   const main=detail.querySelector('.ss-reading')||detail,meaning=main.querySelector('.learn-meaning');if(meaning)meaning.after(section);else main.prepend(section);

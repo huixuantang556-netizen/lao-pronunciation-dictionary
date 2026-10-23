@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="17527f5dced78b9e">
+  <meta name="lao-app-build" content="b8d0b85da684faa2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7090,7 +7090,7 @@ async function importPhoneticRepair(root){
    const values=await Promise.all([learningSnapshot(),allEntries()]);if(settled||run!==revision)return;
     [snap,entries]=values;const result=await (root.format==='lao-study-refresh-v1'?srRefreshPlan:paRepairPlan)(root,snap,entries,message=>{if(!settled&&run===revision)status.textContent=message;});
     if(settled||run!==revision)return;if(workspace()!==origin)throw Error('账号或本机空间已切换，请重新导入');
-    prepared=result;const n=result.counts;get('[data-repair-summary]').textContent=(n.grammar?'更新语法／构词 '+n.grammar+' 张；':'')+'新增发音分析 '+n.created+' 份；补全／更新发音关联 '+n.annotated+' 张；归档 '+n.archived+' 份。原词句、词义及全部录音保留。';
+    prepared=result;const n=result.counts;get('[data-repair-summary]').textContent=(n.newWords?'新增独立词卡 '+n.newWords+' 张（含标签，不含录音）；':'')+(n.grammar?'更新语法／构词 '+n.grammar+' 张；':'')+'新增发音分析 '+n.created+' 份；补全／更新发音关联 '+n.annotated+' 张；归档 '+n.archived+' 份。原词句、词义及全部录音保留。';
     status.textContent='校验通过，尚未保存。勾选备份确认后，点击“确认应用”。';check.disabled=false;
    }catch(error){if(!settled&&run===revision)showError(error,'核对未通过：');}finally{checking=false;}
   };
@@ -7106,12 +7106,13 @@ async function importPhoneticRepair(root){
   void validate();
  });}finally{dialog.remove();}
 }
-// Atomic analysis-only refresh. Reconstruct child records; never trust arbitrary
-// material fields, dictionary edits, audio blobs, placements or deletion requests.
+// Atomic analysis refresh with optional strictly additive lexical cards.
+// Never accept edits to existing dictionary words, audio, placements or deletions.
 function srGrammarBase(m){return {...paRepairBase(m),translationZh:m.translationZh||'',studyWordAnalysis:m.studyWordAnalysis||false};}
+function srComponentKey(text){return saTextKey(text).replace(/ໝ/g,'ຫມ').replace(/ໜ/g,'ຫນ');}
 async function srGrammarWrites(op,snap,entries){
- const parent=snap.learningMaterials.find(m=>m.id===op.id&&!m.deleted&&!m.phoneticProfile&&!m.analysisOwner);
- if(!parent||await paDigest(srGrammarBase(parent))!==op.baseHash)throw Error('语法资料自导出后已变化，请重新导出');
+ const stored=snap.learningMaterials.find(m=>m.id===op.id),parent=stored|| (op.id.startsWith('word:')?paResolve(op.id,snap,entries).m:null);
+ if(!parent||parent.id!==op.id||parent.deleted||parent.phoneticProfile||parent.analysisOwner||(stored?await paDigest(srGrammarBase(parent)):null)!==op.baseHash)throw Error('语法资料自导出后已变化，请重新导出');
  const resolved=paResolve(parent.id,snap,entries),text=resolved.text;
  if(!Number.isFinite(op.savedAt)||op.savedAt<=0||op.analysis?.original!==text)throw Error('语法原文或保存时间无效');
  const data=saValidate(op.analysis,text),units=new Map(),old=parent.sentenceAnalysis;
@@ -7126,7 +7127,7 @@ async function srGrammarWrites(op,snap,entries){
  }
  const segments=[];
  for(const s of data.segments){const words=[];for(const w of s.words){
-   const candidates=entries.filter(e=>learningNorm(e.word)===learningNorm(w.lao)&&learningNorm(e.meaning)===learningNorm(w.meaning));
+   const candidates=entries.filter(e=>srComponentKey(e.word)===srComponentKey(w.lao)&&learningNorm(e.meaning)===learningNorm(w.meaning));
    const target=!w.isName&&candidates.length===1?'word:'+candidates[0].syncId:await unit('word',w.lao,w.meaning,w.role);
    words.push({...w,target});
   }segments.push({...s,target:await unit('segment',s.lao,s.chinese,s.grammar.map(g=>g.explanation).join('\n')),words});}
@@ -7137,12 +7138,28 @@ async function srRefreshPlan(root,snap,entries,progress=()=>{}){
  // Validate dictionary/rules even before reconstructing grammar.
  const refs=root.phonetic.sourceEntries;if(!Array.isArray(refs))throw Error('缺少来源词典校验');const byWord=new Map(entries.map(w=>[w.syncId,w]));
  for(const r of refs){const w=byWord.get(r.syncId);if(!w||await paDigest(paRepairEntryBase(w))!==r.hash)throw Error('来源词条已变化，请重新导出');}
+ const newWords=[];
+ if(root.newEntries!==undefined){
+  if(!Array.isArray(root.newEntries)||root.newEntries.length>500)throw Error('新增组成词数量无效');
+  const spellings=new Set(entries.map(w=>srComponentKey(w.word))),ids=new Set(entries.flatMap(w=>[w.syncId,...(w.syncAliases||[])]));
+  for(const item of root.newEntries){
+   if(!item||typeof item.word!=='string'||!/^\p{Script=Lao}[\p{Script=Lao}\s]*$/u.test(item.word)||item.word.length>80||typeof item.meaning!=='string'||!item.meaning.trim()||item.meaning.length>1000||typeof item.category!=='string'||item.category.length>500||typeof item.note!=='string'||item.note.length>6000||!Number.isFinite(item.updatedAt)||item.updatedAt<=0||typeof item.syncId!=='string'||!item.syncId.startsWith('component-20261024-'))throw Error('新增组成词字段无效');
+   if(Object.keys(item).some(k=>!['word','meaning','category','note','syncId','updatedAt'].includes(k)))throw Error('新增组成词不允许携带录音、覆盖或删除字段');
+   if(spellings.has(srComponentKey(item.word))||ids.has(item.syncId))throw Error('组成词“'+item.word+'”已有词卡，请重新核对补充包，避免重复');
+   spellings.add(srComponentKey(item.word));ids.add(item.syncId);newWords.push({...item,ipa:''});
+  }
+  entries=[...entries,...newWords];
+  const parents=newWords.map(w=>learningWordMaterial(w));
+  if(parents.some(m=>snap.learningMaterials.some(old=>old.id===m.id)))throw Error('新增词卡资料编号冲突');
+  snap={...snap,learningMaterials:[...snap.learningMaterials,...parents]};
+ }
  const writes=new Map(),seen=new Set();
  for(const op of root.grammar){if(seen.has(op.id))throw Error('语法更新编号重复');seen.add(op.id);for(const m of await srGrammarWrites(op,snap,entries)){if(writes.has(m.id))throw Error('语法更新记录冲突');writes.set(m.id,m);}progress('已核对语法／构词 '+seen.size+' / '+root.grammar.length);await new Promise(resolve=>setTimeout(resolve,0));}
  const existing=new Set(snap.learningMaterials.map(m=>m.id)),next={...snap,learningMaterials:snap.learningMaterials.map(m=>writes.get(m.id)||m).concat([...writes.values()].filter(m=>!existing.has(m.id)))};
  const phonetic=await paRepairPlan(root.phonetic,next,entries,progress);
  for(const m of phonetic.plan.materials)writes.set(m.id,m);
- return {plan:{entries:[],materials:[...writes.values()]},after:phonetic.after,counts:{...phonetic.counts,grammar:root.grammar.length}};
+ for(const w of newWords){const m=writes.get('word:'+w.syncId);if(!m?.studyWordAnalysis||!m.sentenceAnalysis||!m.pronunciationAnalysis)throw Error('新增组成词缺少配套语法或发音分析');}
+ return {plan:{entries:newWords,materials:[...writes.values()]},after:phonetic.after,counts:{...phonetic.counts,grammar:root.grammar.length,newWords:newWords.length}};
 }
 </script>
 <script data-learning-bundle="phonetic-analysis">
@@ -9084,6 +9101,8 @@ function cwBoundaries(text,index){
 }
 function cwSplits(raw,index){
  const text=cwNorm(raw);if(text.length>80)return [];
+ // Whole lexical loans and conventional names are not made of coincidental syllable words.
+ if(new Set(['ພາສາ','ອາຈານ','ອາທິດ','ລະດູ','ນາທີ','ກະແຈ','ກະເພາະ','ກະປູ','ກະປ໋ອງ','ກາງເກງ','ກາລະວັດ','ປັດສະປອດ','ມາລ້າ','ນ້ຳເບີ','ບາງກອກ','ໂຕກຽວ']).has(text))return [];
  if(/\s/u.test(text)&&/^[\u0e80-\u0eff\s]+$/u.test(text)){const words=text.split(/\s+/u);return words.length>1&&words.length<=6&&words.every(w=>index.lexicon.has(w))?[words]:[];}
  if(!/^[\u0e80-\u0eff]+$/u.test(text))return [];
  if(cwReviewedParts[text])return [cwReviewedParts[text].map(p=>p[0])];
@@ -9097,7 +9116,7 @@ function cwSplits(raw,index){
  }return walk(0).filter(p=>p.length>1).slice(0,4);
 }
 function cwOptions(text,index){
- const rows=index.lexicon.get(text)||[],formal=rows.filter(r=>r.source==='dictionary'),base=formal.length?formal:rows;
+ const key=s=>s.replace(/ໝ/g,'ຫມ').replace(/ໜ/g,'ຫນ'),rows=index.lexicon.get(text)||[...index.lexicon].filter(([t])=>key(t)===key(text)).flatMap(([,v])=>v),formal=rows.filter(r=>r.source==='dictionary'),base=formal.length?formal:rows;
  const out=[];for(const r of base){let target=r.target;if(!target){const exact=rows.filter(x=>x.target&&x.meaning===r.meaning);if(exact.length===1)target=exact[0].target;}const key=r.meaning.normalize('NFKC').replace(/[\s；;，,。]/gu,'');const prior=out.find(x=>x.key===key);if(!prior)out.push({...r,target,key});else if(!prior.target&&target)prior.target=target;}
  return out;
 }
@@ -9106,12 +9125,14 @@ function cwVariantSplits(raw,index){
  const variants=[...new Set([cwNorm(match[1]),cwNorm(match[2])])].map(text=>({text,splits:cwSplits(text,index)}));return variants.some(v=>v.splits.length)?variants:[];
 }
 const cwClassifiers={'ຄົນ':'人的量词；这里相当于“个（人）”','ກ້ານ':'细长物的量词；此处用于笔，相当于“支”','ໂຕ':'个体量词；常用于动物等','ອັນ':'通用个体量词，相当于“个／件”','ແກ້ວ':'杯／瓶，依语境','ເມັດ':'粒／片，依语境','ໃບ':'张／片等，依语境','ຄັນ':'车辆等的量词','ຫຼັງ':'房屋等的量词','ຄູ່':'双／对','ເຫຼັ້ມ':'册／本'};
+Object.assign(cwClassifiers,{'ກ້ອນ':'块；团，用于石块等','ໜ່ວຍ':'个体量词，用于水果、物件等','ຫນ່ວຍ':'个体量词；ໜ່ວຍ的分写形式','ຫນວ່ຍ':'原词卡量词字形，调号位置待核对；不作为标准拼写新增','ປ໋ອງ':'罐','ຕຸກ':'瓶','ຈານ':'盘','ຈອກ':'杯','ຫ້ອງ':'间；房间量词','ຖ້ວຍ':'碗','ບ່ອນ':'处；地方','ຜືນ':'幅；片，用于布等；衣服搭配需结合教材核对','ຊຸດ':'套；组','ດອກ':'朵','ຫົວ':'本课用于书本的量词；亦有头、个等义','ຖົງ':'袋'});
+const cwQuantityNouns={'ໝາ':'狗','ຫມາ':'狗；ໝາ的分写形式','ກ້ອນຫີນ':'石块；石头','ຫມາກພ້າວ':'椰子；分写字形'};
 function cwQuantity(raw,index){
  const text=cwNorm(raw),match=/^([\u0e80-\u0eff\s]+?)\s*([0-9໐-໙]+(?:,[0-9໐-໙]{3})*)\s*([\u0e80-\u0eff]+)$/u.exec(text);if(!match)return null;
  const noun=cwNorm(match[1]),number=match[2],classifier=match[3];if(!cwClassifiers[classifier])return null;
- const nounOptions=cwOptions(noun,index),reviewed=cwReviewedParts[noun];if(!nounOptions.length&&!reviewed)return null;
+ const nounOptions=cwOptions(noun,index),reviewed=cwReviewedParts[noun];
  const value=Number(number.replace(/[໐-໙]/g,c=>String(c.charCodeAt(0)-0xed0)).replaceAll(',',''));if(!Number.isSafeInteger(value)||value<0||value>999999999999)return null;
- return {noun,number,value,classifier,meaning:noun==='ຄົນຈີນ'?'中国人':nounOptions[0]?.meaning||reviewed.map(p=>p[1]).join('＋'),parts:reviewed||[],target:nounOptions[0]?.target||'',classifierTarget:cwOptions(classifier,index)[0]?.target||''};
+ return {noun,number,value,classifier,meaning:noun==='ຄົນຈີນ'?'中国人':nounOptions[0]?.meaning||cwQuantityNouns[noun]||reviewed?.map(p=>p[1]).join('＋')||'名词位置；尚缺独立词义记录，请结合原短语释义',parts:reviewed||[],target:nounOptions[0]?.target||'',classifierTarget:cwOptions(classifier,index)[0]?.target||''};
 }
 function cwQuantityHtml(q,index,h){
  const link=(text,target)=>'<strong lang="lo">'+(target?'<button type="button" data-cw-target="'+h(target)+'">'+h(text)+'</button>':h(text))+'</strong>';
@@ -9396,7 +9417,7 @@ function nlModel(value){
  return {n,formatted,parts,lao:parts.join(''),chunks,groups:rawGroups.map((digits,i)=>{const index=rawGroups.length-i-1,base=groupBases[index],value=Number(digits)*base;return {digits,index,base,value,label:groupLabels[index],zero:value===0};})};
 }
 function nlState(course){const scope=typeof fvWorkspace==='function'?fvWorkspace():'local',key=scope+'|'+course.id;if(!nlSessions.has(key))nlSessions.set(key,{mode:'discover',value:1550550000,unit:100000,group:1,question:0,answers:{}});return nlSessions.get(key);}
-function nlNav(state){return '<nav class="nl-tabs" aria-label="大数学习步骤">'+[['discover','1 看规律'],['explore','2 拆大数'],['quiz','3 自测']].map(([key,label])=>'<button type="button" data-nl-mode="'+key+'" aria-pressed="'+(state.mode===key)+'">'+label+'</button>').join('')+'</nav>';}
+function nlNav(state){return '<nav class="nl-tabs" aria-label="大数学习步骤">'+[['discover','1 看规律'],['explore','2 拆大数'],['quiz','3 自测']].map(([key,label])=>'<button type="button" data-nl-mode="'+key+'" aria-pressed="'+(state.mode===key)+'">'+label+'</button>').join('')+'</nav><p class="nl-caption">位值卡：单击听已有发音，双击查看词卡；键盘可用 Shift＋Enter 查看。</p>';}
 function nlHtml(course){const state=nlState(course);return '<section class="nl-lab" data-nl-lab aria-label="大数读法实验室"><header class="nl-heading"><p class="nl-eyebrow">数词 · 位值与组合</p><h3>把大数，读成有规律的小块。</h3><p>跟着课本，从十万一路读到十亿。</p></header>'+nlNav(state)+'<div data-nl-body>'+nlBody(state)+'</div><p class="nl-status" data-nl-status role="status" aria-live="polite"></p><details class="nl-reference"><summary>来源与读法说明</summary><p>按你提供的课堂图片整理。本页采用图中的「十亿 → 百万 → 十万 → 千 → 余数」拆解路径。数字中的逗号只是位值定位，不是要读出的词；其他等值数词组合不据此判错。</p><p>本图用 ພັນ（千）的组合表示万位；ສິບພັນ 与 ໝື່ນ 都可表示一万。本课不把图片里非标准的拉丁转写当成 IPA 或准确发音。</p><p>本实验室只练普通数量，不用于电话号码、日期或小数；这些需要依语境另读。原课的数词表、单词和会话均保留。</p><p><a href="https://seasite.niu.edu/lao/LaoLanguage/Vocabulary_Learning/lao_numbers.htm" target="_blank" rel="noopener noreferrer">NIU：基础数词及「多少千」的组合</a> · <a href="https://www.unicode.org/cldr/cldr-aux/charts/28/verify/numbers/lo.html" target="_blank" rel="noopener noreferrer">Unicode CLDR：百万 ລ້ານ、十亿 ຕື້</a></p></details></section>';}
 function nlBody(state){
  const h=learningEsc;
@@ -9413,12 +9434,23 @@ function nlQuizHtml(state){
  return '<div class="nl-quiz"><p class="nl-eyebrow">第 '+(state.question+1)+' / '+nlQuestions.length+' 题 · 已答 '+done+' 题 · 当前答对 '+correct+' 题</p><h4>'+learningEsc(q.prompt)+'</h4><div class="nl-options">'+options.map((label,i)=>'<button type="button" data-nl-answer="'+i+'" aria-pressed="'+(selected===i)+'"'+(answered?' disabled':'')+'>'+learningEsc(label)+(answered&&i===q.answer?' ✓ 正确答案':answered&&selected===i?' · 你的选择':'')+'</button>').join('')+'</div>'+(answered?'<div class="nl-feedback" role="status"><strong>'+(selected===q.answer?'答对了':'这题再记一下')+'</strong><p>'+learningEsc(q.explain)+'</p></div><div class="nl-quiz-actions"><button type="button" data-nl-retry>重做本题</button><button type="button" class="primary" data-nl-next>'+(state.question===nlQuestions.length-1?'查看本轮结果':'下一题 →')+'</button></div>':'<p class="nl-caption">选择后再显示答案和解释。</p>')+(state.summary?'<div class="nl-feedback"><h4>本轮完成：'+correct+' / '+nlQuestions.length+'</h4><p>'+(correct===nlQuestions.length?'全部答对。去拆一个自己的数字试试。':'点击题号复习错题，或重新练习。')+'</p><div class="nl-question-nav">'+nlQuestions.map((q,i)=>'<button type="button" data-nl-question="'+i+'">'+(i+1)+(state.answers[i]===q.answer?' ✓':' · 复习')+'</button>').join('')+'</div></div>':'')+'</div>';
 }
 function nlDraw(root,state){const focus=document.activeElement?.closest('[data-nl-lab]')===root?document.activeElement:null,mode=focus?.dataset?.nlMode;root.querySelector('[data-nl-body]').innerHTML=nlBody(state);root.querySelectorAll('[data-nl-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.nlMode===state.mode)));root.querySelector('[data-nl-status]').textContent='';if(mode)root.querySelector('[data-nl-mode="'+mode+'"]')?.focus();}
+let nlUnitTimer=null,nlUnitRun=0;
+function nlUnitReading(value){const u=nlUnits.find(x=>x.value===value);if(!u)throw Error('位值卡已变化');return {raw:nlFormat(value),normalized:String(value),kind:'cardinal',parts:[u.lao],lao:u.lao,compactLao:u.lao,breakdown:[{lao:u.lao,meaning:u.zh}],note:'本卡学习位值词本身，不额外补读“一”。',context:{line:u.lao,before:'',after:'',hint:'位值词'}};}
+async function nlUnitAction(value,button,root,details,run){
+ try{const reading=nlUnitReading(value),current=()=>run===nlUnitRun&&root.isConnected!==false&&nlMatches(learningLesson);
+  if(details){scGuard();const entries=await allEntries();if(!current())return;const exact=entries.filter(w=>saTextKey(w.word)===saTextKey(reading.lao));if(exact.length===1)await saOpenNested('word:'+exact[0].syncId,button);else await nsOpen(reading,button);}
+  else {await nsPlay(reading,false,current);if(current())root.querySelector('[data-nl-status]').textContent='正在播放“'+reading.lao+'”的已有发音。';}
+ }catch(error){if(run===nlUnitRun&&root.isConnected!==false)root.querySelector('[data-nl-status]').textContent=error.message;}
+}
+document.addEventListener('dblclick',e=>{const button=e.target.closest('[data-nl-unit]'),root=button?.closest('[data-nl-lab]');if(!root||!nlMatches(learningLesson))return;e.preventDefault();clearTimeout(nlUnitTimer);const run=++nlUnitRun;void nlUnitAction(Number(button.dataset.nlUnit),button,root,true,run);});
+document.addEventListener('keydown',e=>{const button=e.target.closest('[data-nl-unit]'),root=button?.closest('[data-nl-lab]');if(!root||!nlMatches(learningLesson)||e.key!=='Enter'||!e.shiftKey)return;e.preventDefault();clearTimeout(nlUnitTimer);const run=++nlUnitRun;void nlUnitAction(Number(button.dataset.nlUnit),button,root,true,run);});
 document.addEventListener('submit',e=>{const form=e.target.closest('[data-nl-form]');if(!form)return;e.preventDefault();const root=form.closest('[data-nl-lab]'),state=nlState(learningLesson);try{state.value=nlParse(form.querySelector('[data-nl-input]').value);state.group=1;nlDraw(root,state);root.querySelector('[data-nl-input]')?.focus();}catch(error){root.querySelector('[data-nl-status]').textContent=error.message;}});
 document.addEventListener('click',e=>{
  const button=e.target.closest('[data-nl-mode],[data-nl-unit],[data-nl-example],[data-nl-group],[data-nl-answer],[data-nl-next],[data-nl-retry],[data-nl-question],[data-nl-read]'),root=button?.closest('[data-nl-lab]');if(!root||!nlMatches(learningLesson))return;
  const state=nlState(learningLesson),d=button.dataset;
+ if(d.nlUnit===undefined){clearTimeout(nlUnitTimer);nlUnitRun++;}
  if(d.nlMode!==undefined){state.mode=d.nlMode;nlDraw(root,state);}
- else if(d.nlUnit!==undefined){state.unit=Number(d.nlUnit);nlDraw(root,state);}
+ else if(d.nlUnit!==undefined){if(e.detail>1)return;clearTimeout(nlUnitTimer);const run=++nlUnitRun,value=Number(d.nlUnit);nlUnitTimer=setTimeout(()=>{if(run!==nlUnitRun||root.isConnected===false||!nlMatches(learningLesson))return;state.unit=value;nlDraw(root,state);void nlUnitAction(value,button,root,false,run);},350);}
  else if(d.nlExample!==undefined){state.value=Number(d.nlExample);state.group=1;nlDraw(root,state);}
  else if(d.nlGroup!==undefined){state.group=Number(d.nlGroup);nlDraw(root,state);root.querySelector('[data-nl-group="'+state.group+'"]')?.focus();}
  else if(d.nlAnswer!==undefined){if(state.answers[state.question]!==undefined)return;state.answers[state.question]=Number(d.nlAnswer);nlDraw(root,state);root.querySelector('[data-nl-next]')?.focus();}

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f2e7ce25bdd306fc">
+  <meta name="lao-app-build" content="805d4a2370f50545">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -684,7 +684,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function loadDictionaryFields() { try { const saved=JSON.parse(localStorage.getItem('lao-dictionary-display-fields')); if(Array.isArray(saved)){const fields=saved.filter(field=>field in dictionaryFieldLabels);if(fields.length)return new Set(fields);} }catch(_){} return new Set(Object.keys(dictionaryFieldLabels)); }
     function saveDictionaryFields() { try{localStorage.setItem('lao-dictionary-display-fields',JSON.stringify([...selectedDictionaryFields]));}catch(_){} }
     function renderDictionaryFields() { $('#dictionaryFields').innerHTML=Object.entries(dictionaryFieldLabels).map(([field,label])=>`<button type="button" class="tag-choice" data-dictionary-field="${field}" aria-pressed="${selectedDictionaryFields.has(field)}">${label}</button>`).join(''); }
-    async function render() { const items=await allEntries(), practiceRows=await practiceAllItems(items), cats=categories(items); $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...(typeof dictionarySentenceRows==='function'?await dictionarySentenceRows():[])]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))).sort((a,b)=>searchPriority(a,q)-searchPriority(b,q)), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button data-learn="word-detail" data-word="${x.id}">⋯ 详情／例句</button>${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-ai="${x.id}">▶ 默认发音</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu"><button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; updatePracticeSummary(practiceRows); updateSelectionControls(); }
+    async function render() { const items=await allEntries(), practiceRows=await practiceAllItems(items), cats=categories(items); $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...(typeof dictionarySentenceRows==='function'?await dictionarySentenceRows():[])]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))).sort((a,b)=>searchPriority(a,q)-searchPriority(b,q)), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button data-learn="word-detail" data-word="${x.id}">⋯ 详情／例句</button>${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button data-ai="${x.id}">▶ 默认发音</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu"><button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; updatePracticeSummary(practiceRows); updateSelectionControls(); }
     function searchPriority(item, query) { if(!query)return 0; const includes=field=>(item[field]||'').toLowerCase().includes(query); if(['word','meaning'].some(includes))return 0; if(['ipa','category'].some(includes))return 1; return 2; }
     async function pasteIntoField(targetId, statusId, replaceAll=false) {
       const field=$('#'+targetId),status=$('#'+statusId),before=field.value,start=field.selectionStart??before.length,end=field.selectionEnd??before.length;
@@ -1252,6 +1252,16 @@ function cloudAudioSession(uid,api,assets){
 
 /* Server revisions decide what changed. No client-clock watermark or blind push. */
 const cloudReadCapabilities=new WeakMap();
+// A second, network-level fence: download mode cannot submit records or audio,
+// even if a later planning regression accidentally attempts an upload.
+function cloudDownloadOnlyApi(api){return (path,options={})=>{
+ const method=String(options.method||'GET').toUpperCase();
+ const readRpc=method==='POST'&&['/rest/v1/rpc/lao_sync_index_v1','/rest/v1/rpc/lao_sync_read_v1'].includes(path)&&['lao_dictionary_records','lao_learning_records'].includes(options.body?.target_table);
+ if(!['GET','HEAD'].includes(method)&&!readRpc)throw Error('只下载模式已阻止云端写入；没有上传这项资料。');
+ if(options.rawBody!==undefined)throw Error('只下载模式禁止上传文件。');
+ return api(path,options);
+};}
+function cloudDownloadDecision(local,remote){return remote?(cloudSame(local,remote)?'same':'remote'):local?'keep-local':'same';}
 function cloudKnownRows(uid,table,base,revisions={}){
  const out=new Map(),learning=table==='lao_learning_records';
  for(const [key,b] of Object.entries(base||{})){const at=key.indexOf(':'),revision=learning?revisions[key]:b?.revision,value=learning?b:b?.value;if(at<0||!value||!Number.isSafeInteger(revision)||revision<1)continue;
@@ -1433,7 +1443,8 @@ async function cloudReadRemote(uid,api,table,known,status){
         reset(){bar.hidden=false;bar.style.display='block';}
       };
     }
-    async function runCloudSync(uid,api,status) {
+    async function runCloudSync(uid,api,status,options={}) {
+      const downloadOnly=options.direction==='download';if(downloadOnly)api=cloudDownloadOnlyApi(api);
       if(uid!==cloudWorkspace)throw new Error('请先进入当前账号的独立词典空间。');
       if(recorder||editingId!==null||ttsPending.size||backupBusy||(typeof learningHasWork==='function'&&learningHasWork())||(typeof speechQueueRunning!=='undefined'&&speechQueueRunning)||(typeof speechQueueBusy!=='undefined'&&speechQueueBusy)||deletingSelection||(typeof alphabetSaving!=='undefined'&&alphabetSaving))throw new Error('请先完成录音、修改、发音生成、备份或删除操作，再同步。');
       stopPracticeAudio();
@@ -1475,6 +1486,7 @@ async function cloudReadRemote(uid,api,table,known,status){
         // Reconcile legacy/cross-device IDs only with explicit user approval.
         const linkedEntries=[];
         for(const [key,value] of [...local]){
+          if(downloadOnly)break; // Never reconcile or upload local-only identities in receive-only mode.
           if(!key.startsWith('entry:')||alphabetConfigKey(key)||remote.has(key)||base[key])continue;
           const e=value.payload.entry;
           const candidates=[...remote].filter(([rk,rr])=>rk.startsWith('entry:')&&!rr.deleted&&rr.payload?.entry&&
@@ -1495,22 +1507,22 @@ async function cloudReadRemote(uid,api,table,known,status){
         for(const key of new Set([...local.keys(),...remote.keys(),...Object.keys(base)])){
           let l=local.get(key)||null;const row=remote.get(key),r=cloudValue(row),b=base[key]?.value||null;
           if(!l&&b)l=key.startsWith('entry:')?{deleted:true,payload:{}}:b; // Cache eviction is not an intentional delete.
-          let action=cloudDecision(l,r,b);
+          let action=downloadOnly?cloudDownloadDecision(l,r):cloudDecision(l,r,b);
           if(action==='conflict')action=cloudSafeSupplement(l,r,b)||action;
           if(key.startsWith('default_audio:')&&!local.has(key)&&r&&!r.deleted)action='remote';
           if(action==='conflict'){
             const label=alphabetConfigKey(key)?'字母表格子 '+key.split(':').slice(-2).join(':'):l?.payload?.entry?.word||r?.payload?.entry?.word||'默认发音';
             conflicts.push({key,label,local:l,remote:r,row,cellText:alphabetBefore[key.replace('entry:alphabet-cell-v1:','').replace(/^color:/,'')]});continue;
           }
-          const target=action==='local'?l:r;if(target)plan.push({key,action,target,row});
+          const target=['local','keep-local'].includes(action)?l:r;if(target)plan.push({key,action,target,row});
         }
         if(conflicts.length)status('等待你选择冲突版本：'+conflicts.length+' 项');
         const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,blobs));
         conflicts.forEach((c,i)=>plan.push({key:c.key,row:c.row,action:resolutions[i],target:resolutions[i]==='local'?c.local:c.remote}));
         const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
         if(uploads||downloads){
-          status('等待你确认词典阶段计划：上传 '+uploads+' 项，接收 '+downloads+' 项；随后继续检查课程与手录参考发音');
-          if(!confirm('词典阶段将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n随后继续同步课程、学习记录及手录参考发音。\n请确认已导出备份。继续同步吗？')){status('已取消同步，数据未改变。');return;}
+          status((downloadOnly?'只下载模式：':'双向同步：')+'词典阶段上传 '+uploads+' 项，接收 '+downloads+' 项；随后继续检查课程与录音');
+          if(!confirm(downloadOnly?'只下载词典：上传 0 项，接收 '+downloads+' 项。\n云端版本将更新本机对应词条、设置和删除状态。\n本机独有资料保留，不上传；请先备份重要的本机修改。继续吗？':'双向同步：词典阶段将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n随后还会单独确认学习资料的上传。\n请确认已导出备份。继续吗？')){status('已取消同步，数据未改变。');return;}
         }else status('词典暂无变化，继续检查课程、学习记录与手录参考发音…');
         function validateAudio(a){if(!a||!a.path?.startsWith(uid+'/')||!/^[0-9a-f]{64}$/.test(a.sha)||a.path!==uid+'/'+a.sha+'-'+a.mime?.replace(/[^a-z0-9]/g,'_')||!a.mime?.startsWith('audio/')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('云端音频索引无效，已停止。');}
         const audioSession=cloudAudioSession(uid,api,blobs),audioRequests=[];
@@ -1545,6 +1557,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           }else if(!p.target.deleted)audioChanges.push({key:p.target.payload.cacheKey,blob:await loadAudio(p.target.payload.audio)});
         }
         const pending=plan.filter(x=>x.action==='local'),preparedAudio=new Map();
+        if(downloadOnly&&pending.length)throw Error('只下载模式已阻止上传计划。');
         const uploadAudio=async p=>{
           const a=p.target.payload.audio;
           if(!p.target.deleted&&a){
@@ -1576,7 +1589,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           };
         });
         await audioSession.release();
-        await render();if(typeof activeView==='undefined'||activeView==='practice'&&!(typeof practiceRound!=='undefined'&&practiceRound))await choosePractice({resume:true});if(typeof activeView!=='undefined'&&activeView==='alphabet')await renderAlphabet();status('云端同步完成：上传 '+uploads+' 项，接收 '+downloads+' 项。字母表修改也已同步；两类音频已保存在本机，可离线播放。');
+        await render();if(typeof activeView==='undefined'||activeView==='practice'&&!(typeof practiceRound!=='undefined'&&practiceRound))await choosePractice({resume:true});if(typeof activeView!=='undefined'&&activeView==='alphabet')await renderAlphabet();status((downloadOnly?'只下载词典完成：':'双向词典同步完成：')+'上传 '+uploads+' 项，接收 '+downloads+' 项。'+(downloadOnly?'本机独有资料保留，未上传。':'字母表修改也已同步；两类音频已保存在本机，可离线播放。'));
       return true;
       }finally{panels.forEach(x=>x.inert=false);window.removeEventListener('beforeunload',beforeUnload);}
     }
@@ -1695,7 +1708,10 @@ async function cloudReadRemote(uid,api,table,known,status){
         switchCloudWorkspace(session.user.id);
       }
       $('#cloudEnterButton').onclick=()=>{if(!busy)enterAccount();};
-      const learningSyncButton=document.createElement('button');learningSyncButton.type='button';learningSyncButton.textContent='仅同步学习资料与语法';$('#cloudSyncButton').after(learningSyncButton);
+      $('#cloudSyncButton').textContent='云端更新（不上传）';
+      const learningSyncButton=document.createElement('button');learningSyncButton.type='button';learningSyncButton.textContent='只下载学习资料';$('#cloudSyncButton').after(learningSyncButton);
+      const bidirectionalSyncButton=document.createElement('button');bidirectionalSyncButton.type='button';bidirectionalSyncButton.id='cloudBidirectionalSync';bidirectionalSyncButton.textContent='双向同步（允许上传）';learningSyncButton.after(bidirectionalSyncButton);
+      const syncDirectionNotice=document.createElement('p');syncDirectionNotice.className='tag-hint';syncDirectionNotice.textContent='默认只下载，禁止上传。本机独有资料保留；云端版本会更新本机对应资料。只有主动选择“双向同步”并确认后，才允许上传。';bidirectionalSyncButton.after(syncDirectionNotice);
       window.laoSyncAccountProfile=async()=>{
         if(busy)throw Error('正在同步或处理账号，请稍后重试');
         if(!session||session.user.id!==cloudWorkspace)throw Error('请先登录并进入此账号词典，再同步昵称与头像');
@@ -1708,23 +1724,26 @@ async function cloudReadRemote(uid,api,table,known,status){
       learningSyncButton.onclick=async()=>{
         if(busy)return;if(!session||session.user.id!==cloudWorkspace){status('请先进入同一账号词典，再同步学习资料。');return;}
         busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
-        try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status);if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
-        catch(e){status('学习资料同步未完成：'+e.message+'。已上传的部分可能已保存，可重新同步；请保留本机资料，不要清空缓存。');}finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
+        try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status,{direction:'download'});if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
+        catch(e){status('学习资料下载未完成：'+e.message+'。本次没有上传；已完成的下载可能已保存，请保留本机资料。');}finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
-      $('#cloudSyncButton').onclick=async()=>{
+      const startCloudSync=async(direction='download')=>{
         if(busy)return;
         if(!session){status('请先登录。');return;}
         if(session.user.id!==cloudWorkspace){status('请先点击“进入此账号词典”；原本机词典保留不变。');return;}
-        busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
+        if(direction!=='download'&&!confirm('你选择了“双向同步”，允许本机资料上传并修改云端。\n旧设备若只想获取最新资料，请取消，改用“云端更新（不上传）”。\n继续后，词典和学习资料阶段仍会分别列出上传数量供确认。允许进入双向同步吗？'))return;
+        busy=true;learningSyncButton.disabled=true;bidirectionalSyncButton.disabled=true;updateUI();beginProgress();
         try{
           await checkConnection();
           const uid=session.user.id;
-          const task=async()=>{const api=(path,options={})=>syncRequest(uid,path,options);if(await runCloudSync(uid,api,status))await learningCloudSync(uid,api,status);};
+          const task=async()=>{const api=(path,options={})=>syncRequest(uid,path,options);if(await runCloudSync(uid,api,status,{direction}))await learningCloudSync(uid,api,status,{direction,requireUploadConfirmation:true});};
           if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
           else await task();
-        }catch(error){status('同步未完成：'+error.message+' 已成功上传的项目可能已在云端保存，请重试；不要清空本机数据。');}
-        finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
+        }catch(error){status((direction==='download'?'云端下载未完成：':'双向同步未完成：')+error.message+(direction==='download'?' 本次没有上传；已完成的下载可能已保存，请保留本机数据。':' 已确认并成功上传的项目可能已保存，请保留本机数据。'));}
+        finally{endProgress();busy=false;learningSyncButton.disabled=false;bidirectionalSyncButton.disabled=false;updateUI();}
       };
+      $('#cloudSyncButton').onclick=()=>startCloudSync('download');
+      bidirectionalSyncButton.onclick=()=>startCloudSync('bidirectional');
       $('#cloudLoginForm').onsubmit=async event=>{
         event.preventDefault();if(busy)return;
         const email=$('#cloudEmail').value.trim(),password=$('#cloudPassword').value;
@@ -2980,7 +2999,8 @@ function learningApplySyncDelta(t,before,after){
 }
 var learningSyncRunning=false;
 function learningSyncRebase(current,before,after){const result={};for(const kind of learningStores){const old=new Map(before[kind].map(r=>[r.id,r])),now=new Map(current[kind].map(r=>[r.id,r])),next=new Map(after[kind].map(r=>[r.id,r]));for(const id of new Set([...old.keys(),...now.keys()]))if(!cloudSame(old.get(id),now.get(id))){if(now.has(id))next.set(id,now.get(id));else next.delete(id);}result[kind]=[...next.values()];}return result;}
-async function learningCloudSync(uid,api,status){
+async function learningCloudSync(uid,api,status,options={}){
+ const downloadOnly=options.direction==='download';if(downloadOnly)api=cloudDownloadOnlyApi(api);
  if(uid!==cloudWorkspace||learningHasWork())throw new Error('请完成学习材料编辑或录音后再同步。');
  if(learningSyncRunning)throw Error('学习资料正在同步，请等待本次完成');learningSyncRunning=true;
  try{
@@ -3008,12 +3028,16 @@ async function learningCloudSync(uid,api,status){
   status('正在比较学习资料版本…');
   const plan=[],conflicts=[];
   for(const key of new Set([...local.keys(),...remote.keys()])){
-   const l=local.get(key),row=remote.get(key),r=row?{deleted:false,payload:row.payload}:null;let action=cloudDecision(l||null,r,base[key]||null);
+   const l=local.get(key),row=remote.get(key),r=row?{deleted:false,payload:row.payload}:null;let action=downloadOnly?cloudDownloadDecision(l||null,r):cloudDecision(l||null,r,base[key]||null);
    if(action==='conflict'){conflicts.push({label:l?.payload?.textLao||r?.payload?.textLao||l?.payload?.name||key,local:l,remote:r,index:plan.length});}
-   plan.push({key,kind:key.slice(0,key.indexOf(':')),id:key.slice(key.indexOf(':')+1),row,action,target:action==='local'?l:r});
+   plan.push({key,kind:key.slice(0,key.indexOf(':')),id:key.slice(key.indexOf(':')+1),row,action,target:['local','keep-local'].includes(action)?l:r});
   }
   if(conflicts.length)status('等待你选择冲突版本：'+conflicts.length+' 项');
   const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,assets));conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
+  const uploads=plan.filter(p=>p.action==='local'&&p.target).length,downloads=plan.filter(p=>p.action==='remote').length;
+  if(downloadOnly&&uploads)throw Error('只下载模式禁止上传学习资料。');
+  if(uploads&&options.requireUploadConfirmation&&!confirm('学习资料阶段将上传 '+uploads+' 项、接收 '+downloads+' 项。\n包括课程、语法／发音分析、学习记录和录音索引。\n这是双向同步，会修改云端；取消则不执行本阶段。继续吗？'))throw Error('已取消学习资料阶段；本阶段未上传。');
+  if(downloadOnly&&downloads&&!confirm('只下载学习资料：上传 0 项，接收 '+downloads+' 项。\n云端版本将更新本机对应资料；本机独有资料保留，不上传。\n请先确认重要的本机修改已有备份。继续吗？'))throw Error('已取消学习资料下载；未上传。');
   const validateAudio=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('学习音频索引无效。');};
   const audioSession=cloudAudioSession(uid,api,assets),audioRequests=[];
   for(const p of plan)if(p.target&&p.kind==='learningAudio'){validateAudio(p.target.payload.audio);audioRequests.push(p.target.payload.audio);}
@@ -3033,10 +3057,10 @@ async function learningCloudSync(uid,api,status){
   });
   rows.forEach(row=>pendingById.get(row.kind+':'+row.id).row=row.result);
   status('正在保存本机学习资料与同步检查点…');
-  const checkpoint=Object.fromEntries(plan.filter(p=>p.target).map(p=>[p.key,p.target]));
+  const checkpoint=Object.fromEntries(plan.filter(p=>p.target&&p.action!=='keep-local').map(p=>[p.key,p.target]));
   const database=await openDB(),t=database.transaction([...learningStores,'cloud_meta'],'readwrite'),done=transactionDone(t);let remaining=learningStores.length;
   const current={};for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{current[kind]=r.result;if(--remaining===0){learningApplySyncDelta(t,current,learningSyncRebase(current,snap,merged));t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
-  await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status('学习资料同步完成：本次上传 '+pending.length+' 项学习资料（含 '+pending.filter(p=>p.kind==='learningAudio').length+' 份录音），接收 '+plan.filter(p=>p.action==='remote').length+' 项；学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
+  await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status(downloadOnly?'只下载学习资料完成：上传 0 项，接收 '+downloads+' 项；保留本机独有 '+plan.filter(p=>p.action==='keep-local').length+' 项（未上传）。':'学习资料同步完成：本次上传 '+pending.length+' 项学习资料（含 '+pending.filter(p=>p.kind==='learningAudio').length+' 份录音），接收 '+plan.filter(p=>p.action==='remote').length+' 项；学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
  }finally{learningSyncRunning=false;}
 }
 </script>
@@ -5973,7 +5997,7 @@ function dictionarySentenceProjection(snap){
 async function dictionarySentenceRows(){return dictionarySentenceProjection(await learningSnapshot());}
 function dictionarySentenceCard(x){
  const h=escapeHtml,id=h(x._sentenceId),show=field=>selectedDictionaryFields.has(field);
- return '<article class="entry dictionary-sentence"><div>'+(show('word')?'<button type="button" class="dictionary-sentence-text" data-dict-sentence="'+id+'" data-dict-sentence-action="play" title="单击点读，双击查看句子详情"><span class="word" lang="lo">'+h(x.word)+'</span></button>':'')+(show('meaning')?'<div class="meaning">'+h(x.meaning)+'</div>':'')+(show('note')&&x.note?'<div class="entry-note">'+h(x.note)+'</div>':'')+tagsFor(x).map(t=>'<span class="tag">'+h(t)+'</span>').join('')+'<p class="dictionary-sentence-status tag-hint" role="status"></p></div><div class="actions"><button type="button" data-dict-sentence="'+id+'" data-dict-sentence-action="detail">⋯ 句子详情／解析</button><button type="button" data-dict-sentence="'+id+'" data-dict-sentence-action="play">▶ 播放参考音</button></div></article>';
+ return '<article class="entry dictionary-sentence"><div>'+(show('word')?'<button type="button" class="dictionary-sentence-text" data-dict-sentence="'+id+'" data-dict-sentence-action="play" title="单击点读，双击查看句子详情"><span class="word" lang="lo">'+h(x.word)+'</span></button>':'')+(show('meaning')?'<div class="meaning">'+h(x.meaning)+'</div>':'')+(show('note')&&x.note?'<div class="entry-note">'+h(x.note)+'</div>':'')+tagsFor(x).map(t=>'<span class="tag">'+h(t)+'</span>').join('')+'<p class="dictionary-sentence-status tag-hint" role="status"></p></div><div class="actions"><button type="button" data-dict-sentence="'+id+'" data-dict-sentence-action="detail">⋯ 句子详情／解析</button><button type="button" data-dict-sentence="'+id+'" data-dict-sentence-action="play">▶ 播放参考音</button>'+(typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml(x._sentenceId):'')+'</div></article>';
 }
 let dictionarySentenceTimer=null;
 $('#entries').addEventListener('click',e=>{
@@ -7414,11 +7438,12 @@ function ssCompose(detail,resolved,id){
   main.append(actions);if(meaning?.textContent.trim())main.append(meaning);else{meaning?.remove();if(trusted&&a.translation)main.append(ssElement('p','learn-meaning',a.translation));}
  }
  if(w&&ipa?.textContent.trim())main.append(ipa);else ipa?.remove();
- if(w&&trusted&&saWords(a).length){const parts=ssGroup('构词与组成词','ss-word-parts');const list=ssElement('div','sa-words');list.innerHTML=saWords(a).map(x=>saUnitHtml(x,[x.meaning,x.role].filter(Boolean).join(' · '))).join('');parts.append(list);main.append(parts);}
+ const components=w&&trusted?saWords(a).filter(x=>saTextKey(x.lao)!==saTextKey(w.word)):[],wholeFallback=w&&trusted&&ssGrammarRows(a).length&&ssGrammarRows(a).every(g=>/^整体词语[／/]/u.test(g.pattern));
+ if(components.length){const parts=ssGroup('构词与组成词','ss-word-parts');const list=ssElement('div','sa-words');list.innerHTML=components.map(x=>saUnitHtml(x,[x.meaning,x.role].filter(Boolean).join(' · '))).join('');parts.append(list);main.append(parts);}
  if(draft)main.append(draft);main.append(status);
  const warning=detail.querySelector('.learn-audio-warning');if(warning)main.append(warning);
  const stale=existing?.querySelector('.ss-stale-warning');if(stale)main.append(stale);
- if(trusted){const grammar=ssGrammarHtml(a);if(grammar){const title=w?'构词与用法':'语法要点',section=ssGroup(title,'ss-grammar');section.innerHTML='<h3>'+title+'</h3>'+grammar;main.append(section);}if(quiz){const summary=quiz.querySelector('summary');if(summary)summary.textContent='语法小测验';main.append(quiz);}}
+ if(trusted){const grammar=wholeFallback?'':ssGrammarHtml(a);if(grammar){const title=w?'构词与用法':'语法要点',section=ssGroup(title,'ss-grammar');section.innerHTML='<h3>'+title+'</h3>'+grammar;main.append(section);}else if(wholeFallback)main.append(ssElement('p','ss-whole-word-fallback','当前保存的分析仅有整体释义，尚未完成组成词拆分。'));if(quiz){const summary=quiz.querySelector('summary');if(summary)summary.textContent='语法小测验';main.append(quiz);}}
  else if(existing&&!m.analysisOwner)main.append(ssElement('p','ss-empty-analysis',a?'文字或词义已修改，旧构词／语法分析需更新，暂不用于学习。':'尚无语法解析；需要时可在设置中添加。'));
  const phonetics=[...detail.querySelectorAll('.pa-segment-analysis')].filter(n=>n.dataset.paReady==='true');
  if(phonetics.length){const fold=ssFold(w?'词语拼读':(a?.segments.length||0)>1?'分段拼读':'整句拼读','ss-pronunciation');phonetics.forEach((n,i)=>{const heading=n.querySelector('h4');if(heading){if(phonetics.length===1)heading.remove();else heading.textContent='第'+(Number(n.dataset.paIndex??i)+1)+'段';}fold.append(n);});main.append(fold);}
@@ -8123,7 +8148,7 @@ document.querySelector('#apSelfTestLanguage').onchange=e=>{try{apSavePreferences
 // Move the original controls, preserving sync handlers, busy state and progress reporting.
 const apSyncHost=document.createElement('div');apSyncHost.className='ap-account-heading';apSyncHost.id='apSyncHost';const apAccountTitle=document.querySelector('#apAccount').querySelector('h3');apAccountTitle.before(apSyncHost);apSyncHost.append(apAccountTitle);
 const apSyncResult=document.createElement('div');apSyncResult.id='apSyncResult';apSyncResult.hidden=true;apSyncHost.after(apSyncResult);
-const apSyncButton=document.querySelector('#cloudSyncButton'),apSyncStatus=document.querySelector('#cloudStatus');if(apSyncButton){apSyncButton.textContent='云端同步';apSyncHost.append(apSyncButton);apSyncButton.addEventListener('click',()=>{if(apSyncStatus)apSyncResult.append(apSyncStatus);apSyncResult.hidden=false;},true);}
+const apSyncButton=document.querySelector('#cloudSyncButton'),apSyncStatus=document.querySelector('#cloudStatus');if(apSyncButton){apSyncButton.textContent='云端更新（不上传）';apSyncHost.append(apSyncButton);apSyncButton.addEventListener('click',()=>{if(apSyncStatus)apSyncResult.append(apSyncStatus);apSyncResult.hidden=false;},true);}
 const apSyncBadge=document.createElement('aside');apSyncBadge.hidden=true;apSyncBadge.setAttribute('aria-label','云端同步状态');apSyncBadge.style.cssText='position:fixed;right:12px;bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:40;max-width:min(320px,85vw);padding:10px 14px;border:1px solid #c8ded6;border-radius:12px;background:#f4faf7;color:#176956;box-shadow:0 3px 14px #0002;font-size:13px';
 const apSyncBadgeText=document.createElement('span'),apSyncBadgeClose=document.createElement('button');apSyncBadgeClose.type='button';apSyncBadgeClose.textContent='×';apSyncBadgeClose.setAttribute('aria-label','收起同步状态（不取消同步）');apSyncBadgeClose.style.cssText='margin-left:8px;padding:2px 8px';apSyncBadgeClose.onclick=()=>apSyncBadge.hidden=true;apSyncBadge.append(apSyncBadgeText,apSyncBadgeClose);document.body.append(apSyncBadge);
 window.laoSyncFeedback=({running,message})=>{apSyncBadge.hidden=false;apSyncBadge.dataset.running=String(running);apSyncBadgeText.textContent=running?'云端同步中，可继续浏览':message.includes('未完成')||message.includes('取消')?'同步未完成，请在设置中查看原因':'本次云端同步已结束；详情见设置';apSyncBadge.title=message;};
@@ -8418,10 +8443,21 @@ async function nsSelect(number,button){
  await audio;
 }
 const nsOldSentenceHtml=wslSentenceHtml;wslSentenceHtml=function(text,ranges){return /\d/.test(text)?nsSentenceHtml(text,ranges):nsOldSentenceHtml(text,ranges);};
-const nsOldDetail=learningOpenDetail;learningOpenDetail=async function(id){await nsOldDetail(id);if(learningDetail!==id)return;const {m,w,snap}=await learningResolve(id);if(learningDetail!==id)return;const text=w?.word||m.textLao;if(!/\d/.test(text))return;const hint=nsContextHint({...m,textLao:text,translationZh:w?.meaning||m.translationZh},snap),detail=learningDialog.querySelector('.learn-detail');if(!detail)return;
+const nsOldDetail=learningOpenDetail;let nsDetailRequest=0;
+learningOpenDetail=async function(id){
+ const request=++nsDetailRequest;await nsOldDetail(id);if(request!==nsDetailRequest||learningDetail!==id)return;
+ const detail=learningDialog.querySelector('.learn-detail');if(!detail)return;
+ const {m,w,snap}=await learningResolve(id);
+ if(request!==nsDetailRequest||learningDetail!==id||detail.isConnected===false||learningDialog.querySelector('.learn-detail')!==detail)return;
+ const text=w?.word||m.textLao,oldPanels=[...detail.querySelectorAll('.ns-detail-links')];
+ if(!/\d/.test(text)){oldPanels.forEach(p=>p.remove());return;}
+ const hint=nsContextHint({...m,textLao:text,translationZh:w?.meaning||m.translationZh},snap);
  const line=detail.querySelector('.wsl-sentence')||detail.querySelector('.ss-original');if(line){for(const b of line.querySelectorAll('[data-ns-number]'))b.dataset.nsHint=hint;if(!line.querySelector('[data-ns-number]'))line.innerHTML=nsSentenceHtml(text,[],hint);}
  if(!/[\u0e80-\u0eff]/.test(text))for(const old of detail.querySelectorAll('.ss-pronunciation')){old.open=false;const summary=old.querySelector('summary');if(summary)summary.textContent='原阿拉伯数字解析（仅核对，不作读音依据）';}
- const panel=document.createElement('section');panel.className='ns-detail-links';panel.innerHTML='<h3>数字表达</h3><p>点击数字查看老挝语读法、构词与句中用法。号码逐位读；原句与原解析保留。</p><div>'+nsScan(text,hint).map(n=>'<button type="button" class="ns-number" data-ns-number="'+n.start+'" data-ns-text="'+learningEsc(text)+'" data-ns-hint="'+learningEsc(hint)+'">'+learningEsc(n.raw)+' · '+learningEsc(nsLabels[n.kind])+'</button>').join('')+'</div>';(detail.querySelector('.ss-reading')||detail).append(panel);
+ const panel=oldPanels[0]||document.createElement('section'),key=JSON.stringify([text,hint]);panel.className='ns-detail-links';
+ oldPanels.slice(1).forEach(p=>p.remove());
+ if(panel.dataset.nsDetailKey!==key){panel.innerHTML='<h3>数字表达</h3><p>点击数字查看老挝语读法、构词与句中用法。号码逐位读；原句与原解析保留。</p><div>'+nsScan(text,hint).map(n=>'<button type="button" class="ns-number" data-ns-number="'+n.start+'" data-ns-text="'+learningEsc(text)+'" data-ns-hint="'+learningEsc(hint)+'">'+learningEsc(n.raw)+' · '+learningEsc(nsLabels[n.kind])+'</button>').join('')+'</div>';panel.dataset.nsDetailKey=key;}
+ const host=detail.querySelector('.ss-reading')||detail;if(panel.parentElement!==host)host.append(panel);
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-ns-number]');if(!b){const word=e.target.closest('[data-wsl-token]'),root=word?.closest('.wsl-panel');if(root){root.nsSelection=(root.nsSelection||0)+1;root.nsButton=null;for(const n of root.querySelectorAll('[data-ns-number]'))n.setAttribute('aria-pressed','false');stopPracticeAudio();}return;}e.preventDefault();e.stopImmediatePropagation();if(e.detail>1)return;const text=b.dataset.nsText||'',start=Number(b.dataset.nsNumber),number=nsScan(text,b.dataset.nsHint||'').find(n=>n.start===start);if(number)void nsSelect(number,b).catch(error=>{const status=learningDialog.open?document.querySelector('#learningDialogStatus'):document.querySelector(typeof activeView!=='undefined'&&activeView==='practice'?'#rpStatus':'#learningStatus');if(status)status.textContent=error.message;});},true);
 document.addEventListener('dblclick',e=>{if(e.target.closest('[data-ns-number]')){e.preventDefault();e.stopImmediatePropagation();}},true);
@@ -8746,7 +8782,7 @@ async function cfRecord(target,{autoStart=true,button=null,quick=false}={}){
  if(quick){
   // Start the permission request in this click; do not wait for snapshots, analysis or the full detail renderer.
   learningDetail=target;learningDraft=null;learningPendingRecording=null;
-  const card=button?.closest('.learn-card'),text=card?.querySelector('strong')?.textContent||'本条参考发音',h=learningEsc;
+  const card=button?.closest('.learn-card,.entry'),text=card?.querySelector('strong,.word')?.textContent||'本条参考发音',h=learningEsc;
   learningModal('录制参考发音','<section data-quick-reference><p lang="lo">'+h(text)+'</p><p class="tag-hint">首次使用请允许麦克风。按钮显示“停止录音”时正在录音；停止后可试听和保存。旧录音保留。</p><button id="learningReferenceRecord" data-learn="record-reference" class="primary">🎙 开始录音</button><button id="learningRecord" hidden></button><div id="learningRecordingDraft"></div></section>');
   try{if(autoStart)await learningStartRecording('reference');}catch(error){$('#learningDialogStatus').textContent=error.message;throw error;}
   return;
@@ -8786,7 +8822,8 @@ wslCardHtml=function(token,target,entry,related){
  html=html.replace(/<div class="wsl-word-actions">([\s\S]*?)<\/div>/,(_,actions)=>'<div class="wsl-word-actions cf-word-controls">'+actions.replace('▶ 听单词','▶ 听读').replace('词条详情','详情').replace('本句词卡','详情')+record+favorite+'</div>');
  return html+'<details class="cf-word-more"><summary>更多操作</summary><button type="button" class="cf-regenerate" data-cf-regenerate="'+learningEsc(target)+'">重新生成本词默认发音</button></details>';
 };
-document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();b.disabled=true;void (b.dataset.cfRecord?cfRecord(b.dataset.cfRecord,{button:b}):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
+function cfDictionaryRecordHtml(target){const h=learningEsc,icon=typeof lessonIcon==='function'?lessonIcon('mic'):'🎙';return '<button type="button" class="dict-reference-record" data-dict-record="'+h(target)+'" aria-label="录制参考发音" title="录制参考发音">'+icon+'</button>';}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate],[data-dict-record]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(b.disabled||e.detail>1)return;b.disabled=true;void (b.dataset.dictRecord?cfRecord(b.dataset.dictRecord,{button:b,quick:true}):b.dataset.cfRecord?cfRecord(b.dataset.cfRecord,{button:b}):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
 function cfDecorate(){
  if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
  for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
@@ -8917,12 +8954,15 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 #learningDialog .wsl-card [data-cf-control="learningRecordingDraft"]{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 #learningDialog .wsl-card .cf-word-more{border:0;margin:8px 0 0;padding:0;font-size:12px;color:var(--muted)}
 @media(max-width:560px){#learningDialog .wsl-card .wsl-word-actions.cf-word-controls{gap:5px;grid-template-columns:1fr 1fr 1fr 36px}#learningDialog .wsl-card .wsl-word-actions.cf-word-controls>button{padding:6px!important;font-size:12px!important;min-height:44px;height:44px}#learningDialog .wsl-card .wsl-word-actions.cf-word-controls>.fv-button{width:36px!important;min-width:36px!important;max-width:36px;font-size:19px!important}}
+/* A direct reference-recording action on dictionary words and projected sentences. */
+#entries .actions>.dict-reference-record{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:10px;border-radius:12px;background:#eef6f2;color:#557c70;border:1px solid #d7e6df}#entries .dict-reference-record svg{width:22px;height:22px;display:block}
 </style>
 <script data-learning-bundle="compound-words">
 /* Read-only lexical component links. Syllables alone are never promoted to words. */
 function cwNorm(x){return String(x||'').normalize('NFC').trim();}
 // Reviewed phrase structures. These are lexical components, not syllable cuts.
 const cwReviewedParts={
+ 'ຄົນຈີນ':[['ຄົນ','人'],['ຈີນ','中国；此处表示中国国籍']],
  'ເຕັມຖັງ':[['ເຕັມ','满；充满'],['ຖັງ','桶；罐；箱；加油场景指油箱']],
  'ຫ້ອງວ່າງ':[['ຫ້ອງ','房间'],['ວ່າງ','空着；有空']],
  'ດິນແດນ':[['ດິນ','土地'],['ແດນ','地域；疆界']],
@@ -9025,7 +9065,9 @@ function cwBoundaries(text,index){
  return boundaries;
 }
 function cwSplits(raw,index){
- const text=cwNorm(raw);if(!/^[\u0e80-\u0eff]+$/u.test(text)||text.length>80)return [];
+ const text=cwNorm(raw);if(text.length>80)return [];
+ if(/\s/u.test(text)&&/^[\u0e80-\u0eff\s]+$/u.test(text)){const words=text.split(/\s+/u);return words.length>1&&words.length<=6&&words.every(w=>index.lexicon.has(w))?[words]:[];}
+ if(!/^[\u0e80-\u0eff]+$/u.test(text))return [];
  if(cwReviewedParts[text])return [cwReviewedParts[text].map(p=>p[0])];
  // Lexical spelling boundaries must not depend on one historical phonetic profile.
  const bounds=new Set([0,text.length]);if(typeof Intl.Segmenter==='function')for(const g of new Intl.Segmenter('lo',{granularity:'grapheme'}).segment(text)){bounds.add(g.index);bounds.add(g.index+g.segment.length);}else for(let i=0;i<=text.length;i++)bounds.add(i);
@@ -9040,6 +9082,25 @@ function cwOptions(text,index){
  const rows=index.lexicon.get(text)||[],formal=rows.filter(r=>r.source==='dictionary'),base=formal.length?formal:rows;
  const out=[];for(const r of base){let target=r.target;if(!target){const exact=rows.filter(x=>x.target&&x.meaning===r.meaning);if(exact.length===1)target=exact[0].target;}const key=r.meaning.normalize('NFKC').replace(/[\s；;，,。]/gu,'');const prior=out.find(x=>x.key===key);if(!prior)out.push({...r,target,key});else if(!prior.target&&target)prior.target=target;}
  return out;
+}
+function cwVariantSplits(raw,index){
+ const match=/^([\u0e80-\u0eff\s]+?)\s*[（(]([\u0e80-\u0eff\s]+)[）)]$/u.exec(cwNorm(raw));if(!match)return [];
+ const variants=[...new Set([cwNorm(match[1]),cwNorm(match[2])])].map(text=>({text,splits:cwSplits(text,index)}));return variants.some(v=>v.splits.length)?variants:[];
+}
+const cwClassifiers={'ຄົນ':'人的量词；这里相当于“个（人）”','ກ້ານ':'细长物的量词；此处用于笔，相当于“支”','ໂຕ':'个体量词；常用于动物等','ອັນ':'通用个体量词，相当于“个／件”','ແກ້ວ':'杯／瓶，依语境','ເມັດ':'粒／片，依语境','ໃບ':'张／片等，依语境','ຄັນ':'车辆等的量词','ຫຼັງ':'房屋等的量词','ຄູ່':'双／对','ເຫຼັ້ມ':'册／本'};
+function cwQuantity(raw,index){
+ const text=cwNorm(raw),match=/^([\u0e80-\u0eff\s]+?)\s*([0-9໐-໙]+(?:,[0-9໐-໙]{3})*)\s*([\u0e80-\u0eff]+)$/u.exec(text);if(!match)return null;
+ const noun=cwNorm(match[1]),number=match[2],classifier=match[3];if(!cwClassifiers[classifier])return null;
+ const nounOptions=cwOptions(noun,index),reviewed=cwReviewedParts[noun];if(!nounOptions.length&&!reviewed)return null;
+ const value=Number(number.replace(/[໐-໙]/g,c=>String(c.charCodeAt(0)-0xed0)).replaceAll(',',''));if(!Number.isSafeInteger(value)||value<0||value>999999999999)return null;
+ return {noun,number,value,classifier,meaning:noun==='ຄົນຈີນ'?'中国人':nounOptions[0]?.meaning||reviewed.map(p=>p[1]).join('＋'),parts:reviewed||[],target:nounOptions[0]?.target||'',classifierTarget:cwOptions(classifier,index)[0]?.target||''};
+}
+function cwQuantityHtml(q,index,h){
+ const link=(text,target)=>'<strong lang="lo">'+(target?'<button type="button" data-cw-target="'+h(target)+'">'+h(text)+'</button>':h(text))+'</strong>';
+ return '<h3>数量短语拆解</h3><p class="cw-hint">名词 ＋ 数词 ＋ 量词。这里是数量短语，不是把整句当成一个组合词。</p><div class="cw-split cw-quantity">'+
+ '<div class="cw-part"><small>名词位置</small>'+link(q.noun,q.target)+'<p>'+h(q.meaning)+'</p>'+(q.parts.length?'<div class="cw-noun-parts">'+q.parts.map(([text,meaning])=>'<p>'+link(text,cwOptions(text,index)[0]?.target||'')+' · '+h(meaning)+'</p>').join('')+'</div>':'')+'</div>'+
+ '<div class="cw-part"><small>数词</small><strong>'+((typeof nsSentenceHtml==='function')?nsSentenceHtml(q.number,[],'普通数量'):h(q.number))+'</strong><p>数量：'+q.value+'</p><p class="cw-hint">点击数字查看数量读法。</p></div>'+
+ '<div class="cw-part"><small>量词</small>'+link(q.classifier,q.classifierTarget)+'<p>'+h(cwClassifiers[q.classifier])+'</p></div></div><p class="cw-hint">按原文的数量结构展示；不改原释义、原解析或录音。不同名词的量词搭配仍需结合语境核对。</p><p class="cw-status" role="status"></p>';
 }
 function cwPartHtml(part,index,h){
  const rows=cwOptions(part,index),primary=rows[0];if(!primary)return '';
@@ -9065,10 +9126,14 @@ if(typeof document!=='undefined'&&typeof learningOpenDetail==='function'){
   // A current, explicit composition already rendered by the main detail must
   // not receive a second candidate panel with the same components.
   if(savedPanel&&new Set(savedParts.map(p=>cwNorm(p.lao))).size>=2)return;
-  const index=cwIndex(entries,snap.learningMaterials),splits=cwSplits(text,index);if(!splits.length)return;
+  const index=cwIndex(entries,snap.learningMaterials),quantity=cwQuantity(text,index);
+  if(quantity){if(savedPanel)savedPanel.remove();detail.querySelector('.ss-whole-word-fallback')?.remove();const section=document.createElement('section');section.className='cw-components';section.innerHTML=cwQuantityHtml(quantity,index,learningEsc);const main=detail.querySelector('.ss-reading')||detail,meaning=main.querySelector('.learn-meaning');if(meaning)meaning.after(section);else main.prepend(section);cwBindComponents(section);return;}
+  const variants=cwVariantSplits(text,index),splits=cwSplits(text,index);if(!splits.length&&!variants.length)return;
   if(savedPanel)savedPanel.remove(); // replaces a self-only visual card, not saved data
+  detail.querySelector('.ss-whole-word-fallback')?.remove();
   const h=learningEsc,section=document.createElement('section');section.className='cw-components';
-  section.innerHTML='<h3>组成词</h3><p class="cw-hint">'+(cwReviewedParts[text]?'按词义组成拆分；带 ທີ່ 的表达属于关系从句短语，不是每个音节都是单词。':'以下为已有词义匹配的候选拆分，仍需结合整词核对。')+'</p>'+splits.map((parts,i)=>'<div class="cw-split" aria-label="候选拆分 '+(i+1)+'">'+parts.map(part=>cwPartHtml(part,index,h)).join('<span class="cw-plus" aria-hidden="true">＋</span>')+'</div>').join('')+'<p class="cw-status" role="status"></p>';
+  const showSplit=(parts,i)=>'<div class="cw-split" aria-label="候选拆分 '+(i+1)+'">'+parts.map(part=>cwPartHtml(part,index,h)).join('<span class="cw-plus" aria-hidden="true">＋</span>')+'</div>',showOptions=options=>options.slice(0,1).map(showSplit).join('')+(options.length>1?'<details><summary>其他候选拆法 · '+(options.length-1)+'</summary>'+options.slice(1).map(showSplit).join('')+'</details>':'');
+  section.innerHTML='<h3>'+(variants.length?'不同表达分别拆解':'组成词')+'</h3><p class="cw-hint">'+(variants.length?'括号内外是两个表达，分别分析，不把它们串成一个组合词。':cwReviewedParts[text]?'按词义组成拆分；带 ທີ່ 的表达属于关系从句短语，不是每个音节都是单词。':'以下为已有词义匹配的候选拆分，仍需结合整词核对。')+'</p>'+(variants.length?variants.map(v=>'<h4 lang="lo">'+h(v.text)+'</h4>'+(v.splits.length?showOptions(v.splits):'<p>此表达尚无可靠拆分，原文保留。</p>')).join(''):showOptions(splits))+'<p class="cw-status" role="status"></p>';
   const main=detail.querySelector('.ss-reading')||detail,meaning=main.querySelector('.learn-meaning');if(meaning)meaning.after(section);else main.prepend(section);
   cwBindComponents(section);
  };
@@ -9082,6 +9147,8 @@ if(typeof document!=='undefined'&&typeof learningOpenDetail==='function'){
 .cw-part button span{overflow-wrap:anywhere}.cw-part small{font-size:11px;color:#627c71;flex-shrink:0}.cw-plus{color:#698077}.cw-part button:disabled{opacity:.65}
 .cw-part>strong{display:block;font-size:25px;font-weight:500;line-height:1.8}.cw-senses{margin-top:6px}.cw-senses>summary{font-size:12px;color:#627c71;padding:10px 0;cursor:pointer}.cw-senses button{border:0;border-top:1px solid #e1ebe5;border-radius:0;box-shadow:none}.cw-part button small{font-size:10px}
 @media(max-width:480px){.cw-components{padding:10px}.cw-part{flex-basis:100%}.cw-plus{display:none}.cw-part button{flex-wrap:wrap}}
+/* Quantity phrases keep lexical constituents separate from numbers and classifiers. */
+.cw-quantity .cw-part>small{display:block;color:#637f74;font-size:13px;margin-bottom:8px}.cw-quantity .cw-part>strong{display:block;font-size:25px;line-height:1.8}.cw-quantity .cw-part>strong>button[data-cw-target]{font:inherit;color:#087f70;text-align:left;padding:2px 6px;min-height:44px;background:transparent;border:0}.cw-quantity .cw-part>p{font-size:15px;line-height:1.8}.cw-noun-parts{border-top:1px solid #d7e7df;margin-top:12px;padding-top:8px;font-size:14px}.cw-noun-parts p{margin:8px 0}.cw-noun-parts strong{font-size:19px}.cw-noun-parts button[data-cw-target]{min-height:44px;padding:4px 7px}.ss-whole-word-fallback{font-size:14px;color:#657f75;line-height:1.8}
 </style>
 <script data-learning-bundle="book-library">
 /* Book shelves share existing course identities; management hides course entrances reversibly. */

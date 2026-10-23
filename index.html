@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="eb6f059dbbd66abc">
+  <meta name="lao-app-build" content="292c400c15e5d176">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3357,7 +3357,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
  else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-dialogue-split="'+h(m.id)+'">✂ 切分已有整段音频</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
- return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
+ return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];

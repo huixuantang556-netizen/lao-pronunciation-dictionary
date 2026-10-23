@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="805d4a2370f50545">
+  <meta name="lao-app-build" content="dfe977499a8c5ba2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6396,11 +6396,19 @@ function wslExampleGroups(snap,word,parentId){
   else other.push(item);
  }
  const seen=new Set(),unique=rows=>rows.filter(r=>{const key=JSON.stringify([norm(r.textLao),r.translationZh||'']);if(seen.has(key))return false;seen.add(key);return true;});
- return {linked:unique(linked),matched:unique(matched),other:unique(other)};
+ const usage=[],index=typeof cwIndex==='function'?cwIndex(snap.entries||[],snap.learningMaterials):null;
+ const usageRows=[...snap.learningMaterials,...(snap.entries||[]).filter(e=>e.syncId&&!e.deleted).map(e=>({id:'word:'+e.syncId,contentType:'word',textLao:e.word,translationZh:e.meaning,source:'我的词典'}))];
+ for(const m of usageRows){
+  if(m.deleted||m.analysisOwner||m.id===parentId||m.contentType!=='word')continue;
+  const q=index&&cwQuantity(m.textLao,index);if(!q)continue;
+  const parts=[{lao:q.noun,target:q.target},...q.parts.map(p=>({lao:p[0],target:''})),{lao:q.classifier,target:q.classifierTarget}];
+  if(parts.some(p=>norm(p.lao)===text))usage.push({...m,exampleMeanings:[],usagePhrase:true});
+ }
+ return {linked:unique(linked),matched:unique(matched),other:unique(other),usage:unique(usage)};
 }
 function wslWordExamplesHtml(groups){
  const h=learningEsc,card=r=>'<p><button data-letter-example-material="'+h(r.id)+'"><span lang="lo">'+h(r.textLao)+'</span> · '+h(r.translationZh||'')+'</button>'+(r.exampleMeanings.length?'<small>句中词义：'+h(r.exampleMeanings.join('；'))+'</small>':'')+'<small>'+h(r.source||r.sourceType||'已收录材料')+'</small></p>',list=rows=>rows.slice(0,5).map(card).join('')+(rows.length>5?'<details><summary>更多例句 · '+(rows.length-5)+'</summary>'+rows.slice(5).map(card).join('')+'</details>':'');
- return (groups.linked.length?'<h4>本词已关联例句</h4>'+list(groups.linked):'')+(groups.matched.length?'<h4>词义匹配的例句候选</h4><p class="tag-hint">来自已有句中分析，按中文释义匹配；显示不改变任何词卡关联。</p>'+list(groups.matched):'')+(groups.other.length?'<details class="wsl-other-examples"><summary>同形词的其他／待核对用法 · '+groups.other.length+'</summary><p class="tag-hint">不是当前词义的已确认例句，请结合每句释义区分。</p>'+list(groups.other)+'</details>':'')+'<p class="letter-example-status" role="status"></p>';
+ return ((groups.usage||[]).length?'<h4>已收录的数量短语用法</h4><p class="tag-hint">包含本词的名词＋数词＋量词结构；短语不等于完整句子，请结合中文释义核对用法。</p>'+list(groups.usage):'')+(groups.linked.length?'<h4>本词已关联例句</h4>'+list(groups.linked):'')+(groups.matched.length?'<h4>词义匹配的例句候选</h4><p class="tag-hint">来自已有句中分析，按中文释义匹配；显示不改变任何词卡关联。</p>'+list(groups.matched):'')+(groups.other.length?'<details class="wsl-other-examples"><summary>同形词的其他／待核对用法 · '+groups.other.length+'</summary><p class="tag-hint">不是当前词义的已确认例句，请结合每句释义区分。</p>'+list(groups.other)+'</details>':'')+'<p class="letter-example-status" role="status"></p>';
 }
 function wslFallbacks(a,ranges){const all=a.segments.flatMap(s=>s.words),key=t=>JSON.stringify([t.lao,t.meaning,t.target]);return all.filter((t,i)=>!t.isName&&t.kind!=='name'&&!ranges.some(r=>key(r.token)===key(t))&&all.findIndex(x=>key(x)===key(t))===i);}
 function wslCardHtml(token,target,entry,related){
@@ -6411,7 +6419,12 @@ learningOpenDetail=async function(id){
  await wslPreviousDetail(id);if(learningDetail!==id)return;
  const {m,w,snap}=await learningResolve(id);if(learningDetail!==id)return;
  const detail=learningDialog.querySelector('.learn-detail');if(!detail)return;const h=learningEsc;
- if(w){const groups=wslExampleGroups(snap,w,m.id);if(groups.linked.length||groups.matched.length||groups.other.length){detail.querySelector('.learn-related')?.remove();const section=document.createElement('section');section.className='letter-examples wsl-word-examples';section.innerHTML='<h3>例句与用法</h3>'+wslWordExamplesHtml(groups);detail.append(section);}return;}
+ if(w||m.analysisUnitType==='word'){
+  const entries=typeof allEntries==='function'?await allEntries():[];if(learningDetail!==id)return;
+  const word=w||{word:m.textLao,meaning:m.translationZh},groups=wslExampleGroups({...snap,entries},word,m.id);
+  if(groups.linked.length||groups.matched.length||groups.other.length||groups.usage.length){detail.querySelector('.learn-related')?.remove();const section=document.createElement('section');section.className='letter-examples wsl-word-examples';section.dataset.wslUsage=String(groups.usage.length>0);section.innerHTML='<h3>例句与用法</h3>'+wslWordExamplesHtml(groups);detail.append(section);}
+  if(w)return;
+ }
  const host=detail.querySelector('.sentence-analysis');if(!host)return;
  const exportButton=document.createElement('button');exportButton.className='sa-export-saved';exportButton.textContent='导出已保存解析 JSON';exportButton.disabled=!m.sentenceAnalysis;exportButton.onclick=()=>saDownload('已保存句子解析.json',JSON.stringify(saValidate(m.sentenceAnalysis,m.textLao),null,2));host.querySelector('.sa-actions').append(exportButton);
  const a=m.sentenceAnalysis;if(!a)return;
@@ -6426,6 +6439,7 @@ learningOpenDetail=async function(id){
   const target=token.target||'',related=target?wslRelated(snap,target,m.id):[];
   let entry=null;try{if(target.startsWith('word:'))entry=learningFindWord(target.slice(5),await allEntries());}catch(_){}
   if(request!==selection||!panel.isConnected)return;
+  for(const old of panel.querySelectorAll('.ns-number-card'))old.hidden=true;
   card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);
   if(typeof paWordCard==='function')void paWordCard(card,m,token,snap);
   if(card.animate&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches)card.animate([{opacity:.45,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:160});
@@ -7449,7 +7463,7 @@ function ssCompose(detail,resolved,id){
  if(phonetics.length){const fold=ssFold(w?'词语拼读':(a?.segments.length||0)>1?'分段拼读':'整句拼读','ss-pronunciation');phonetics.forEach((n,i)=>{const heading=n.querySelector('h4');if(heading){if(phonetics.length===1)heading.remove();else heading.textContent='第'+(Number(n.dataset.paIndex??i)+1)+'段';}fold.append(n);});main.append(fold);}
  else if(paTools){const saved=[...paTools.children].filter(n=>n.classList.contains('pa-section'));if(saved.length){const fold=ssFold('语音分析','ss-pronunciation');saved.forEach(n=>fold.append(n));main.append(fold);}}
  const related=detail.querySelector('.learn-related');if(related&&panel){metadata.append(related);}else if(related&&!related.querySelector('button')){related.remove();}else if(related&&!w&&related.querySelector('button')){const fallback=ssFold('词汇','ss-fallback-words');for(const n of [...related.children])if(n.tagName==='H3'||n.classList.contains('tag-hint'))n.remove();fallback.append(related);main.append(fallback);}
- if(w){const nodes=originalDetailChildren.filter(n=>(n===related||n.classList.contains('letter-examples'))&&n.querySelector('button'));if(nodes.length){const examples=ssFold('例句与用法','ss-word-examples');examples.open=true;for(const n of nodes){n.querySelector('h3')?.remove();examples.append(n);}main.append(examples);}}
+ if(w||m.analysisUnitType==='word'){const nodes=originalDetailChildren.filter(n=>(w&&n===related||n.classList.contains('letter-examples'))&&n.querySelector('button'));if(nodes.length){const examples=nodes.some(n=>n.dataset.wslUsage==='true')?ssGroup('例句与短语用法','ss-usage-examples'):ssFold('例句与用法','ss-word-examples');examples.open=true;for(const n of nodes){n.querySelector('h3')?.remove();examples.append(n);}main.append(examples);}}
  parseTools.append(ssElement('p','ss-management-note',a?'已有解析；原文和录音不随显示调整而改变。':'尚未添加解析。'));
  const exportSaved=existing?.querySelector('.sa-export-saved');if(exportSaved)parseTools.append(exportSaved);
  for(const n of originalHostChildren){if(n===panel||n===paTools||n===raw||n===stale)continue;if(n.tagName==='H3'||n.classList.contains('sa-help')){n.remove();continue;}if(n.querySelector('[data-split]'))audioTools.append(n);else parseTools.append(n);}
@@ -8417,7 +8431,11 @@ async function nsSelect(number,button){
  const root=button.closest('.wsl-panel,.ss-reading,.learn-card,.rp-flashcard,.study-example,#practiceCard')||button.parentElement;if(!root)throw Error('原句页面已变化，请重新打开');
  if(root.nsButton===button){const old=root.querySelector('.ns-number-card');if(old&&!old.hidden){root.nsSelection=(root.nsSelection||0)+1;root.nsButton=null;old.hidden=true;button.setAttribute('aria-pressed','false');stopPracticeAudio();return;}}
  root.wslCancelSelection?.();stopPracticeAudio();const request=(root.nsSelection||0)+1;root.nsSelection=request;
- let card=root.querySelector('.wsl-card');if(!card){card=document.createElement('section');card.className='wsl-card ns-inline-card';card.setAttribute('aria-live','polite');const anchor=root.querySelector('.wsl-hint,.learn-meaning,.study-example-translation,.learn-card-main,.rp-card-word,.question-row');if(anchor)anchor.after(card);else root.append(card);}
+ for(const old of root.querySelectorAll('.wsl-card'))old.hidden=true;
+ let card=root.querySelector('.ns-number-card');if(!card){card=document.createElement('section');card.className='wsl-card ns-inline-card';card.setAttribute('aria-live','polite');}
+ // Keep the expansion in document flow immediately below the clicked structure.
+ const anchor=button.closest('.cw-quantity,.ns-detail-links,.wsl-sentence,.ss-original,.question-row')||root.querySelector('.wsl-hint,.study-example-translation,.learn-card-main,.rp-card-word,.learn-meaning');
+ if(anchor&&root.contains(anchor))anchor.after(card);else root.append(card);
  card.paRun=(card.paRun||0)+1;card.hidden=false;card.innerHTML='<button type="button" data-ns-inline-close aria-label="收起数字读法">收起 ×</button>'+nsInlineHtml(number);card.classList.add('ns-number-card');root.nsButton=button;
  card.querySelector('[data-ns-inline-close]').onclick=e=>{e.stopPropagation();root.nsSelection++;root.nsButton=null;card.hidden=true;button.setAttribute('aria-pressed','false');stopPracticeAudio();button.focus({preventScroll:true});};
  for(const b of root.querySelectorAll('[data-wsl-token],[data-ns-number]'))b.setAttribute('aria-pressed',String(b===button));
@@ -8493,8 +8511,8 @@ if(typeof MutationObserver==='function'){let pending=false;new MutationObserver(
 .ns-note,.ns-study>p:not(.ns-reading):not(.ns-kind){font-size:14px;line-height:1.9;overflow-wrap:anywhere}.ns-sources{font-size:12px;color:#6a8078;margin-top:20px;line-height:1.8}.ns-study #nsStatus{color:#947337}
 .rr-record-word{background:transparent;border:0;padding:0;margin:0;text-align:left;color:#24564a;text-decoration:underline;text-decoration-color:#bfd9cd;text-underline-offset:5px}.rr-history-item>button{align-self:center;min-height:44px}.rr-history-item .rr-record-word strong{font-size:24px}
 @media(max-width:600px){#learningDialog.ns-dialog{padding:18px 14px}.ns-study .ns-reading{padding:12px;font-size:27px}.rr-history-item{flex-wrap:wrap}.rr-history-item>div{flex:1 1 100%}.rr-history-item>button{margin-bottom:4px}}
-.ns-number-card{max-height:360px;overflow:auto;overscroll-behavior:contain;position:relative}
-.ns-number-card [data-ns-inline-close]{display:block;position:sticky;top:0;z-index:2;margin-left:auto;background:#fff;min-height:44px}
+.ns-number-card{max-height:none;overflow:visible;position:relative;grid-column:1/-1}
+.ns-number-card [data-ns-inline-close]{display:block;margin-left:auto;background:#fff;min-height:44px}
 .ns-number-card .ns-inline-reading{font-size:clamp(1.25rem,3vw,1.8rem);overflow-wrap:anywhere}
 .ns-number-card[hidden]{display:none!important}
 </style>

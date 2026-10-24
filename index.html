@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c4e8638eeb050369">
+  <meta name="lao-app-build" content="9ac51883c22a196a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3414,7 +3414,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  if(selected)lessonV2Sections.set(c.id,selected.id);
  const sectionHtml=s=>s.numberLab?nlHtml(c):'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(!grouped&&typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block,!!grouped):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
  return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><div class="learn-course-tools'+(learningSettings?' is-settings':'')+'"><button type="button" data-course-test="course">本章检测</button>'+(learningSettings?'<button type="button" data-learn="course-edit">修改名称／简介</button><button type="button" data-learn="v2-organize">整理分类与内容</button><button type="button" data-analysis-batch>语法分析（文字）</button><button type="button" data-phonetic-batch>读法分析（文字）</button><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button>':'')+'</div>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
- (grouped?grouped.nav+(grouped.sections.length?(typeof lessonGroupedToolbar==='function'?lessonGroupedToolbar(grouped,c):'')+grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
+ (grouped?grouped.nav+(grouped.sections.length?(typeof lessonGroupedContent==='function'?lessonGroupedContent(grouped,c,sectionHtml):grouped.sections.map(sectionHtml).join('')):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
  (lessonV2Mode==='category'?'<nav class="learn-tabs">'+['all',...types].map(t=>'<button data-learn="v2-filter" data-key="'+h(t)+'" aria-current="'+(lessonV2Filter===t?'page':'false')+'">'+h(({all:'全部',knowledge:'知识','word-ref':'词汇',reading:'朗读',sentence:'句子',dialogue:'对话',table:'表格'})[t]||t)+'</button>').join('')+'</nav>'+d.sections.filter(s=>s.blocks.some(b=>lessonV2Filter==='all'||lessonV2Filter===b.contentType)).map(sectionHtml).join(''):(selected?sectionHtml(selected):'<p>本课暂无小节。</p>')));
@@ -3648,6 +3648,11 @@ function lessonPageItems(section,course,grouped=false){
 function lessonGroupedToolbar(view,course){
  const words=view.sections.flatMap(s=>lessonPageItems(s,course,true));
  return lessonPageToolbarFor(words,view.title,course.id+':grouped');
+}
+function lessonGroupedContent(view,course,renderSection){
+ // Keep the aggregate player, every section and self-test controls in one scope.
+ // cfDecorate must not wrap the player alone before the section-test button.
+ return '<section class="cf-self-test learning-group-scope">'+lessonGroupedToolbar(view,course)+view.sections.map(renderSection).join('')+'</section>';
 }
 function lessonPageToolbar(section,course){
  const words=lessonPageItems(section,course);if(!words.length)return '';

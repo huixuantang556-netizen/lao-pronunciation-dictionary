@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="3712ed9fcf8b64e2">
+  <meta name="lao-app-build" content="3b0103024a58988a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9019,12 +9019,15 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 </script>
 <style data-learning-bundle="study-comfort">
 .cf-mask-controls,.cf-word-controls,.page-progress{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin:.8rem 0}
-.dialogue-group-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
-#learningPanel .dialogue-group-controls button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:10px 14px;border:1px solid #d6e7df;border-radius:12px;background:#f1f8f5;color:#24584d}
+.dialogue-group-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 12px}
+#learningPanel .dialogue-group-controls button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;box-sizing:border-box;gap:5px;width:auto;min-width:0;min-height:34px;margin:0;padding:6px 10px;border:1px solid #dce8e2;border-radius:8px;background:#f7faf8;color:#41675c;font-size:13px;font-weight:500;line-height:20px;white-space:nowrap;box-shadow:none;transition:background .15s,border-color .15s}
+#learningPanel .dialogue-group-controls button svg{width:15px;height:15px;flex:0 0 15px}
+#learningPanel .dialogue-group-controls button:hover{background:#eaf3ee;border-color:#b9d5c8}
+#learningPanel .dialogue-group-controls button:focus-visible{outline:2px solid #087e6d;outline-offset:3px}
 #learningPanel .dialogue-group-controls [data-dialogue-action="play"]{background:#087e6d;border-color:#087e6d;color:white}
 .dialogue-group-player [data-page-status]:empty{display:none}
 .dialogue-group-player [data-page-status]{font-size:13px;color:#537368;overflow-wrap:anywhere}
-@media(max-width:600px){#learningPanel .dialogue-group-controls button{flex:1 0 calc(50% - 8px)}}
+@media(pointer:coarse){#learningPanel .dialogue-group-controls button{min-height:44px}}
 #learningPanel .comm-detail .v2-sentences .learn-card>small{grid-column:1/-1;grid-row:2;display:block;max-width:100%;box-sizing:border-box;margin:0;padding:0 14px 10px;font-size:12px;line-height:1.5;color:#8a6b31;overflow-wrap:anywhere}
 @media(min-width:601px){#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-main{grid-column:1;grid-row:1;min-width:0}#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-actions{grid-column:2;grid-row:1}}
 .page-progress label{flex:1;min-width:180px}.page-progress input{display:block;width:100%}.page-progress span{font-variant-numeric:tabular-nums}

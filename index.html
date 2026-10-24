@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="4007f0f74a4e69bd">
+  <meta name="lao-app-build" content="4244be6b8e446748">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -920,6 +920,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
         const current=practiceRound?.history?.[practiceRound.cursor];
         if(current&&practiceId===current.id){current.answer=$('#practiceAnswer').value;current.result=$('#practiceResult').textContent;current.resultClass=$('#practiceResult').className;current.evaluated=practiceEvaluated;}
         localStorage.setItem(workspaceName('lao-practice-session-v1'),JSON.stringify({round:practiceRound,kind:$('#practiceKind')?.value,mode:$('#practiceMode').value,scope:$('#practiceScope').value,tagMode:$('#practiceTagMode').value,tags:[...selectedPracticeTags]}));
+        if(typeof practiceAutoSchedule==='function')practiceAutoSchedule(JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1'))));
       }catch(_){}
     }
     function restorePractice(){
@@ -2492,8 +2493,8 @@ async function learningSnapshot(){const scope=typeof ssDetailRenderGate==='undef
 async function learningReadSnapshot(){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(learningStores,'readonly'),out={};for(const s of learningStores){const r=t.objectStore(s).getAll();r.onsuccess=()=>out[s]=r.result;}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
 async function learningWrite(rows,expected=null,options={}){
  for(const kind of Object.keys(rows))for(const row of rows[kind])learningValidateRecord(kind,row);
- const d=await openDB(),names=Object.keys(rows),quick=options.quickAudio&&typeof qaStage==='function'&&qaEnabled(),t=d.transaction(quick?[...names,'cloud_meta']:names,'readwrite'),done=transactionDone(t);let failure;
- const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,before:expected?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
+ const d=await openDB(),names=Object.keys(rows),quick=typeof qaStage==='function'&&(options.quickAudio&&qaEnabled()||options.quickProgress&&qaProgressEnabled()),t=d.transaction(quick?[...names,'cloud_meta']:names,'readwrite'),done=transactionDone(t);let failure;
+ const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,...(options.quickProgress?{progress:true}:{}),before:expected?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
  if(expected){let left=names.length;for(const s of names){const q=t.objectStore(s).getAll();q.onsuccess=()=>{if(!cloudSame(q.result,expected[s])){failure=new Error('另一个页面修改了学习材料，请重新打开后再保存。');t.abort();return;}if(--left===0)write();};}}else write();
  try{await done;}catch(e){throw failure||e;}if(quick)qaKick();
 }
@@ -4820,7 +4821,7 @@ async function reviewWriteAttempt(item,direction,question,patch){
  const courses=learningCourses(snap),refs=snap.learningPlacements.filter(p=>!p.deleted&&(item._practiceMaterialId?p.materialId===item._practiceMaterialId:snap.learningMaterials.some(m=>m.id===p.materialId&&m.contentType==='word'&&m.linkedWordSyncIds.some(k=>[item.syncId,...(item.syncAliases||[])].includes(k))))).map(p=>courses.find(c=>c.id===p.lessonId)).filter(Boolean);
  const event={version:1,id,target:reviewTarget(item),direction,at:old?.reviewEvent?.at||now,word:item.word,meaning:item.meaning||'',kind:practiceIsSentence(item)?'sentence':$('#practiceKind').value==='letters'?'letter':'word',courses:[...new Map(refs.map(c=>[c.id,{id:c.id,label:[c.textbookName,c.chapterName,c.title].filter(Boolean).join(' · ')}])).values()],...old?.reviewEvent,...patch};
  if(patch.rating)event.at=old?.reviewEvent?.rating?old.reviewEvent.at:now;
- await learningWrite({learningMaterials:[{...(old||learningBlank(id,'knowledge','复习记录 · '+item.word)),reviewEvent:event,updatedAt:now}]},snap);
+ await learningWrite({learningMaterials:[{...(old||learningBlank(id,'knowledge','复习记录 · '+item.word)),reviewEvent:event,updatedAt:now}]},snap,{quickProgress:true});
  return {event,events:reviewEvents([...snap.learningMaterials.filter(m=>m.id!==id),{reviewEvent:event}])};
 }
 async function reviewRecordCheck(item,direction,correct){
@@ -5528,7 +5529,7 @@ async function roundResultSave(round){
   const snap=await learningSnapshot(),existing=snap.learningMaterials.find(x=>x.id===round.resultId);
   if(existing?.roundResult)return existing.roundResult;
   const result=roundResultBuild(round,reviewEvents(snap.learningMaterials));
-  await learningWrite({learningMaterials:[{...learningBlank(result.id,'knowledge','默写轮次结果'),roundResult:result}]},snap);return result;
+  await learningWrite({learningMaterials:[{...learningBlank(result.id,'knowledge','默写轮次结果'),roundResult:result}]},snap,{quickProgress:true});return result;
  })();roundSaves.set(round.resultId,task);
  try{return await task;}finally{roundSaves.delete(round.resultId);}
 }
@@ -5593,10 +5594,10 @@ async function practiceResumeHandoff(s){
   await showView('practice');
  }catch(e){practiceRound=old.round;practiceSourceFilters=old.sources;reviewDaily=old.daily;for(const [id,key] of [['practiceKind','kind'],['practiceMode','mode'],['practiceScope','scope'],['practiceTagMode','tagMode']])$('#'+id).value=old[key];selectedPracticeTags.clear();old.tags.forEach(t=>selectedPracticeTags.add(t));localStorage.setItem(workspaceName('lao-practice-sources-v1'),JSON.stringify(old.sources));localStorage.setItem(workspaceName('lao-review-daily-v1'),old.daily?'1':'0');persistPractice();throw e;}
 }
-const handoffPanel=document.createElement('details');handoffPanel.innerHTML='<summary>跨设备继续默写</summary><p>电脑先点账号里的“云端同步”，手机登录同一账号后也点同步，再在下方选择进度继续。仅同步不会替换当前轮次。</p><button type="button" data-handoff-refresh>查看可继续的进度</button><div data-handoff-list></div>';roundHistoryPanel.after(handoffPanel);
+const handoffPanel=document.createElement('details');handoffPanel.innerHTML='<summary>跨设备继续默写</summary><p>开启账号设置中的“默写进度自动同步”后，新作答和当前位置会自动上传。另一设备登录同一账号并接收云端更新后，在下方选择进度继续；不会自动替换正在进行的练习。</p><button type="button" data-handoff-refresh>查看可继续的进度</button><div data-handoff-list></div>';roundHistoryPanel.after(handoffPanel);
 async function practiceHandoffDraw(){
  const list=handoffPanel.querySelector('[data-handoff-list]');list.replaceChildren();
- const rows=(await learningRows('learningMaterials')).map(m=>m.practiceHandoff).filter(handoffValid).sort((a,b)=>b.savedAt-a.savedAt);
+ const rows=(await learningRows('learningMaterials')).map(m=>m.practiceHandoff).filter(handoffValid).filter(s=>!s.round.completed).sort((a,b)=>b.savedAt-a.savedAt);
  if(!rows.length){list.textContent='暂无已同步的未完成轮次。';return;}
  for(const s of rows.slice(0,20)){const button=document.createElement('button');button.style.cssText='display:block;margin:8px 0;white-space:normal';button.textContent=new Date(s.savedAt).toLocaleString('zh-CN')+' · '+s.device+' · 已标记 '+s.round.history.filter(q=>q.rated).length+'，已展示 '+s.round.history.length+' / '+(s.round.total||s.round.history.length)+' · 继续';button.onclick=async()=>{button.disabled=true;try{await practiceResumeHandoff(s);}catch(e){alert(e.message);}finally{button.disabled=false;}};list.append(button);}
 }
@@ -6370,15 +6371,15 @@ function courseCheckGroups(data,course,snap,words,scope,key,kind){
  }).filter(r=>r.lao.trim()&&r.zh.trim())}))).filter(g=>g.items.length);
 }
 function courseCheckShuffle(items){const out=items.slice();for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;}
-function courseCheckQueue(groups,random){return (random?courseCheckShuffle(groups):groups).flatMap(g=>(random&&!g.dialogue?courseCheckShuffle(g.items):g.items).map(r=>({...r,group:g.title})));}
+function courseCheckQueue(groups,order){if(order==='random-all')return courseCheckShuffle(groups.flatMap(g=>g.items.map(r=>({...r,group:g.title}))));const random=order===true||order==='random';return (random?courseCheckShuffle(groups):groups).flatMap(g=>(random&&!g.dialogue?courseCheckShuffle(g.items):g.items).map(r=>({...r,group:g.title})));}
 async function courseCheckOpen(scope='course',key=''){
  if(learningHasWork())throw Error('请先结束编辑或录音');stopPracticeAudio();
  const course={...learningLesson},snap=await learningSnapshot(),words=await allEntries(),data=lessonV2Export(snap,course),h=learningEsc;
  const groups=courseCheckGroups(data,course,snap,words,scope,key,'all');
  const title=scope==='block'?groups[0]?.title:scope==='section'?data.sections.find(s=>s.id===key)?.title:course.title;
- learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">随机测试（对话组随机，组内保持顺序）</option></select></label><p class="tag-hint">先回忆再显示答案，自评掌握程度。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><button class="primary">开始检测</button></form>');
+learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><p class="tag-hint">先回忆再显示答案，自评掌握程度。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><button class="primary">开始检测</button></form>');
  for(const [id,name,fallback]of [['ccScope','Scope','current'],['ccKind','Kind','all'],['ccDirection','Direction','lao'],['ccOrder','Order','ordered']])$('#'+id).value=(typeof appPreference==='function'&&appPreference('courseCheck'+name))||fallback;
- $('#courseCheckSetup').onsubmit=e=>{e.preventDefault();const chosenScope=$('#ccScope').value==='course'?'course':scope,kind=$('#ccKind').value,direction=$('#ccDirection').value,queue=courseCheckQueue(courseCheckGroups(data,course,snap,words,chosenScope,key,kind),$('#ccOrder').value==='random');
+ $('#courseCheckSetup').onsubmit=e=>{e.preventDefault();const chosenScope=$('#ccScope').value==='course'?'course':scope,kind=$('#ccKind').value,direction=$('#ccDirection').value,queue=courseCheckQueue(courseCheckGroups(data,course,snap,words,chosenScope,key,kind),$('#ccOrder').value);
   if(!queue.length){$('#learningDialogStatus').textContent='此范围没有同时具备老挝语和中文的可测项目。';return;}
   courseCheckSession(queue,course,direction,snap);
  };
@@ -8311,7 +8312,7 @@ rpToggle();if(activeView==='practice')void rpRender().catch(error=>{$('#rpStatus
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
 const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandExamples:false,revealAudio:true,selfTestEnabled:false,selfTestHideLao:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered'});
-const apPreferenceChoices={courseCheckScope:['current','course'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh'],courseCheckOrder:['ordered','random']};
+const apPreferenceChoices={courseCheckScope:['current','course'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,saved?.[key])]));}
@@ -8329,7 +8330,7 @@ apDialog.append(apContent);const apAccountSymbol=document.createElement('span');
 document.querySelector('#personalSettings')?.remove();
 const apSelfTest=document.createElement('div');apSelfTest.className='ap-self-test';apSelfTest.innerHTML='<h4>章节自测</h4><label class="ap-switch-row"><span><strong>默认开启自测</strong><small>遮住答案，点击遮挡条只揭晓这一处。</small></span><input type="checkbox" role="switch" data-ap-preference="selfTestEnabled"></label><label class="ap-self-test-language">默认隐藏<select id="apSelfTestLanguage"><option value="zh">中文</option><option value="lo">老挝语</option></select></label>';document.querySelector('#apPreferences').prepend(apSelfTest);
 document.querySelector('#apResetPreferences').textContent='恢复默认偏好';
-const apCourseCheck=document.createElement('div');apCourseCheck.className='ap-course-check';apCourseCheck.innerHTML='<h4>教材检测默认模式</h4><label>检测范围<select data-ap-choice="courseCheckScope"><option value="current">当前组／小节（整章入口则为整章）</option><option value="course">整章所有分组</option></select></label><label>内容<select data-ap-choice="courseCheckKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select data-ap-choice="courseCheckDirection"><option value="lao">看老挝语认中文</option><option value="zh">看中文回忆老挝语</option></select></label><label>顺序<select data-ap-choice="courseCheckOrder"><option value="ordered">逐组测试</option><option value="random">随机测试（对话组内保持顺序）</option></select></label><p class="ap-note">用于“检测本组”和“本章检测”的起始选项；单次检测仍可临时调整，不会覆盖这里的默认偏好。</p>';document.querySelector('#apPreferences').append(apCourseCheck);
+const apCourseCheck=document.createElement('div');apCourseCheck.className='ap-course-check';apCourseCheck.innerHTML='<h4>教材检测默认模式</h4><label>检测范围<select data-ap-choice="courseCheckScope"><option value="current">当前组／小节（整章入口则为整章）</option><option value="course">整章所有分组</option></select></label><label>内容<select data-ap-choice="courseCheckKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select data-ap-choice="courseCheckDirection"><option value="lao">看老挝语认中文</option><option value="zh">看中文回忆老挝语</option></select></label><label>顺序<select data-ap-choice="courseCheckOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><p class="ap-note">用于“检测本组”和“本章检测”的起始选项；单次检测仍可临时调整，不会覆盖这里的默认偏好。</p>';document.querySelector('#apPreferences').append(apCourseCheck);
 function apRefreshSelfTest(){document.querySelector('#apSelfTestLanguage').value=appPreference('selfTestHideLao')?'lo':'zh';}
 document.querySelector('#apSelfTestLanguage').onchange=e=>{try{apSavePreferences({...apReadPreferences(),selfTestHideLao:e.target.value==='lo'});if(typeof cfDecorate==='function'){for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope,true);cfMaskRefresh(scope);}}document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){apRefreshSelfTest();document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 // Move the original controls, preserving sync handlers, busy state and progress reporting.
@@ -9658,13 +9659,16 @@ document.addEventListener('click',e=>{
 const qaQueueKey='quickAudioOutboxV1',qaMimes=['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'];
 let qaTimer=null,qaRunning=false,qaDelay=1500;
 function qaEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-audio-sync'))!=='off';}catch(_){return false;}}
+function qaProgressEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-practice-sync'))!=='off';}catch(_){return false;}}
+function qaAnyEnabled(){return qaEnabled()||qaProgressEnabled();}
+function qaAllowed(records){return records.every(r=>r.progress)?qaProgressEnabled():qaEnabled();}
 function qaMessage(message){
  if(typeof document==='undefined')return;
  let node=document.querySelector('#quickAudioSyncStatus');if(!node){node=document.createElement('div');node.id='quickAudioSyncStatus';node.setAttribute('role','status');node.style.cssText='position:fixed;bottom:16px;left:16px;max-width:min(420px,calc(100vw - 32px));z-index:1000;padding:9px 13px;border:1px solid #cfe3d9;border-radius:10px;background:#f6fbf8;color:#41675c;font-size:12px;box-shadow:0 3px 14px #173e3012;pointer-events:none';document.body.append(node);}node.textContent=message;node.hidden=!message;
  const label=document.querySelector('#quickAudioSyncDetail');if(label)label.textContent=message;
 }
 function qaStage(store,records){
- if(!qaEnabled()||!records.length)return;
+ if(!records.length||!qaAllowed(records))return;
  const q=store.get(qaQueueKey);q.onsuccess=()=>{const jobs=q.result||[],targets=records.filter(r=>r.kind!=='learningAudio'),id=(targets.length?targets:records).map(r=>r.table+':'+r.kind+':'+r.id).sort().join('|'),old=jobs.find(j=>j.id===id);
   const assets=new Map((old?.records||[]).filter(r=>r.kind==='learningAudio').map(r=>[r.id,r]));for(const r of records.filter(r=>r.kind==='learningAudio'))assets.set(r.id,r);
   const merged=[...assets.values(),...records.filter(r=>r.kind!=='learningAudio')];
@@ -9678,7 +9682,7 @@ async function qaSaveEntry(value,id,before){
  q.onsuccess=()=>{result=q.result;qaStage(t.objectStore('cloud_meta'),[{table:'lao_dictionary_records',kind:'entry',id:row.syncId,row:{...row,id:result},before}]);};await done;qaKick();return result;
 }
 function qaRecordLearning(rows){return Object.entries(rows).flatMap(([kind,rs])=>rs.map(row=>({table:'lao_learning_records',kind,id:row.id,row})));}
-function qaKick(delay=350){clearTimeout(qaTimer);if(!qaEnabled())return;qaTimer=setTimeout(()=>qaDrain().catch(e=>qaMessage('本机已保存；自动同步暂缓：'+e.message)),delay);}
+function qaKick(delay=350){clearTimeout(qaTimer);if(!qaAnyEnabled())return;qaTimer=setTimeout(()=>qaDrain().catch(e=>qaMessage('本机已保存；自动同步暂缓：'+e.message)),delay);}
 async function qaReadMeta(){const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction('cloud_meta','readonly'),s=t.objectStore('cloud_meta'),keys=[qaQueueKey,'checkpoint','learningCheckpoint','learningServerRevisions'],out={};for(const key of keys){const q=s.get(key);q.onsuccess=()=>out[key]=q.result|| (key===qaQueueKey?[]:{});}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
 function qaBase(meta,record){const key=record.kind+':'+record.id;return record.table==='lao_learning_records'?meta.learningCheckpoint[key]||null:meta.checkpoint[key]?.value||null;}
 function qaRemoteValue(record,row){return row?{deleted:record.table==='lao_learning_records'?false:!!row.deleted,payload:row.payload}:null;}
@@ -9693,6 +9697,10 @@ function qaMetadataOnly(record,value){
  if(record.kind==='entry')delete copy.updatedAt;return copy;
 }
 function qaCheckHistory(record,base,remote,desired){
+ if(record.progress&&record.table==='lao_learning_records'&&record.kind==='learningMaterials'){
+  const r=record.row,h=r.practiceHandoff;if(h&&h.id===record.id&&h.deviceId&&record.id==='practice-handoff:auto:'+h.deviceId+':'+String(h.round?.resultId||'').replace(/^practice-round:/,''))return;
+  if(r.reviewEvent?.id===record.id&&record.id.startsWith('review-event:')||r.roundResult?.id===record.id&&record.id.startsWith('practice-round:'))return;
+ }
  if(cloudSame(remote,desired)||!record.before)return;
  if(!base)throw Object.assign(Error('这条资料尚未建立同步基线，请先完整同步一次'),{blocked:true});
  const previous=record.kind==='entry'?cloudEntryData(record.before):record.before,baseline=record.kind==='entry'?base.payload.entry:base.payload;
@@ -9744,19 +9752,19 @@ async function qaRunJob(job,api){
    if(current&&cloudSame(qaRemoteValue(record,remote),{deleted:false,payload:(await qaPrepare(job.uid,current)).payload})){await qaRemove(job.token);return;}
    throw Object.assign(Error('词卡在保存后又有修改，请完整同步核对；旧版本不会自动回写'),{blocked:true});
   }const base=qaBase(meta,record),action=qaPlan(base,qaRemoteValue(record,remote),desired);qaCheckHistory(record,base,qaRemoteValue(record,remote),desired);if(action==='conflict')throw Object.assign(Error('这条资料有云端冲突，请用完整同步核对；本机录音保留'),{blocked:true});plan.push({record,remote,action});}
- for(const p of plan){if(!qaEnabled())throw Object.assign(Error('已暂停自动上传'),{blocked:true});if(p.action==='same'){await qaAck(p.record,p.remote);continue;}await qaUploadBlob(api,job.uid,p.record,p.remote);const row={kind:p.record.kind,id:p.record.id,payload:p.record.payload,revision:p.remote?.revision??null,deleted:false};await cloudBatchWrite(job.uid,api,p.record.table,[row],()=>{});await qaAck(p.record,row.result);}
+ for(const p of plan){if(!qaAllowed(job.records))throw Object.assign(Error('已暂停自动上传'),{blocked:true});if(p.action==='same'){await qaAck(p.record,p.remote);continue;}await qaUploadBlob(api,job.uid,p.record,p.remote);const row={kind:p.record.kind,id:p.record.id,payload:p.record.payload,revision:p.remote?.revision??null,deleted:false};await cloudBatchWrite(job.uid,api,p.record.table,[row],()=>{});await qaAck(p.record,row.result);}
  await qaRemove(job.token);
 }
 async function qaDrain(){
- if(qaRunning||!qaEnabled()||navigator.onLine===false)return;
+ if(qaRunning||!qaAnyEnabled()||navigator.onLine===false)return;
  const bridge=window.laoQuickAudioBridge;if(!bridge||bridge.uid()!==cloudWorkspace)return;if(bridge.busy()){qaKick(3000);return;}
  if(!navigator.locks){qaMessage('本机已保存 · 此浏览器不支持安全的跨页面自动同步，请使用手动同步');return;}
  qaRunning=true;window.laoQuickSyncBusy=true;
  try{
-  const run=async()=>{const all=(await qaReadMeta())[qaQueueKey],jobs=all.filter(j=>j.uid===cloudWorkspace&&!j.blocked);if(!jobs.length){if(all.length)qaMessage('本机已保存 · '+all.length+'项需完整同步核对：'+(all[0].blocked||'待处理'));return;}
-   qaMessage('本机已保存 · 正在同步本次语音…');
-   for(const job of jobs){if(!qaEnabled()||bridge.uid()!==job.uid)break;try{await qaRunJob(job,(p,o)=>bridge.request(job.uid,p,o));}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
-   const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次语音已同步 ✓');if(pending.some(j=>!j.blocked))qaKick(500);qaDelay=1500;
+  const run=async()=>{const all=(await qaReadMeta())[qaQueueKey],jobs=all.filter(j=>j.uid===cloudWorkspace&&!j.blocked&&qaAllowed(j.records));if(!jobs.length){if(all.length)qaMessage('本机已保存 · '+all.length+'项待处理：'+(all.find(j=>j.blocked)?.blocked||'自动上传已暂停'));return;}
+   qaMessage('本机已保存 · 正在同步语音／默写进度…');
+   for(const job of jobs){if(!qaAllowed(job.records)||bridge.uid()!==job.uid)continue;try{await qaRunJob(job,(p,o)=>bridge.request(job.uid,p,o));}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
+   const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次更新已同步 ✓');if(pending.some(j=>!j.blocked&&qaAllowed(j.records)))qaKick(500);qaDelay=1500;
   };
   if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+cloudWorkspace,{ifAvailable:true},lock=>lock?run():qaKick(2000));else await run();
  }catch(e){qaMessage('本机已保存 · 网络同步未完成，将重试：'+e.message);qaDelay=Math.min(60000,qaDelay*2);qaKick(qaDelay);}
@@ -9764,15 +9772,61 @@ async function qaDrain(){
 }
 async function qaBlock(token,message){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(j=>j.token===token?{...j,blocked:message}:j),qaQueueKey);await done;}
 async function qaAfterManual(){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(({blocked,...j})=>j),qaQueueKey);await done;qaKick();}
-function qaPause(){localStorage.setItem(workspaceName('quick-audio-sync'),'off');clearTimeout(qaTimer);const toggle=document.querySelector('#quickAudioSyncToggle');if(toggle)toggle.checked=false;qaMessage('自动上传已暂停；本机录音和待传任务保留');}
+function qaPause(){localStorage.setItem(workspaceName('quick-audio-sync'),'off');localStorage.setItem(workspaceName('quick-practice-sync'),'off');clearTimeout(qaTimer);for(const id of ['#quickAudioSyncToggle','#quickPracticeSyncToggle']){const toggle=document.querySelector(id);if(toggle)toggle.checked=false;}qaMessage('自动上传已暂停；本机语音、进度和待传任务保留');}
 function qaMount(){
  const anchor=document.querySelector('#cloudLoggedIn');if(!anchor||document.querySelector('#quickAudioSyncSettings'))return;
- const box=document.createElement('div');box.id='quickAudioSyncSettings';box.innerHTML='<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input id="quickAudioSyncToggle" type="checkbox" style="width:auto">短录音保存后自动同步</label><p class="tag-hint">仅自动处理本次更新后新保存的语音，不扫描历史资料。离线留在本机，重新打开后续传；冲突需手动核对。仅下载会暂停自动上传。</p><p id="quickAudioSyncDetail" class="tag-hint" role="status"></p><button type="button" id="quickAudioSyncRetry">重试待传语音</button>';
- anchor.after(box);const toggle=box.querySelector('input');toggle.checked=qaEnabled();toggle.disabled=!cloudWorkspace;toggle.onchange=()=>{localStorage.setItem(workspaceName('quick-audio-sync'),toggle.checked?'on':'off');toggle.checked?qaKick():qaPause();};box.querySelector('button').onclick=()=>{if(!qaEnabled()){qaMessage('请先开启短录音自动同步');return;}qaAfterManual().catch(e=>qaMessage(e.message));};
+ const box=document.createElement('div');box.id='quickAudioSyncSettings';box.innerHTML='<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input id="quickAudioSyncToggle" type="checkbox" style="width:auto">短录音保存后自动同步</label><label style="display:flex;gap:8px;align-items:center;font-size:13px"><input id="quickPracticeSyncToggle" type="checkbox" style="width:auto">默写进度自动同步</label><p class="tag-hint">只处理启用后新保存的语音和默写进度，不扫描历史资料。离线留在本机，重新打开后续传；冲突需手动核对。仅下载会暂停两项自动上传。</p><p id="quickAudioSyncDetail" class="tag-hint" role="status"></p><button type="button" id="quickAudioSyncRetry">重试待传更新</button>';
+ anchor.after(box);for(const [id,key,enabled]of [['quickAudioSyncToggle','quick-audio-sync',qaEnabled],['quickPracticeSyncToggle','quick-practice-sync',qaProgressEnabled]]){const toggle=box.querySelector('#'+id);toggle.checked=enabled();toggle.disabled=!cloudWorkspace;toggle.onchange=()=>{localStorage.setItem(workspaceName(key),toggle.checked?'on':'off');if(toggle.checked){if(typeof practiceAutoFlush==='function')practiceAutoFlush();qaKick();}else qaMessage('此项自动上传已暂停，本机数据保留');};}box.querySelector('button').onclick=()=>{if(!qaAnyEnabled()){qaMessage('请先开启需要的自动同步选项');return;}if(typeof practiceAutoFlush==='function')practiceAutoFlush();qaAfterManual().catch(e=>qaMessage(e.message));};
 }
 if(typeof window!=='undefined'){
  window.addEventListener('online',()=>qaKick());window.addEventListener('pageshow',()=>qaKick());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')qaKick();});
  qaMount();qaKick(1000);
+}
+</script>
+<script data-practice-auto-sync>
+/* Enroll new practice saves only; never upload a restored legacy session on startup. */
+let practiceAutoTimer=null,practiceAutoRunning=false,practiceAutoArmed=false;
+const practiceAutoWordKeys=new Map();
+function practiceAutoPendingKey(){return workspaceName('lao-practice-auto-pending-v1');}
+function practiceAutoPending(){try{return JSON.parse(localStorage.getItem(practiceAutoPendingKey())||'null');}catch(_){return null;}}
+function practiceAutoSchedule(saved){
+ if(!practiceAutoArmed||typeof qaProgressEnabled!=='function'||!qaProgressEnabled()||!saved?.round?.history?.length||!saved.round.resultId)return;
+ try{
+  let deviceId=localStorage.getItem(workspaceName('lao-practice-auto-device-v1'));if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(workspaceName('lao-practice-auto-device-v1'),deviceId);}
+  const sources={...practiceSourceFilters},fingerprint=JSON.stringify({saved,sources}),old=practiceAutoPending();if(old?.fingerprint===fingerprint||!old&&localStorage.getItem(workspaceName('lao-practice-auto-last-v1'))===fingerprint)return;
+  const marker={uid:cloudWorkspace,deviceId,token:crypto.randomUUID(),capturedAt:Date.now(),saved,sources,fingerprint};
+  localStorage.setItem(practiceAutoPendingKey(),JSON.stringify(marker));clearTimeout(practiceAutoTimer);practiceAutoTimer=setTimeout(()=>practiceAutoFlush(),600);
+ }catch(e){qaMessage('默写已保存到本机；自动同步暂未准备好：'+e.message);}
+}
+async function practiceAutoStableRound(round){
+ const converted=JSON.parse(JSON.stringify(round)),ids=[...new Set([...round.queue,...round.history.map(q=>q.id)])],missing=ids.filter(id=>typeof id!=='string'||!id.startsWith('material:')).filter(id=>!practiceAutoWordKeys.has(id));
+ if(missing.length){const db=await openDB();await new Promise((resolve,reject)=>{const t=db.transaction('entries','readonly');let failure;for(const id of missing){const q=t.objectStore('entries').get(id);q.onsuccess=()=>{if(!q.result?.syncId){failure=Error('部分词条没有同步编号或已移除，进度仍保留本机');return;}practiceAutoWordKeys.set(id,'word:'+q.result.syncId);};}t.oncomplete=()=>failure?reject(failure):resolve();t.onabort=()=>reject(t.error);});}
+ const key=id=>typeof id==='string'&&id.startsWith('material:')?id:practiceAutoWordKeys.get(id);
+ converted.queue=converted.queue.map(key);converted.history=converted.history.map(q=>({...q,id:key(q.id)}));return converted;
+}
+async function practiceAutoCommit(marker){
+ const round=await practiceAutoStableRound(marker.saved.round),roundId=String(round.resultId).replace(/^practice-round:/,'');if(!/^[A-Za-z0-9_-]{1,100}$/.test(roundId)||!/^[a-f0-9-]{36}$/i.test(marker.deviceId))throw Error('默写轮次标识无效');
+ const id='practice-handoff:auto:'+marker.deviceId+':'+roundId,snapshot={version:1,id,deviceId:marker.deviceId,savedAt:marker.capturedAt,device:/Android/i.test(navigator.userAgent)?'Android 手机':/iPhone|iPad/i.test(navigator.userAgent)?'iPhone / iPad':'电脑或其他设备',round,filters:{kind:marker.saved.kind,mode:marker.saved.mode,scope:marker.saved.scope,tagMode:marker.saved.tagMode,tags:marker.saved.tags},sources:marker.sources};
+ if(!handoffValid(snapshot))throw Error('默写进度格式校验未通过');
+ const row={...learningBlank(id,'knowledge','自动保存默写 · '+snapshot.device),practiceHandoff:snapshot,updatedAt:marker.capturedAt};learningValidateRecord('learningMaterials',row);
+ if(new Blob([JSON.stringify(row)]).size>245000)throw Error('本轮进度太大，仍保留在本机');
+ const db=await openDB(),t=db.transaction(['learningMaterials','cloud_meta'],'readwrite'),done=transactionDone(t),s=t.objectStore('learningMaterials'),q=s.get(id);let failure;
+ q.onsuccess=()=>{try{if(practiceAutoPending()?.token!==marker.token||!qaProgressEnabled())return;const old=q.result;if(old?.practiceHandoff?.savedAt>marker.capturedAt)return;s.put(row);qaStage(t.objectStore('cloud_meta'),[{table:'lao_learning_records',kind:'learningMaterials',id,row,before:old||null,progress:true}]);}catch(e){failure=e;t.abort();}};
+ try{await done;}catch(e){throw failure||e;}
+ if(practiceAutoPending()?.token===marker.token){localStorage.setItem(workspaceName('lao-practice-auto-last-v1'),marker.fingerprint);localStorage.removeItem(practiceAutoPendingKey());}qaKick();
+}
+async function practiceAutoFlush(){
+ if(practiceAutoRunning||typeof qaProgressEnabled!=='function'||!qaProgressEnabled())return;
+ practiceAutoRunning=true;let success=false;
+ try{const marker=practiceAutoPending();if(!marker||marker.uid!==cloudWorkspace)return;await practiceAutoCommit(marker);success=true;}
+ catch(e){qaMessage('默写已保存到本机；进度待同步：'+e.message);}
+ finally{practiceAutoRunning=false;if(success&&practiceAutoPending())practiceAutoTimer=setTimeout(()=>practiceAutoFlush(),600);}
+}
+if(typeof document!=='undefined'){
+ const arm=e=>{if(e.isTrusted!==false&&e.target?.closest?.('#practicePanel'))practiceAutoArmed=true;};for(const event of ['click','input','change','keydown'])document.addEventListener(event,arm,true);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')practiceAutoFlush();});window.addEventListener('online',()=>practiceAutoFlush());window.addEventListener('pageshow',()=>practiceAutoFlush());
+ // Only an explicit pending marker from a post-update save is resumed, not old local history.
+ if(practiceAutoPending())practiceAutoFlush();
 }
 </script>
 <script src="./offline.js"></script>

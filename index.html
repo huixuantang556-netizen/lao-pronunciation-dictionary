@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="5db87f25870e9474">
+  <meta name="lao-app-build" content="afb17915677b2b87">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2572,8 +2572,9 @@ async function learningRestorePosition(saved){
  if(Array.isArray(saved.dialogues))for(const pair of saved.dialogues.slice(0,100)){if(Array.isArray(pair)&&pair.length===2&&pair.every(x=>typeof x==='string')&&pair[0].startsWith(course.id+':'))communicationDialogs.set(...pair);}
 }
 async function renderLearning(){
+ const token=++learningRenderToken,route=learningRoute,courseId=learningLesson.id;
  if(activeView==='learning')await learningSeedLessonOne();
- const token=++learningRenderToken;const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);if(token!==learningRenderToken||activeView!=='learning')return;
+ const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};if(token!==learningRenderToken||activeView!=='learning'||learningRoute!==route||learningLesson.id!==courseId)return;
  const courses=learningCourses(snap),current=courses.find(c=>c.id===learningLesson.id);
  if(learningRoute==='lesson'&&!current)learningRoute=learningLesson.library==='communication'?'communication':'teaching';
  learningLesson=current||courses.find(c=>(c.library==='communication')===(learningLesson.library==='communication'))||courses[0]||learningFirstLesson;
@@ -2584,7 +2585,7 @@ async function renderLearning(){
  else if(learningRoute==='communication'&&typeof lessonV2CommunicationHtml==='function')html=lessonV2CommunicationHtml(snap);
  else if(learningRoute==='communication')html=nav+'<h2>交流型材料</h2><p class="tag-hint">场景课程后续开放；教材中适用的词句将可以直接引用到这些场景。</p><div class="learn-chips">'+['购物','餐厅','交通','学校','家庭','医院','驾校','日常交流'].map(s=>'<span>'+s+'</span>').join('')+'</div>';
  else if(learningRoute==='teaching')html=nav+'<h2>'+h(typeof lbCurrentName==='function'?lbCurrentName('teaching',snap)||'教学型材料':'教学型材料')+'</h2><button data-learn="course-new">＋ 新建章节／课程</button>'+learningCatalog(snap);
- else if(learningLesson.schemaVersion===2&&typeof lessonV2Render==='function')html=await lessonV2Render(snap,words);
+ else if(learningLesson.schemaVersion===2&&typeof lessonV2Render==='function')html=await lessonV2Render(snap,words,{token});
  else {
   if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}
   html='<h2>'+h(learningLesson.title)+'</h2><p class="learn-course-description">'+h(learningLesson.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button><nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+[['knowledge','知识点'],['word','词汇'],['reading_drill','朗读练习'],['sentence','句子与短语']].map(([k,v])=>'<button data-learn="tab" data-key="'+k+'" aria-current="'+(k===learningTab?'page':'false')+'">'+v+'</button>').join('')+'</nav>';
@@ -2611,7 +2612,7 @@ async function renderLearning(){
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
- if(token===learningRenderToken){$('#learningContent').innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;$('#learningStatus').textContent='';}
+ if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);$('#learningStatus').textContent='';}
 }
 async function learningSetup(){
  const words=await allEntries();learningDraft={kind:'setup'};
@@ -2946,7 +2947,7 @@ async function learningAuthorAction(a,b){
  if(a==='course-delete'||a==='course-restore'){if(!learningSettings)throw Error('请先打开课程设置');if(learningHasWork())throw Error('请先保存或关闭正在编辑的内容／录音');const course=learningCourses(await learningSnapshot(),true).find(c=>c.id===b.dataset.id);if(!course)throw Error('找不到课程');const library=learningManagementLibrary(course),deleted=a==='course-delete';if(deleted&&!confirm('删除课程“'+course.title+'”？\n只移出目录，保留私人词典、学习材料和所有录音。可在课程设置的“已删除课程”中恢复。'))return true;await learningSetCourseDeleted(course.id,deleted);await learningReturnAfterManagement(library);$('#learningStatus').textContent=deleted?'课程已移出目录，可在“已删除课程”恢复；词条和录音未删除。':'课程已恢复。';return true;}
  if(a==='package-open'){await lessonPackageOpen();return true;}
  if(a==='package-preview'){await lessonPackagePreview();return true;}
- if(a==='course-open'){if(learningHasWork())throw Error('请先完成编辑或录音');learningResetMulti();stopPracticeAudio();const snap=await learningSnapshot();const target=learningCourses(snap).find(c=>c.id===b.dataset.id);if(!target)throw Error('课程不存在或已删除');learningLesson=target;if(typeof lbSelectCourse==='function')lbSelectCourse(target);learningRoute='lesson';learningTab='knowledge';await renderLearning();return true;}
+ if(a==='course-open'){if(learningHasWork())throw Error('请先完成编辑或录音');learningResetMulti();stopPracticeAudio();const snap=typeof lnGetData==='function'?(await lnGetData()).snap:await learningSnapshot();const target=learningCourses(snap).find(c=>c.id===b.dataset.id);if(!target)throw Error('课程不存在或已删除');learningLesson=target;if(typeof lbSelectCourse==='function')lbSelectCourse(target);learningRoute='lesson';learningTab='knowledge';await renderLearning();return true;}
  if(a==='course-new'||a==='course-edit'){await learningCourseEditor(a==='course-edit');return true;}
  if(a==='knowledge-new'||a==='knowledge-edit'){await learningKnowledgeEditor(b.dataset.id);return true;}
  if(a==='word-import'){await learningWordImport();return true;}if(a==='word-preview'){await learningWordPreview();return true;}
@@ -2975,6 +2976,8 @@ async function learningAudioAudit(){
 }
 async function learningSeedLessonOne(){
  const learningLesson=learningFirstLesson,learningPlacement=(id,section,position)=>learningPlacementFor(id,section,position,learningFirstLesson);
+ // A completed intake needs one indexed read, not a read/write scan of all recordings on every tab click.
+ const seedDb=await openDB(),seeded=await new Promise((resolve,reject)=>{const t=seedDb.transaction('learningPlacements','readonly'),q=t.objectStore('learningPlacements').get(learningPlacement('knowledge:lesson1','knowledge',0).id);t.oncomplete=()=>resolve(q.result?.intakeVersion===1);t.onabort=()=>reject(t.error);});if(seeded)return;
  const d=await openDB(),t=d.transaction(['entries',...learningStores],'readwrite'),done=transactionDone(t),rows={};let left=4,issue;
  for(const kind of ['entries',...learningStores]){const q=t.objectStore(kind).getAll();q.onsuccess=()=>{rows[kind]=q.result;if(--left)return;try{
   const marker=rows.learningPlacements.find(p=>p.materialId==='knowledge:lesson1');if(marker?.intakeVersion===1)return;
@@ -3413,8 +3416,21 @@ async function lessonV2Preview(raw){
  $('#v2repreview').onclick=async()=>{if(learningBusy)return;try{const remaining=plans.filter(p=>p.data&&!p.saved).map(p=>p.data);if(!remaining.length){$('#learningDialogStatus').textContent='没有可重新预览的课程';return;}await lessonV2Preview({format:'lao-lesson-bundle-v2',lessons:remaining});}catch(e){$('#learningDialogStatus').textContent=e.message;}};
  $('#lessonV2Form').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;const missing=pendingMeanings();if(missing.length){const x=missing[0],select=$('#v2word'+x.i+'_'+x.j);$('#learningDialogStatus').textContent='还有 '+missing.length+' 项词义未选择：'+x.title+' · '+x.r.textLao+'。请在顶部集中选择。';$('#v2meaningQueue')?.scrollIntoView?.({block:'start',behavior:'smooth'});select?.focus?.({preventScroll:true});return;}if(!$('#v2confirmed').checked){$('#learningDialogStatus').textContent='请先核对并确认';return;}if(!plans.some((p,i)=>!p.error&&!p.saved&&$('#v2include'+i).checked)){$('#learningDialogStatus').textContent='没有可导入的课程，请先处理预览中的错误或勾选课程';return;}$('#learningDialogStatus').textContent='';learningBusy=true;const results=[];try{for(let i=0;i<plans.length;i++){const p=plans[i];if(p.error||p.saved||!$('#v2include'+i).checked)continue;try{const choices={};lessonV2Words(p.data).forEach((w,j)=>{const value=$('#v2word'+i+'_'+j).value;if(!value)throw Error('请选择同名词义');choices[learningNorm(w.textLao)]=value;});const course=await lessonV2Save(p.data,{snap:expectedSnap,entries:expectedEntries,chart},{replace:Boolean(p.replace&&$('#v2replace'+i)?.checked),restore:p.restoreDeleted?Boolean($('#v2restore'+i)?.checked):undefined,words:choices,changes:p.changes.filter((_,j)=>$('#v2change'+i+'_'+j).checked).map(x=>x.id),order:Boolean($('#v2order'+i)?.checked),course:Boolean($('#v2course'+i)?.checked)});p.saved=true;$('#v2include'+i).checked=false;$('#v2include'+i).disabled=true;updateMeanings();expectedSnap=await learningSnapshot();expectedEntries=await allEntries();learningLesson=course;results.push(p.data.course.title+'：导入成功，实际课程入口「'+course.title+'」'+(expectedSnap.learningMaterials.find(m=>m.id==='course:'+course.id)?.courseDeleted?'（未恢复，课程继续隐藏）':p.restoreDeleted?'（已恢复到教材目录）':''));}catch(e){results.push(p.data.course.title+'：未导入，'+e.message);}}$('#v2results').textContent=results.join('\n');learningDraft.dirty=plans.some((p,i)=>!p.error&&!p.saved&&$('#v2include'+i).checked);learningRoute='lesson';await renderLearning();}finally{learningBusy=false;}};
 }
-function lessonV2Export(snap,course){const key=course.packageKey,find=(kind,id)=>snap.learningMaterials.find(m=>m.id===lessonV2Id(key,kind,id));return {format:'lao-lesson-v2',course:Object.fromEntries(['textbookId','textbookName','chapterId','chapterName','lessonId','title','description','sceneMetadata','library','folderId','sourceLabel'].filter(k=>course[k]!==undefined).map(k=>[k,course[k]])),sections:(course.v2SectionIds||[]).map(id=>find('section',id)).filter(Boolean).map(m=>{const s=lessonV2Clone(m.v2Data);s.blocks=s.blocks.map(id=>find('block',id)).filter(m=>m&&m.v2Data.sectionId===s.id).map(m=>{const b=lessonV2Clone(m.v2Data);delete b.sectionId;const field=b.contentType==='table'?'rows':'items';if(lessonV2Displays[b.contentType]&&b.contentType!=='knowledge'&&Array.isArray(b.content[field]))b.content[field]=b.content[field].map(id=>find('item',id)).filter(m=>m&&m.v2Data.blockId===b.id&&!snap.learningPlacements.some(p=>p.lessonId===course.id&&p.materialId===m.id&&p.deleted)).map(m=>{const r=lessonV2Clone(m.v2Data);delete r.blockId;delete r.itemType;delete r.unitType;delete r.generatedId;return lessonV2StudyExport(m,snap,r);});return b;});return s;}),uncertain:snap.learningMaterials.find(m=>m.id==='course:'+course.id)?.v2Uncertain||[]};}
-async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}const h=learningEsc,c=learningLesson,d=lessonV2Export(snap,c),key=c.packageKey,chart=await readAlphabetOverrides();const rec=(kind,id)=>snap.learningMaterials.find(m=>m.id===lessonV2Id(key,kind,id));
+function lessonV2Export(snap,course,options={}){
+ const key=course.packageKey,byId=new Map(snap.learningMaterials.map(m=>[m.id,m])),removed=new Set(snap.learningPlacements.filter(p=>p.lessonId===course.id&&p.deleted).map(p=>p.materialId)),find=(kind,id)=>byId.get(lessonV2Id(key,kind,id));
+ return {format:'lao-lesson-v2',course:Object.fromEntries(['textbookId','textbookName','chapterId','chapterName','lessonId','title','description','sceneMetadata','library','folderId','sourceLabel'].filter(k=>course[k]!==undefined).map(k=>[k,course[k]])),sections:(course.v2SectionIds||[]).map(id=>find('section',id)).filter(Boolean).map(m=>{
+  const s=lessonV2Clone(m.v2Data);s.blocks=s.blocks.map(id=>find('block',id)).filter(m=>m&&m.v2Data.sectionId===s.id).map(m=>{
+   const b=lessonV2Clone(m.v2Data);delete b.sectionId;const field=b.contentType==='table'?'rows':'items';
+   if(lessonV2Displays[b.contentType]&&b.contentType!=='knowledge'&&Array.isArray(b.content[field]))b.content[field]=b.content[field].map(id=>find('item',id)).filter(m=>m&&m.v2Data.blockId===b.id&&!removed.has(m.id)).map(m=>{
+    const r=lessonV2Clone(m.v2Data);delete r.blockId;delete r.itemType;delete r.unitType;delete r.generatedId;
+    // Navigation paints saved cards; only a real export reconstructs full study annotations.
+    if(options.navigation){delete r.studyAnalysis;return r;}return lessonV2StudyExport(m,snap,r);
+   });return b;
+  });return s;
+ }),uncertain:byId.get('course:'+course.id)?.v2Uncertain||[]};
+}
+async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}const h=learningEsc,c=learningLesson,d=lessonV2Export(snap,c),key=c.packageKey,chart=await readAlphabetOverrides(),byId=new Map(snap.learningMaterials.map(m=>[m.id,m]));const rec=(kind,id)=>byId.get(lessonV2Id(key,kind,id));
+ if(context.token!==undefined&&(context.token!==learningRenderToken||activeView!=='learning'||learningRoute!=='lesson'||learningLesson.id!==c.id))return '';
  if(typeof nlMatches==='function'&&nlMatches(c))d.sections.unshift({id:'interactive-large-numbers',title:'大数读法实验室',numberLab:true,topics:[],roles:[],blocks:[]});
  const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?learningFindWord(m.linkedWordSyncIds[0],words):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||''});};
  const block=b=>{const m=rec('block',b.id),x=b.content;let body='';if(!lessonV2Displays[b.contentType]?.includes(b.displayType))body='<p>该内容类型暂未支持专用展示</p><pre>'+h(JSON.stringify(x,null,2))+'</pre>';
@@ -7537,12 +7553,13 @@ function scGoalCourse(plan,courses,local=scLocal()){
  return local.recent.map(x=>list.find(c=>c.id===x.courseId)).find(Boolean)||list[0]||null;
 }
 async function scSavePlan(next,expected){
+ if(expected.detailReadOnly){const fresh=await learningSnapshot();if(!cloudSame(scPlan(fresh),scPlan(expected)))throw Error('学习目标刚刚已变化，请重新打开后再保存');expected=fresh;}
  const old=expected.learningMaterials.find(m=>m.id===scPlanId),row={...learningBlank(scPlanId,'knowledge','学习中心'),...old,deleted:false,analysisOwner:'study-center',studyPlan:next,updatedAt:Date.now()};scValidateRecord(row);await learningWrite({learningMaterials:[row]},expected);
 }
 async function scChangePin(id){scGuard();const snap=await learningSnapshot(),plan=scPlan(snap);if(plan.pinned.includes(id))plan.pinned=plan.pinned.filter(x=>x!==id);else{if(!learningCourses(snap).some(c=>c.id===id))throw Error('章节不存在或已删除，请先同步资料');if(plan.pinned.length>=12)throw Error('最多固定12个常学章节，请先取消一个');plan.pinned.push(id);}await scSavePlan(plan,snap);await renderLearning();}
 async function scSetCourseGoal(id){scGuard();const snap=await learningSnapshot(),course=learningCourses(snap).find(c=>c.id===id);if(!course)throw Error('章节不存在或已删除，请先同步资料');const plan=scPlan(snap);plan.goal={bookKey:scBookKey(course),courseId:id};await scSavePlan(plan,snap);await renderLearning();$('#learningStatus').textContent='已设为学习目标，可从首页学习中心直达。';}
 async function scOpenCourse(id,{test=false}={}){
- scGuard();const snap=await learningSnapshot(),course=learningCourses(snap).find(c=>c.id===id);if(!course)throw Error('这个章节已删除或尚未同步；请先恢复／同步课程，不会跳到同名章节');
+ scGuard();const snap=typeof lnGetData==='function'?(await lnGetData()).snap:await learningSnapshot(),course=learningCourses(snap).find(c=>c.id===id);if(!course)throw Error('这个章节已删除或尚未同步；请先恢复／同步课程，不会跳到同名章节');
  const location=scLocal().recent.find(x=>x.courseId===id);learningResetMulti();stopPracticeAudio();learningSettings=false;learningLesson=course;learningRoute='lesson';learningTab='knowledge';lessonV2Mode='order';lessonV2Filter='all';learningGroupState.delete(id);lessonV2Sections.delete(id);scRestore(course,snap,location);await showView('learning');
  if(activeView!=='learning'||learningLesson.id!==id)return;
  if(test){if(course.schemaVersion!==2)throw Error('此旧课程暂不支持整章检测，可使用原有练习入口');await courseCheckOpen('course');return;}
@@ -7555,8 +7572,8 @@ function scCourseLabel(c){return [c.textbookName,c.chapterName,c.title].filter(B
 function scCourseCard(c,plan,location){const h=learningEsc;return '<article class="sc-course"><div><small>'+h([c.textbookName,c.chapterName].filter(Boolean).join(' · '))+'</small><h3>'+h(c.title)+'</h3>'+(location?'<p>'+h(location.label)+' · '+h(scDate(location.at))+'</p>':'')+'</div><div class="sc-actions"><button type="button" data-sc-action="resume" data-id="'+h(c.id)+'">'+(location?'继续学习':'打开章节')+'</button><button type="button" data-sc-action="pin" data-id="'+h(c.id)+'" aria-pressed="'+plan.pinned.includes(c.id)+'">'+(plan.pinned.includes(c.id)?'取消固定':'固定章节')+'</button></div></article>';}
 let scRenderRun=0;
 async function scRender(){
- const run=++scRenderRun;++learningRenderToken;await learningSeedLessonOne();const snap=await learningSnapshot();
- let reviewHtml='',reviewError='';if(typeof rrHomeSectionHtml==='function')try{reviewHtml=rrHomeSectionHtml(rrModel(snap,await allEntries()));}catch(error){reviewError='复习记录读取失败：'+error.message;}
+ const run=++scRenderRun;++learningRenderToken;await learningSeedLessonOne();const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};
+ let reviewHtml='',reviewError='';if(typeof rrHomeSectionHtml==='function')try{reviewHtml=rrHomeSectionHtml(rrModel(snap,words));}catch(error){reviewError='复习记录读取失败：'+error.message;}
  if(run!==scRenderRun||activeView!=='learning'||learningRoute!=='study')return;
  const courses=learningOrderedCourses(snap),books=scBooks(courses),plan=scPlan(snap),local=scLocal(),last=local.recent.find(l=>courses.some(c=>c.id===l.courseId)),latest=last&&courses.find(c=>c.id===last.courseId),goal=scGoalCourse(plan,courses,local),book=books.find(b=>b.key===plan.goal?.bookKey),h=learningEsc;
  learningPanel.className='panel';$('#learningContent').innerHTML='<section class="study-center"><header class="sc-heading"><div><p class="sc-eyebrow">少翻目录，接着上次学</p><h2>学习中心</h2></div><button type="button" data-sc-action="catalog">全部课程目录</button></header><div class="sc-overview"><section class="sc-box sc-continue"><h3>继续上次</h3>'+(latest?'<p class="sc-course-title">'+h(latest.title)+'</p><p>'+h(latest.textbookName||'')+'</p><small>'+h(last.label)+' · '+h(scDate(last.at))+'</small><button type="button" class="primary" data-sc-action="resume" data-id="'+h(latest.id)+'">继续学习 →</button>':'<p>打开一个章节后，会在这里记住上次的小分类、对话和词句位置。</p>')+'</section><section class="sc-box sc-goal-card"><h3>当前学习目标</h3>'+(goal?'<p class="sc-course-title">'+h(plan.goal.courseId?goal.title:book.title)+'</p><p>'+h(plan.goal.courseId?'目标章节':'整本教材／材料集；按你的课程顺序学习')+'</p><div class="sc-actions sc-goal-actions"><button type="button" class="primary" data-sc-action="resume" data-id="'+h(goal.id)+'">继续目标 →</button>'+(goal.schemaVersion===2?'<button type="button" data-sc-action="test" data-id="'+h(goal.id)+'">检测本章</button>':'')+'</div>':plan.goal?'<p>目标课程已删除或尚未同步。可先同步，或在下方更换目标。</p>':'<p>选择一本教材或一个章节作为近期目标。你仍可自由学习其他内容。</p>')+'<button type="button" data-sc-action="edit-goal">更换学习目标</button></section></div>'+reviewHtml+'<section class="sc-section"><h3>常学章节</h3><div class="sc-list">'+(plan.pinned.length?plan.pinned.map(id=>{const c=courses.find(c=>c.id===id);return c?scCourseCard(c,plan,local.recent.find(l=>l.courseId===id)):'<article class="sc-course"><p>固定章节已删除或尚未同步</p><button type="button" data-sc-action="pin" data-id="'+h(id)+'">移除快捷入口</button></article>';}).join(''):'<p>在章节顶部点“固定到学习中心”，就能在这里直接打开。最多固定12个，不移动原课程。</p>')+'</div></section><details class="sc-goal-editor" '+(!plan.goal?'open':'')+'><summary>选择／更换目标课本与章节</summary><form id="scGoalForm"><label>目标课本／材料集<select id="scGoalBook"><option value="">请选择</option>'+books.map(b=>'<option value="'+h(b.key)+'" '+(b.key===plan.goal?.bookKey?'selected':'')+'>'+h(b.title)+'</option>').join('')+'</select></label><label>目标章节<select id="scGoalCourse"></select></label><div class="sc-actions"><button class="primary" type="submit">保存学习目标</button><button type="button" data-sc-action="cancel-goal">取消修改</button>'+(plan.goal?'<button type="button" data-sc-action="clear-goal">取消当前目标</button>':'')+'</div><p id="scGoalStatus" role="status"></p></form></details><details class="sc-recent"><summary>最近打开的章节（本设备）</summary><div class="sc-list">'+(local.recent.filter(l=>courses.some(c=>c.id===l.courseId)).slice(0,5).map(l=>scCourseCard(courses.find(c=>c.id===l.courseId),plan,l)).join('')||'<p>暂无记录。</p>')+'</div></details><section class="sc-section"><h3>找章节并固定</h3><div class="sc-search"><label>课本／材料集<select id="scBrowseBook"><option value="">全部课本与材料</option>'+books.map(b=>'<option value="'+h(b.key)+'">'+h(b.title)+'</option>').join('')+'</select></label><label>搜索<input id="scSearch" type="search" placeholder="搜索课本、章节、课程名称"></label></div><p id="scBrowseCount" role="status"></p><div id="scBrowseRows" class="sc-list"></div><button id="scBrowseMore" type="button">再显示8个章节</button></section><p class="sc-note">目标与固定章节随完整备份、学习资料同步保存；最近位置仅保留在本设备、当前账号。最近打开不等于学会，不自动计算掌握率，也不消耗AI额度。</p></section>';
@@ -7571,10 +7588,9 @@ const scPreviousRender=renderLearning;
 renderLearning=async function(...args){
  if(activeView==='learning'&&learningRoute==='study'){await scRender();return;}
  await scPreviousRender(...args);if(activeView!=='learning')return;
- const route=learningRoute,courseId=learningLesson.id,snap=await learningSnapshot();if(activeView!=='learning'||learningRoute!==route||learningLesson.id!==courseId)return;
+ const route=learningRoute,courseId=learningLesson.id,snap=typeof lnGetData==='function'?(await lnGetData()).snap:await learningSnapshot();if(activeView!=='learning'||learningRoute!==route||learningLesson.id!==courseId)return;
  const content=$('#learningContent');if(!content||content.querySelector('[data-sc-shortcut]'))return;
- const plan=scPlan(snap),tools=document.createElement('div');tools.className='sc-lesson-tools';tools.dataset.scShortcut='true';
- if(route==='lesson'){const c=learningCourses(snap).find(c=>c.id===courseId);if(c){if(!scRemember(c,snap))$('#learningStatus').textContent='本机浏览器存储不可用，上次位置未能保存。目标和固定章节可继续使用。';tools.innerHTML='<button type="button" data-learn="catalog-back">← 返回'+(c.library==='communication'?'交流型材料':'教学型材料')+'</button><button type="button" data-study-open>← 学习中心</button><button type="button" data-sc-action="set-goal" data-id="'+learningEsc(c.id)+'">设为学习目标</button><button type="button" data-sc-action="pin" data-id="'+learningEsc(c.id)+'" aria-pressed="'+plan.pinned.includes(c.id)+'">'+(plan.pinned.includes(c.id)?'已固定 · 取消固定':'固定到学习中心')+'</button>';content.prepend(tools);}}
+ if(route==='lesson'){const c=learningCourses(snap).find(c=>c.id===courseId);if(c&&!scRemember(c,snap))$('#learningStatus').textContent='本机浏览器存储不可用，上次位置未能保存。';}
 };
 const scNav=document.createElement('button');scNav.type='button';scNav.textContent='学习中心';scNav.dataset.studyOpen='true';scNav.setAttribute('aria-controls','learningPanel');$('#viewNav [data-view="dictionary"]').before(scNav);
 document.addEventListener('click',async e=>{
@@ -8188,7 +8204,7 @@ function lcRevealCurrent(){
 async function lcOpenChooser(button){
  if(learningBusy||learningHasWork()||recorder)throw Error('请先保存编辑或结束录音，再选择章节');
  const select=button.closest('.lc-course-picker')?.querySelector('[data-course-jump]');if(!select)return;
- const options=[...select.options].map(o=>({value:o.value,text:o.textContent})),current=select.value,snap=await learningSnapshot(),courses=learningCourses(snap),h=learningEsc;if(button.isConnected===false)return;
+ const options=[...select.options].map(o=>({value:o.value,text:o.textContent})),current=select.value,snap=typeof lnGetData==='function'?(await lnGetData()).snap:await learningSnapshot(),courses=learningCourses(snap),h=learningEsc;if(button.isConnected===false)return;
  learningModal('选择章节／课程','<div class="lc-chooser"><label class="lc-search-label">搜索章节<input id="lcCourseSearch" type="search" placeholder="章节名称、教材或关键词" autocomplete="off"></label><p id="lcCourseCount" role="status"></p><div id="lcCourseRows" class="lc-choice-list"></div></div>');
  const draw=()=>{const rows=lcChoiceRows(options,courses,$('#lcCourseSearch').value,current);$('#lcCourseCount').textContent='共 '+rows.length+' 个章节／课程';$('#lcCourseRows').innerHTML=rows.map(c=>'<button type="button" data-lc-course="'+h(c.id)+'" '+(c.current?'aria-current="true"':'')+'><span><strong>'+h(c.title)+'</strong>'+(c.meta?'<small>'+h(c.meta)+'</small>':'')+'</span><span class="lc-choice-mark" aria-hidden="true">'+(c.current?'✓':'›')+'</span></button>').join('')||'<p class="lc-choice-empty">没有匹配的章节，请换个关键词。</p>';};
  let opening=false;$('#lcCourseSearch').oninput=draw;$('#lcCourseRows').onclick=async e=>{const row=e.target.closest('[data-lc-course]');if(!row||opening)return;opening=true;try{if(learningBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音');await learningAuthorAction('course-open',{dataset:{id:row.dataset.lcCourse}});learningDialog.close();}catch(error){$('#learningDialogStatus').textContent=error.message;}finally{opening=false;}};draw();requestAnimationFrame(lcRevealCurrent);
@@ -9537,7 +9553,7 @@ const btEntry=document.createElement('button');btEntry.type='button';btEntry.cla
 <script data-learning-bundle="mobile-lesson-entry">
 /* Mobile course entry: move existing controls, keep delegates and course data intact. */
 function mleCompact(content){
- if(!content||!window.matchMedia('(max-width:640px)').matches||content.querySelector('.mle-top'))return;
+ if(!content||content.querySelector('.mle-top'))return;
  const quick=content.querySelector('.learn-quick-nav'),title=[...content.children].find(n=>n.tagName==='H2');
  if(!title&&!quick)return;
  content.dataset.mleReady='true';content.classList.add('mle-lesson');
@@ -9571,7 +9587,7 @@ const mleViewport=window.matchMedia('(max-width:640px)');
 mleViewport.addEventListener?.('change',()=>{if(activeView==='learning'&&learningRoute==='lesson'&&!learningBusy&&!learningHasWork()&&!recorder)void renderLearning();});
 </script>
 <style data-learning-bundle="mobile-lesson-entry">
-@media(max-width:640px){
+@media(min-width:0px){
  #learningPanel .mle-top>.lc-course-picker{min-width:0;width:100%;max-width:100%}#learningPanel .mle-top>.lc-course-picker>.lc-picker-button{min-height:44px;height:auto;min-width:0;padding:8px;font-size:14px}
  #learningPanel #learningContent.mle-lesson{padding:0;min-width:0}
  #learningPanel .mle-top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:6px;margin:0 0 12px;padding:0;border:0;position:relative;z-index:5}
@@ -9877,7 +9893,7 @@ openDB=async function(...args){
  const proxy=new Proxy(db,{get(target,key){
   if(key==='transaction')return (names,mode,...rest)=>{const t=target.transaction(names,mode,...rest),list=typeof names==='string'?[names]:Array.from(names),content=['entries','learningMaterials','learningPlacements','learningAudio'];
    if(mode!=='readwrite'||!list.some(n=>content.includes(n)))return t;
-   const changes=[],stores=new Map();t.addEventListener('complete',()=>dfInvalidate(true,changes),{once:true});
+   const changes=[],stores=new Map();t.addEventListener('complete',()=>{if(changes.length)dfInvalidate(true,changes);},{once:true});
    return new Proxy(t,{get(tx,p){if(p==='objectStore')return name=>{const store=tx.objectStore(name);if(!content.includes(name))return store;if(stores.has(name))return stores.get(name);const wrapped=new Proxy(store,{get(s,k){if(['put','add','delete','clear'].includes(k))return (...values)=>{const row=['put','add'].includes(k)?structuredClone(values[0]):null,q=s[k](...values);q.addEventListener('success',()=>changes.push(row?{store:name,op:'put',row:{...row,id:row.id??q.result}}:{store:name,op:k,key:values[0]}),{once:true});return q;};const v=Reflect.get(s,k,s);return typeof v==='function'?v.bind(s):v;},set(s,k,v){return Reflect.set(s,k,v,s);}});stores.set(name,wrapped);return wrapped;};const v=Reflect.get(tx,p,tx);return typeof v==='function'?v.bind(tx):v;},set(tx,p,v){return Reflect.set(tx,p,v,tx);}});
   };
   const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
@@ -10212,6 +10228,66 @@ function ccFastContext(queue,course,direction,snap){
  #learningDialog .course-recall .practice-navigation button{font-size:13px;min-height:44px;padding:8px 12px}
 }
 @media(max-width:360px){#learningPanel .mle-lesson .learn-card-actions>button{width:31px;min-width:31px}#learningPanel .mle-lesson .learn-card-main strong{font-size:23px!important}#learningPanel .mle-lesson>h2{font-size:19px}}
+</style>
+<script data-navigation-fast="navigation-fast.js">
+/* Read-only navigation data. Saves, audio playback and sync retain their fresh reads. */
+let lnData=null,lnLoading=null,lnRun=0;
+const lnExports=new WeakMap();
+async function lnGetData(){
+ dfCheckStamp();const owner=workspaceName('navigation-text-v1'),revision=dfRevision;
+ if(lnData?.owner===owner&&lnData.revision===revision)return lnData;
+ if(lnLoading?.owner===owner&&lnLoading.revision===revision)return lnLoading.promise;
+ const promise=(async()=>{
+  const data=await dfGetData();
+  if(owner!==workspaceName('navigation-text-v1')||revision!==dfRevision)return lnGetData();
+  // Navigation never needs audio binaries. Actual playback resolves the asset when clicked.
+  const snap={...data.snap,learningAudio:[],detailReadOnly:true};
+  return lnData={owner,revision,snap,words:data.words};
+ })();lnLoading={owner,revision,promise};
+ try{return await promise;}finally{if(lnLoading?.promise===promise)lnLoading=null;}
+}
+function lnRenderKey(){return JSON.stringify([workspaceName('navigation-text-v1'),learningRoute,learningLesson.id,learningTab,learningSettings,lessonV2Mode,lessonV2Filter,learningGroupState.get(learningLesson.id)]);}
+const lnPreviousExport=lessonV2Export;
+lessonV2Export=function(snap,course){
+ if(!snap.detailReadOnly)return lnPreviousExport(snap,course);
+ let courses=lnExports.get(snap);if(!courses){courses=new Map();lnExports.set(snap,courses);}
+ if(!courses.has(course))courses.set(course,lnPreviousExport(snap,course,{navigation:true}));
+ // Renderers may add interactive sections. Never mutate the cached course definition.
+ return lessonV2Clone(courses.get(course));
+};
+const lnPreviousRender=renderLearning;
+renderLearning=async function(...args){
+ const run=++lnRun,key=lnRenderKey(),content=document.querySelector('#learningContent');
+ if(learningRoute!=='lesson')content?.classList?.remove('mle-lesson');
+ if(content&&content.dataset.navigationPage!==key){content.setAttribute('data-navigation-pending','true');content.setAttribute('aria-busy','true');}
+ try{return await lnPreviousRender(...args);}
+ finally{if(run===lnRun&&content){content.removeAttribute('data-navigation-pending');content.removeAttribute('aria-busy');content.dataset.navigationPage=lnRenderKey();}}
+};
+// Distinct capture targets prevent the generic course entry handler from consuming the study tab.
+document.addEventListener('click',event=>{
+ const button=event.target.closest?.('#viewNav [data-study-open]');if(!button)return;
+ event.preventDefault();event.stopImmediatePropagation();void scOpen().catch(learningError);
+},true);
+document.addEventListener('pointerover',event=>{if(event.target.closest?.('#viewNav,[data-learning-group],[data-learning-category]'))void lnGetData().catch(()=>{});},{passive:true});
+</script>
+<style data-navigation-fast="navigation-fast.css">
+/* One navigation layout on desktop and phone; no intermediate legacy controls. */
+#learningContent[data-navigation-pending]{visibility:hidden;min-height:240px;pointer-events:none}
+@media(min-width:641px){
+ #learningPanel .mle-top{grid-template-columns:auto minmax(180px,560px) auto;justify-content:start;gap:10px;margin-bottom:24px;align-items:center}
+ #learningPanel .mle-top>button,#learningPanel .mle-more>summary,#learningPanel .mle-top>.lc-course-picker>.lc-picker-button{background:#f2f6f2;border-color:#e1e9e2;border-radius:11px;box-shadow:none;font-size:14px;padding:8px 14px;min-height:44px}
+ #learningPanel .mle-more{position:relative}
+ #learningPanel .mle-menu{top:50px;left:0;right:auto;width:300px;max-width:calc(100vw - 80px)}
+ #learningPanel .mle-lesson>h2{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:25px;line-height:1.5;margin:0 0 24px}
+ #learningPanel .mle-chapter-test{font-size:13px;min-height:40px;padding:7px 14px;border-radius:10px;background:#edf6f1;border-color:#cfe1d5;color:#24614e;white-space:nowrap}
+ #learningPanel .mle-lesson>.learning-primary-groups{display:flex;max-width:560px;padding:4px;gap:4px;background:#edf2ee;border-radius:13px;margin:0 0 14px}
+ #learningPanel .mle-lesson>.learning-primary-groups button{flex:1;min-height:44px;padding:8px 20px;border:0;border-radius:10px;font-size:16px;font-weight:600;background:transparent;color:#6c8076;box-shadow:none}
+ #learningPanel .mle-lesson>.learning-primary-groups button[aria-pressed=true]{background:#fff;color:#0f7059;box-shadow:0 2px 6px #1b503a0d}
+ #learningPanel .mle-lesson>.learning-secondary-groups{gap:8px;margin:0 0 22px}
+ #learningPanel .mle-lesson>.learning-secondary-groups button{font-size:13px;min-height:38px;padding:8px 14px;border:0;border-radius:10px;background:#f0f4f0;color:#687e70;box-shadow:none}
+ #learningPanel .mle-lesson>.learning-secondary-groups button[aria-pressed=true]{background:#dcefe5;color:#15694f;font-weight:600}
+ #learningPanel .mle-lesson .learn-card-actions button{box-shadow:none}
+}
 </style>
 <script src="./offline.js"></script>
 </body>

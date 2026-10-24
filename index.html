@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="769b9b735a981efe">
+  <meta name="lao-app-build" content="bbdbd4ecde4fefdb">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6489,7 +6489,7 @@ function wslExampleGroups(snap,word,parentId){
  }
  const seen=new Set(),unique=rows=>rows.filter(r=>{const key=JSON.stringify([norm(r.textLao),r.translationZh||'']);if(seen.has(key))return false;seen.add(key);return true;});
  const usage=[],index=typeof cwIndex==='function'?cwIndex(snap.entries||[],snap.learningMaterials):null;
- const usageRows=[...snap.learningMaterials,...(snap.entries||[]).filter(e=>e.syncId&&!e.deleted).map(e=>({id:'word:'+e.syncId,contentType:'word',textLao:e.word,translationZh:e.meaning,source:'我的词典'}))];
+ const usageRows=Array.isArray(snap.detailUsageRows)?snap.detailUsageRows:[...snap.learningMaterials,...(snap.entries||[]).filter(e=>e.syncId&&!e.deleted).map(e=>({id:'word:'+e.syncId,contentType:'word',textLao:e.word,translationZh:e.meaning,source:'我的词典'}))];
  for(const m of usageRows){
   if(m.deleted||m.analysisOwner||m.id===parentId||m.contentType!=='word')continue;
   const q=index&&cwQuantity(m.textLao,index);if(!q)continue;
@@ -9836,10 +9836,12 @@ if(typeof document!=='undefined'){
 let dfDetailScope=null,dfRevision=0,dfData=null,dfLoading=null,dfOpenRun=0,dfQueue=Promise.resolve(),dfActive=null,dfWarmTimer=null,dfIndexes=new WeakMap();
 const dfViews=new Map(),dfDbProxies=new WeakMap(),dfStampKey=workspaceName('detail-content-revision-v1');
 let dfStamp='';try{dfStamp=localStorage.getItem(dfStampKey)||'';}catch(_){}
-function dfInvalidate(notify=false){
+function dfInvalidate(notify=false,changes=null){
+ const oldStamp=dfStamp;
  dfRevision++;dfData=null;dfLoading=null;dfViews.clear();dfIndexes=new WeakMap();
  if(notify){dfStamp=Date.now()+':'+crypto.randomUUID();try{localStorage.setItem(dfStampKey,dfStamp);}catch(_){}dfChannel?.postMessage(dfStamp);}
- clearTimeout(dfWarmTimer);dfWarmTimer=setTimeout(()=>{if(document.visibilityState!=='hidden')dfGetData().catch(()=>{});},1200);
+ if(typeof dgInvalidate==='function')dgInvalidate(oldStamp,notify?changes:null);
+ clearTimeout(dfWarmTimer);dfWarmTimer=setTimeout(()=>{if(document.visibilityState!=='hidden')(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});},1200);
 }
 let dfChannel=null;try{if(typeof BroadcastChannel==='function'){dfChannel=new BroadcastChannel(workspaceName('detail-content-v1'));dfChannel.onmessage=e=>{if(e.data!==dfStamp){dfStamp=e.data;dfInvalidate();}};}}catch(_){}
 function dfCheckStamp(){try{const now=localStorage.getItem(dfStampKey)||'';if(now!==dfStamp){dfStamp=now;dfInvalidate();}}catch(_){}}
@@ -9847,8 +9849,11 @@ const dfOriginalOpenDB=openDB;
 openDB=async function(...args){
  const db=await dfOriginalOpenDB(...args);if(dfDbProxies.has(db))return dfDbProxies.get(db);
  const proxy=new Proxy(db,{get(target,key){
-  if(key==='transaction')return (names,mode,...rest)=>{const t=target.transaction(names,mode,...rest),list=typeof names==='string'?[names]:Array.from(names);
-   if(mode==='readwrite'&&list.some(n=>['entries','learningMaterials','learningPlacements','learningAudio'].includes(n)))t.addEventListener('complete',()=>dfInvalidate(true),{once:true});return t;};
+  if(key==='transaction')return (names,mode,...rest)=>{const t=target.transaction(names,mode,...rest),list=typeof names==='string'?[names]:Array.from(names),content=['entries','learningMaterials','learningPlacements','learningAudio'];
+   if(mode!=='readwrite'||!list.some(n=>content.includes(n)))return t;
+   const changes=[],stores=new Map();t.addEventListener('complete',()=>dfInvalidate(true,changes),{once:true});
+   return new Proxy(t,{get(tx,p){if(p==='objectStore')return name=>{const store=tx.objectStore(name);if(!content.includes(name))return store;if(stores.has(name))return stores.get(name);const wrapped=new Proxy(store,{get(s,k){if(['put','add','delete','clear'].includes(k))return (...values)=>{const row=['put','add'].includes(k)?structuredClone(values[0]):null,q=s[k](...values);q.addEventListener('success',()=>changes.push(row?{store:name,op:'put',row:{...row,id:row.id??q.result}}:{store:name,op:k,key:values[0]}),{once:true});return q;};const v=Reflect.get(s,k,s);return typeof v==='function'?v.bind(s):v;},set(s,k,v){return Reflect.set(s,k,v,s);}});stores.set(name,wrapped);return wrapped;};const v=Reflect.get(tx,p,tx);return typeof v==='function'?v.bind(tx):v;},set(tx,p,v){return Reflect.set(tx,p,v,tx);}});
+  };
   const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
  }});dfDbProxies.set(db,proxy);return proxy;
 };
@@ -9879,10 +9884,10 @@ learningOpenDetail=function(id){
  const build=async()=>{
   if(run!==dfOpenRun)return;
   try{
-   const data=await dfGetData();if(run!==dfOpenRun)return;
+   const data=await (typeof dgReadDetail==='function'?dgReadDetail(id):dfGetData());if(run!==dfOpenRun)return;
    dfDetailScope={snapshot:Promise.resolve(data.snap),entries:Promise.resolve(data.words),resolved:new Map(),revision:data.revision};
    await dfOriginalDetail(id);if(run!==dfOpenRun)return;if(data.revision!==dfRevision)throw Error('资料刚更新，请重新打开，避免显示旧版本');
-   if(!nested)dfRemember(key,id,data.revision);
+   if(!nested)dfRemember(key,id,data.revision);if(typeof dgPrefetch==='function')dgPrefetch(data,id);
   }catch(e){if(run===dfOpenRun){dfDetailScope=null;learningModal('词句暂时无法打开','<p>'+learningEsc(e.message)+'</p>');}throw e;}
   finally{dfDetailScope=null;if(run===dfOpenRun){learningDialog.removeAttribute('data-df-building');learningDialog.removeAttribute('aria-busy');}}
  };
@@ -9891,9 +9896,107 @@ learningOpenDetail=function(id){
 if(typeof ssCancelDetail==='function'){const cancel=ssCancelDetail;ssCancelDetail=function(){dfOpenRun++;dfActive=null;if(dfDetailScope)dfDetailScope.cancelled=true;learningDialog.removeAttribute('data-df-building');return cancel();};}
 if(typeof cwIndex==='function'){const original=cwIndex;cwIndex=function(entries,materials){let byMaterials=dfIndexes.get(entries);if(!byMaterials){byMaterials=new WeakMap();dfIndexes.set(entries,byMaterials);}let index=byMaterials.get(materials);if(!index){index=original(entries,materials);byMaterials.set(materials,index);}return index;};}
 window.addEventListener('storage',e=>{if(e.key===dfStampKey){dfStamp=e.newValue||'';dfInvalidate();}});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){dfCheckStamp();dfGetData().catch(()=>{});}});
-document.addEventListener('pointerover',e=>{if(e.target.closest?.('[data-learn="word-detail"],[data-learn="play-card"],[data-wsl-detail],[data-cw-target]'))dfGetData().catch(()=>{});},{passive:true});
-const dfWarm=()=>dfGetData().then(data=>{if(typeof cwIndex==='function')cwIndex(data.words,data.snap.learningMaterials);}).catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dfWarm,{timeout:2000});else dfWarmTimer=setTimeout(dfWarm,1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){dfCheckStamp();(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});}});
+document.addEventListener('pointerover',e=>{if(e.target.closest?.('[data-learn="word-detail"],[data-learn="play-card"],[data-wsl-detail],[data-cw-target]'))(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});},{passive:true});
+const dfWarm=()=>typeof dgGetGraph==='function'?dgGetGraph().catch(()=>{}):dfGetData().then(data=>{if(typeof cwIndex==='function')cwIndex(data.words,data.snap.learningMaterials);}).catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dfWarm,{timeout:2000});else dfWarmTimer=setTimeout(dfWarm,1000);
+</script>
+<script data-detail-graph>
+/* Disposable local relation index. Native records remain the source of truth. */
+const dgKey='detailRelationIndexV1',dgHeaderKey='detailRelationHeaderV1',dgShapesKey='detailRelationShapesV1',dgSnapshotGraphs=new WeakMap(),dgCompactKeys=['id','syncId','syncAliases','word','meaning','ipa','category','note','updatedAt'];
+let dgGraph=null,dgLoading=null,dgBuildPromise=null;const dgReads=new Map();
+const dgNorm=t=>String(t||'').normalize('NFC').replace(/\s+/gu,'');
+function dgAdd(map,key,id){if(!key)return;const rows=map.get(key)||[];if(!rows.includes(id))rows.push(id);map.set(key,rows);}
+function dgCompact(w){return Object.fromEntries(dgCompactKeys.filter(k=>w[k]!==undefined).map(k=>[k,w[k]]));}
+function dgShape(m){return JSON.stringify([m.deleted||false,m.contentType,m.textLao,m.translationZh,m.analysisOwner,m.analysisUnitType,m.linkedWordSyncIds,m.phoneticProfile||false,m.sentenceAnalysis?.original,(m.sentenceAnalysis?.segments||[]).map(s=>[s.lao,s.words]),(m.pronunciationAnalysis?.segments||[]).map(s=>[s.profileId,(s.words||[]).map(w=>w.profileId)])]);}
+function dgCreate(data,stamp=dfStamp){
+ const {snap,words}=data,index=cwIndex(words,snap.learningMaterials),g={format:'detail-relation-index-v1',stamp,baseStamp:stamp,patches:{words:new Map(),reviews:new Map(),profiles:new Map()},words:words.map(dgCompact),wordIds:new Map(),canonical:new Map(),examplesRef:new Map(),examplesText:new Map(),profiles:new Map(),profileRules:new Map(),placements:new Map(),reviews:new Map(),usage:new Map(),shapes:new Map(),shapesLoaded:true,order:new Map(snap.learningMaterials.map((m,i)=>[m.id,i])),lexicon:index.lexicon};
+ g.children=new Map();g.profileOwners=new Map();
+ for(const w of g.words)for(const ref of syncKeys(w))if(!g.wordIds.has(ref))g.wordIds.set(ref,w.id);
+ for(const p of snap.learningPlacements)dgAdd(g.placements,p.materialId,p.id);
+ for(const m of snap.learningMaterials){g.shapes.set(m.id,dgShape(m));if(m.deleted)continue;
+  if(m.analysisOwner)dgAdd(g.children,m.analysisOwner,m.id);
+  if(!m.analysisOwner&&!m.courseDefinition)for(const s of m.pronunciationAnalysis?.segments||[])for(const p of [s,...s.words||[]])if(p.profileId)dgAdd(g.profileOwners,p.profileId,m.id);
+  if(m.contentType==='word')for(const ref of m.linkedWordSyncIds||[])if(!g.canonical.has(ref))g.canonical.set(ref,m.id);
+  if(m.phoneticProfile){dgAdd(g.profiles,m.textLao,m.id);g.profileRules.set(m.id,m.ruleDigest);}
+  if(m.reviewEvent)dgAdd(g.reviews,m.reviewEvent.target,m.id);
+  if(m.analysisOwner||!['sentence','dialogue'].includes(m.contentType))continue;
+  for(const ref of m.linkedWordSyncIds||[])dgAdd(g.examplesRef,ref,m.id);
+  const a=m.sentenceAnalysis;if(a&&dgNorm(a.original)===dgNorm(m.textLao))for(const s of a.segments||[])for(const w of s.words||[]){if(w.isName||w.kind==='name')continue;dgAdd(g.examplesText,dgNorm(w.lao),m.id);if(w.target?.startsWith('word:'))dgAdd(g.examplesRef,w.target.slice(5),m.id);}
+ }
+ // Quantity-phrase reverse links are computed ONCE, not for every word at every depth.
+ const usageRows=[...snap.learningMaterials.filter(m=>m.contentType==='word'&&!m.deleted&&!m.analysisOwner),...words.filter(w=>w.syncId&&!w.deleted).map(w=>({id:'word:'+w.syncId,textLao:w.word,translationZh:w.meaning,contentType:'word',source:'我的词典'}))];
+ for(const m of usageRows){const q=cwQuantity(m.textLao,index);if(!q)continue;for(const text of [q.noun,...q.parts.map(p=>p[0]),q.classifier]){const key=dgNorm(text),rows=g.usage.get(key)||[];if(!rows.some(r=>r.id===m.id&&r.textLao===m.textLao))rows.push({id:m.id,textLao:m.textLao,translationZh:m.translationZh,contentType:'word',source:m.source||m.sourceType||'已收录材料'});g.usage.set(key,rows);}}
+ return g;
+}
+async function dgPersist(g,full=true){if(g.stamp!==dfStamp)return;try{const db=await openDB();if(g.stamp!==dfStamp)return;const t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta');if(full){const {shapes,...core}=g;s.put({...core,shapes:null,shapesLoaded:false},dgKey);s.put({baseStamp:g.baseStamp,shapes},dgShapesKey);}s.put({baseStamp:g.baseStamp,stamp:g.stamp,patches:g.patches},dgHeaderKey);await done;}catch(_){/* Derived cache failure never fails a user save. */}}
+function dgApplyPatches(g,p){
+ if(!p||!['words','reviews','profiles'].every(k=>p[k] instanceof Map))return false;
+ for(const [id,row]of p.words)g.words=g.words.map(w=>w.id===id?row:w);
+ for(const [id,target]of p.reviews)dgAdd(g.reviews,target,id);
+ for(const [id,row]of p.profiles){for(const [text,ids]of g.profiles){const next=ids.filter(x=>x!==id);next.length?g.profiles.set(text,next):g.profiles.delete(text);}if(!row.deleted){dgAdd(g.profiles,row.text,id);g.profileRules.set(id,row.ruleDigest);}else g.profileRules.delete(id);}
+ g.patches=p;return true;
+}
+async function dgHydrateShapes(g){
+ if(g.shapesLoaded||dgGraph!==g)return;
+ try{const db=await openDB(),saved=await new Promise((resolve,reject)=>{const t=db.transaction('cloud_meta','readonly'),q=t.objectStore('cloud_meta').get(dgShapesKey);t.oncomplete=()=>resolve(q.result);t.onabort=()=>reject(t.error);});if(dgGraph===g&&saved?.baseStamp===g.baseStamp&&saved.shapes instanceof Map){g.shapes=saved.shapes;g.shapesLoaded=true;}}catch(_){}
+}
+async function dgPrepare(data){
+ if(dgGraph?.stamp===dfStamp)return dgGraph;if(dgBuildPromise)return dgBuildPromise;
+ const stamp=dfStamp,task=Promise.resolve().then(()=>{const g=dgCreate(data,stamp);if(stamp!==dfStamp)return null;dgGraph=g;dfData=null;void dgPersist(g);return g;});dgBuildPromise=task;try{return await task;}finally{if(dgBuildPromise===task)dgBuildPromise=null;}
+}
+async function dgGetGraph(){
+ dfCheckStamp();if(dgGraph?.stamp===dfStamp)return dgGraph;if(dgLoading)return dgLoading;
+ const stamp=dfStamp,task=(async()=>{const db=await openDB(),saved=await new Promise((resolve,reject)=>{const t=db.transaction('cloud_meta','readonly'),q=t.objectStore('cloud_meta').get(dgKey),h=t.objectStore('cloud_meta').get(dgHeaderKey);t.oncomplete=()=>resolve({core:q.result,header:h.result});t.onabort=()=>reject(t.error);}).catch(()=>null),cached=saved?.core,header=saved?.header;
+  if(stamp!==dfStamp){dgLoading=null;return dgGetGraph();}if(cached?.format==='detail-relation-index-v1'&&header?.stamp===stamp&&header.baseStamp===cached.baseStamp&&Array.isArray(cached.words)&&['lexicon','wordIds','canonical','examplesRef','examplesText','profiles','profileRules','placements','reviews','usage','order','children','profileOwners'].every(k=>cached[k] instanceof Map)&&dgApplyPatches(cached,header.patches)){cached.stamp=stamp;cached.shapes=new Map();cached.shapesLoaded=false;dgGraph=cached;setTimeout(()=>{if(typeof requestIdleCallback==='function')requestIdleCallback(()=>dgHydrateShapes(cached),{timeout:4000});else void dgHydrateShapes(cached);},1500);return cached;}
+  return dgPrepare(await dfGetData());})();dgLoading=task;try{return await task;}finally{if(dgLoading===task)dgLoading=null;}
+}
+function dgInvalidate(oldStamp,changes){
+ dgLoading=null;dgBuildPromise=null;dgReads.clear();const g=dgGraph;if(!g||g.stamp!==oldStamp||!changes?.length){dgGraph=null;return;}
+ // Routine progress, a new recording or audio metadata must not force a full library scan.
+ const safe=changes.every(c=>c.op==='put'&&(c.store==='learningAudio'||c.store==='entries'&&g.words.some(w=>w.id===c.row.id&&JSON.stringify([w.word,w.meaning,w.ipa,w.category,w.note,w.syncId,w.syncAliases])===JSON.stringify([c.row.word,c.row.meaning,c.row.ipa,c.row.category,c.row.note,c.row.syncId,c.row.syncAliases]))||c.store==='learningMaterials'&&(c.row.reviewEvent||c.row.practiceHandoff||c.row.roundResult||c.row.rollingReview||c.row.phoneticProfile||g.shapes.get(c.row.id)===dgShape(c.row))));
+ if(!safe){dgGraph=null;return;}
+ for(const c of changes){const r=c.row;if(c.store==='entries'){const row=dgCompact(r);g.words=g.words.map(w=>w.id===r.id?row:w);g.patches.words.set(r.id,row);}if(c.store==='learningMaterials'){g.shapes.set(r.id,dgShape(r));if(r.reviewEvent){dgAdd(g.reviews,r.reviewEvent.target,r.id);g.patches.reviews.set(r.id,r.reviewEvent.target);}if(r.phoneticProfile){for(const [text,ids]of g.profiles){const next=ids.filter(id=>id!==r.id);next.length?g.profiles.set(text,next):g.profiles.delete(text);}if(!r.deleted){dgAdd(g.profiles,r.textLao,r.id);g.profileRules.set(r.id,r.ruleDigest);}else g.profileRules.delete(r.id);g.patches.profiles.set(r.id,{text:r.textLao,deleted:!!r.deleted,ruleDigest:r.ruleDigest});}}}
+ g.stamp=dfStamp;dgGraph=g;void dgPersist(g,false);
+}
+async function dgGetRows(store,ids){
+ const keys=[...new Set(ids)].filter(id=>id!==null&&id!==undefined&&id!=='');if(!keys.length)return [];
+ const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction(store,'readonly'),out=new Array(keys.length);keys.forEach((id,i)=>{const q=t.objectStore(store).get(id);q.onsuccess=()=>out[i]=q.result;});t.oncomplete=()=>resolve(out.filter(Boolean));t.onabort=()=>reject(t.error||Error('关联详情读取失败'));});
+}
+async function dgReadDetail(id){
+ const g=await dgGetGraph();if(!g||g.stamp!==dfStamp)return dgReadDetail(id);
+ const stamp=g.stamp,key=stamp+'|'+id;if(dgReads.has(key))return dgReads.get(key);
+ const task=(async()=>{
+  const wordRef=id.startsWith('word:')?id.slice(5):'',physical=wordRef?g.wordIds.get(wordRef):undefined;
+  let [initial,entry]=await Promise.all([dgGetRows('learningMaterials',[id,wordRef&&g.canonical.get(wordRef)]),dgGetRows('entries',[physical])]);let m=initial.find(r=>r.id===id)||initial[0],w=entry[0];
+  if(m?.contentType==='word'&&!w){w=(await dgGetRows('entries',[g.wordIds.get(m.linkedWordSyncIds?.[0])]))[0];}
+  if(wordRef&&w&&!syncKeys(w).includes(wordRef))throw Error('词条关联已改变，请刷新后重试');
+  if(!m&&w)m=learningWordMaterial(w);if(!m||m.deleted||m.contentType==='word'&&!w)throw Error('词句已移除或尚未同步');
+  const texts=new Set([dgNorm(w?.word||m.textLao)]),sounds=new Set([w?.word||m.textLao]),refs=new Set(w?syncKeys(w):[]),links=new Set(refs),ids=new Set([m.id]);
+  for(const child of g.children.get(m.id)||[])ids.add(child);
+  let owner=m;const owners=new Set([m.id]);while(owner.analysisOwner&&!owners.has(owner.analysisOwner)){owners.add(owner.analysisOwner);const rows=await dgGetRows('learningMaterials',[owner.analysisOwner]);owner=rows[0];if(!owner||owner.deleted)break;ids.add(owner.id);}
+  if(owner?.phoneticProfile)for(const parent of g.profileOwners.get(owner.id)||[])ids.add(parent);
+  for(const s of m.sentenceAnalysis?.segments||[])for(const token of [s,...s.words||[]]){if(dgNorm(token.lao)){texts.add(dgNorm(token.lao));sounds.add(token.lao);}if(token.target?.startsWith('word:')){const ref=token.target.slice(5);links.add(ref);if(g.canonical.has(ref))ids.add(g.canonical.get(ref));}else if(token.target)ids.add(token.target);}
+  for(const ref of links)for(const target of g.examplesRef.get(ref)||[])ids.add(target);
+  for(const text of texts)for(const target of g.examplesText.get(text)||[])ids.add(target);
+  const digest=await paDigest(paRules());for(const text of sounds){if(!text?.trim())continue;const compatible=ids=>ids.filter(pid=>paCompatibleDigest(g.profileRules.get(pid),digest)),exact=compatible(g.profiles.get(text)||[]);if(exact.length){for(const target of exact)ids.add(target);}else for(const [original,profileIds]of g.profiles)if(original.includes(text))for(const target of compatible(profileIds))ids.add(target);}
+  for(const p of m.pronunciationAnalysis?.segments||[])if(p.profileId)ids.add(p.profileId);
+  for(const target of [id,m.id,...[...refs].map(r=>'word:'+r)])for(const rid of g.reviews.get(target.startsWith('word:')?target:'material:'+target)||[])ids.add(rid);
+  let materials=await dgGetRows('learningMaterials',[...ids]);if(!materials.some(r=>r.id===m.id))materials.unshift(m);
+  const profiles=new Set(materials.flatMap(r=>(r.pronunciationAnalysis?.segments||[]).map(s=>s.profileId).filter(Boolean)));for(const row of await dgGetRows('learningMaterials',[...profiles].filter(pid=>!ids.has(pid))))materials.push(row);
+  const placements=await dgGetRows('learningPlacements',g.placements.get(m.id)||[]),words=g.words.map(row=>w&&row.id===w.id?w:row);
+  materials.sort((a,b)=>(g.order.get(a.id)??Number.MAX_SAFE_INTEGER)-(g.order.get(b.id)??Number.MAX_SAFE_INTEGER));const snap={learningMaterials:materials,learningPlacements:placements,learningAudio:[],detailReadOnly:true,detailUsageRows:g.usage.get(dgNorm(w?.word||m.textLao))||[]};dgSnapshotGraphs.set(materials,g);
+  if(stamp!==dfStamp)return dgReadDetail(id);return {snap,words,revision:dfRevision,at:Date.now()};
+ })();dgReads.set(key,task);while(dgReads.size>24)dgReads.delete(dgReads.keys().next().value);try{return await task;}catch(e){dgReads.delete(key);throw e;}
+}
+const dgOriginalCwIndex=cwIndex;
+cwIndex=function(entries,materials){const g=dgSnapshotGraphs.get(materials);return g?{lexicon:g.lexicon,materials,wordTargets:new Map(entries.flatMap(w=>syncKeys(w).map(ref=>['word:'+ref,w]))),materialTargets:new Map(materials.map(m=>[m.id,m]))}:dgOriginalCwIndex(entries,materials);};
+function dgPrefetch(data,id){
+ const m=data.snap.learningMaterials.find(r=>r.id===id)||data.snap.learningMaterials.find(r=>r.contentType==='word'&&(r.linkedWordSyncIds||[]).some(ref=>id==='word:'+ref));if(!m)return;
+ const targets=[...new Set((m.sentenceAnalysis?.segments||[]).flatMap(s=>[s.target,...(s.words||[]).map(w=>w.target)]).filter(t=>t&&t!==id))].slice(0,12);
+ const work=()=>{let next=0;const run=async()=>{while(next<targets.length){const target=targets[next++];try{await dgReadDetail(target);}catch(_){}}};void Promise.all([run(),run()]);};if(typeof requestIdleCallback==='function')requestIdleCallback(work,{timeout:1200});else setTimeout(work,50);
+}
+// Build the disposable persistent index while idle, not at every word click.
+const dgWarm=()=>dgGetGraph().catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dgWarm,{timeout:2500});else setTimeout(dgWarm,1000);
 </script>
 <script src="./offline.js"></script>
 </body>

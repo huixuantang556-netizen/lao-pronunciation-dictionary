@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b2978d80b21380c4">
+  <meta name="lao-app-build" content="86c76323a9b7f42d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6933,12 +6933,14 @@ async function paPlan(results,snap){
  for(const m of snap.learningMaterials)if(m.phoneticProfile&&!m.deleted&&paCompatibleDigest(m.ruleDigest,results[0]?.digest)){if(!available.has(m.textLao))available.set(m.textLao,[]);available.get(m.textLao).push(m);}
  for(const p of results){if(p.error)throw Error('请取消勾选无效项');
   const profile=async analysis=>{const id='phonetic-profile:'+await paDigest({ruleDigest:p.digest,analysis});const previous=snap.learningMaterials.find(m=>m.id===id),old=previous&&!previous.deleted?previous:null;
-   if(previous?.deleted){const replacement=snap.learningMaterials.find(m=>m.id===previous.repairRedirectTo&&!m.deleted&&m.phoneticProfile);if(replacement&&replacement.textLao===analysis.original&&paReadingKey(replacement.phoneticAnalysis)===paReadingKey(analysis))return replacement.id;throw Error('这份同内容分析已移除，请先恢复或重新核对；不会静默恢复已归档记录。');}
    if(!old&&resolved(analysis)){
     const key=cloudStable([p.digest,analysis.original,paReadingKey(analysis),reviewKey(analysis)]);if(reused.has(key))return reused.get(key);
     for(const candidate of available.get(analysis.original)||[])try{if(!paCompatibleDigest(candidate.ruleDigest,p.digest))continue;const a=paValidateAnalysis(candidate.phoneticAnalysis,analysis.original);if(resolved(a)&&paReadingKey(a)===paReadingKey(analysis)&&reviewKey(a)===reviewKey(analysis)){reused.set(key,candidate.id);return candidate.id;}}catch(_){}
-    reused.set(key,id);
+    if(!previous?.deleted)reused.set(key,id);
    }
+   // Compaction may have retired both the original hash and its first redirect.
+   // Reuse a current equal reading/review state above, but never resurrect a tombstone.
+   if(previous?.deleted)throw Error('“'+analysis.original+'”的同内容分析已移除，且未找到规则、读法及核对状态一致的有效分析；请重新核对，不会恢复已归档记录。');
    if(!old&&!writes.has(id))writes.set(id,{...learningBlank(id,'reading_drill',analysis.original),analysisOwner:'phonetic-cache',phoneticProfile:true,phoneticAnalysis:analysis,ruleDigest:p.digest,updatedAt:now});return id;};
   const segments=[];for(const s of p.segments){const profileId=await profile(s.analysis),words=[];for(const w of s.words){const part=paSlice(s.analysis,w.lao);if(part)words.push({...w,profileId:await profile(part)});}segments.push({index:s.index,original:s.original,chinese:s.chinese,profileId,words});}
   writes.set(p.target.m.id,{...p.target.m,pronunciationAnalysis:{format:'lao-segment-pronunciation-v1',original:p.target.text,basisKey:cloudStable(p.basis),ruleDigest:p.digest,segments,savedAt:now},updatedAt:now});

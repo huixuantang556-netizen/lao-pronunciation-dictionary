@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="db1c50099f437146">
+  <meta name="lao-app-build" content="3712ed9fcf8b64e2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -840,7 +840,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       try {
         const backup=JSON.parse(await file.text());
         if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
-        if(['lao-phonetic-repair-v1','lao-study-refresh-v1'].includes(backup?.format)){const applied=await importPhoneticRepair(backup);if(!applied)$('#backupStatus').textContent='已取消分析更新，未修改本机资料。';return;}
+        if(['lao-phonetic-repair-v1','lao-study-refresh-v1','lao-library-organize-v1'].includes(backup?.format)){const applied=await importPhoneticRepair(backup);if(!applied)$('#backupStatus').textContent='已取消资料更新，未修改本机资料。';return;}
         if(backup?.format==='lao-dictionary-text-export-v1')throw new Error('这是不含音频的全部资料审查文件，不能作为完整备份恢复。请保留原录音，使用核对后的专用修复文件。');
         if(backup?.format==='lao-tag-review')throw new Error('这是导出的标签整理词表，请选择“词典标签更新-2026-10-08.json”，而不是标签整理词表。');
         if(!isValidBackup(backup))throw new Error('这不是本词典的有效备份文件');
@@ -6144,6 +6144,7 @@ async function saCommitDictionary(plan,expected,expectedEntries){
  for(const name of ['entries','learningMaterials']){const q=tx.objectStore(name).getAll();q.onsuccess=()=>{actual[name]=q.result;if(--left)return;try{
   if(!learningSameRecords(actual.entries,expectedEntries)||!learningSameRecords(actual.learningMaterials,expected.learningMaterials))throw Error('词典或解析已在另一个页面修改，请重新预览后保存。');
   for(const w of plan.entries)tx.objectStore('entries').add(w);
+  for(const w of plan.entryUpdates||[])tx.objectStore('entries').put(w);
   for(const m of plan.materials)tx.objectStore('learningMaterials').put(m);
  }catch(e){failure=e;tx.abort();}};}
  try{await done;}catch(e){throw failure||e;}
@@ -7155,6 +7156,7 @@ async function importPhoneticRepair(root){
  const dialog=document.createElement('dialog');dialog.innerHTML='<h2>发音分析专项修复</h2><p data-repair-status role="status">正在核对当前数据和所有关联，不会改动录音…</p><div data-repair-summary></div><textarea data-repair-error hidden readonly rows="5" aria-label="导入错误详情，可复制"></textarea><label><input data-repair-confirm type="checkbox" style="width:auto" disabled>我已保存完整备份，理解规则分析不等于听音验证，确认应用整批修复。</label><p><button type="button" data-repair-save disabled>确认应用</button><button type="button" data-repair-retry hidden>重新核对</button><button type="button" data-repair-cancel>取消／关闭</button></p>';document.body.append(dialog);dialog.showModal();
  const get=s=>dialog.querySelector(s),status=get('[data-repair-status]'),save=get('[data-repair-save]'),check=get('[data-repair-confirm]'),retry=get('[data-repair-retry]'),errorBox=get('[data-repair-error]');
  if(root.format==='lao-study-refresh-v1')dialog.querySelector('h2').textContent='语法、构词与发音更新';
+ if(root.format==='lao-library-organize-v1')dialog.querySelector('h2').textContent='词典标签备注与教材单词分类整理';
  dialog.className='pa-repair-dialog';
  const workspace=()=>typeof workspaceName==='function'?workspaceName('phonetic-repair'):'local',origin=workspace();
  let prepared,snap,entries,applying=false,applied=false,settled=false,checking=false,revision=0;
@@ -7172,9 +7174,10 @@ async function importPhoneticRepair(root){
    status.textContent='正在核对当前资料，尚未保存…';
    try{if(workspace()!==origin)throw Error('账号或本机空间已切换，请关闭后重新导入');
    const values=await Promise.all([learningSnapshot(),allEntries()]);if(settled||run!==revision)return;
-    [snap,entries]=values;const result=await (root.format==='lao-study-refresh-v1'?srRefreshPlan:paRepairPlan)(root,snap,entries,message=>{if(!settled&&run===revision)status.textContent=message;});
+    [snap,entries]=values;const result=await (root.format==='lao-library-organize-v1'?loOrganizePlan:root.format==='lao-study-refresh-v1'?srRefreshPlan:paRepairPlan)(root,snap,entries,message=>{if(!settled&&run===revision)status.textContent=message;});
     if(settled||run!==revision)return;if(workspace()!==origin)throw Error('账号或本机空间已切换，请重新导入');
     prepared=result;const n=result.counts;get('[data-repair-summary]').textContent=(n.newWords?'新增独立词卡 '+n.newWords+' 张（含标签，不含录音）；':'')+(n.grammar?'更新语法／构词 '+n.grammar+' 张；':'')+'新增发音分析 '+n.created+' 份；补全／更新发音关联 '+n.annotated+' 张；归档 '+n.archived+' 份。原词句、词义及全部录音保留。';
+    if(root.format==='lao-library-organize-v1')get('[data-repair-summary]').textContent='整理 '+n.metadata+' 条词典标签／备注（其中 '+n.meanings+' 条释义修订）；重排 '+n.courses+' 课单词分类；更新 '+n.annotated+' 张发音关联，新增 '+n.created+' 份分析，归档 '+n.archived+' 份历史分析。对话正文与分类、录音、收藏和复习记录不变。未确认读法继续保留核对标记。';
     status.textContent='校验通过，尚未保存。勾选备份确认后，点击“确认应用”。';check.disabled=false;
    }catch(error){if(!settled&&run===revision)showError(error,'核对未通过：');}finally{checking=false;}
   };
@@ -7184,11 +7187,73 @@ async function importPhoneticRepair(root){
    try{if(workspace()!==origin)throw Error('账号或本机空间已切换，请关闭后重新导入');await saCommitDictionary(prepared.plan,snap,entries);}
    catch(error){applying=false;showError(error,'未能完成保存：');return;}
    applied=true;status.textContent=root.format==='lao-study-refresh-v1'?'语法、构词与发音更新已保存；原词句、词义及录音保留。':'修复已保存；原录音、词义及语法未改动。';const output=document.querySelector('#backupStatus');if(output)output.textContent=status.textContent;
+   if(root.format==='lao-library-organize-v1'){status.textContent='词典标签、备注、已列出的释义修订及教材单词分类已保存；对话、录音与复习记录保留。';if(output)output.textContent=status.textContent;}
    try{if(typeof render==='function')await render();}catch(_){if(output)output.textContent='发音修复已保存，请刷新页面查看。';}
    applying=false;finish();
   };
   void validate();
  });}finally{dialog.remove();}
+}
+// Explicit, conflict-checked metadata/layout patch; audio and dialogue data are never accepted.
+function loEntryBase(w){return Object.fromEntries(['syncId','word','meaning','category','note'].map(k=>[k,w[k]??'']));}
+function loCourseParts(snap,courseId){
+ const course=snap.learningMaterials.find(m=>m.id==='course:'+courseId&&!m.courseDeleted&&!m.coursePurged)?.courseDefinition;
+ if(!course||course.textbookId!=='lao-training-dialogue-2'||course.schemaVersion!==2)throw Error('只能整理指定培训教材的现有课程');
+ const by=new Map(snap.learningMaterials.map(m=>[m.id,m])),get=(type,id)=>by.get('v2:'+course.packageKey+':'+type+':'+id);
+ const sections=course.v2SectionIds.map(id=>get('section',id));if(sections.some(s=>!s||s.deleted))throw Error('课程章节已变化');
+ const blocks=sections.flatMap(s=>s.v2Data.blocks.map(id=>get('block',id)));if(blocks.some(b=>!b||b.deleted))throw Error('课程分类已变化');
+ const wordBlocks=blocks.filter(b=>b.v2Data.contentType==='word-ref'),items=wordBlocks.flatMap(b=>(b.v2Data.content.items||[]).map(id=>get('item',id))).filter(m=>m&&!m.deleted&&!snap.learningPlacements.some(p=>p.lessonId===courseId&&p.materialId===m.id&&p.deleted));
+ return {course,sections,blocks,wordBlocks,items};
+}
+function loLayoutBase(parts){return {course:parts.course,sections:parts.sections.map(m=>({id:m.id,v2Data:m.v2Data})),blocks:parts.blocks.map(m=>({id:m.id,v2Data:m.v2Data})),items:parts.items.map(m=>({id:m.id,textLao:m.textLao,translationZh:m.translationZh,linkedWordSyncIds:m.linkedWordSyncIds,v2Data:m.v2Data}))};}
+async function loMetadataPlan(root,snap,entries){
+ if(root?.format!=='lao-library-organize-v1'||!Array.isArray(root.dictionary)||root.dictionary.length>10000||!Array.isArray(root.wordLayouts)||root.wordLayouts.length>50)throw Error('资料整理包格式无效');
+ let nextEntries=[...entries];const entryUpdates=[],writes=new Map(),seen=new Set(),materialIds=new Set(snap.learningMaterials.map(m=>m.id));let meanings=0;
+ for(const op of root.dictionary){
+  const i=nextEntries.findIndex(w=>w.syncId===op.syncId),old=nextEntries[i];
+  if(!old||seen.has(op.syncId)||await paDigest(loEntryBase(old))!==op.baseHash)throw Error('词典标签／释义自导出后已变化，请重新导出：'+(old?.word||op.syncId));seen.add(op.syncId);
+  if(!op.changes||Object.keys(op.changes).some(k=>!['category','note','meaning'].includes(k))||Object.entries(op.changes).some(([k,v])=>typeof v!=='string'||v.length>(k==='note'?60000:2000))||op.changes.meaning!==undefined&&!op.changes.meaning.trim())throw Error('整理包只能修改标签、备注与明确列出的释义');
+  if(op.changes.meaning!==undefined&&op.changes.meaning!==old.meaning)meanings++;
+  const next={...old,...op.changes,updatedAt:Date.now()};nextEntries[i]=next;entryUpdates.push(next);
+ }
+ const courseSeen=new Set();
+ for(const layout of root.wordLayouts){
+  if(courseSeen.has(layout.courseId))throw Error('教材单词分类重复');courseSeen.add(layout.courseId);
+  const parts=loCourseParts(snap,layout.courseId);if(await paDigest(loLayoutBase(parts))!==layout.baseHash)throw Error('课程单词／对话结构已变化，请重新导出：'+parts.course.title);
+  if(!Array.isArray(layout.groups)||!layout.groups.length||layout.groups.length>15||!parts.wordBlocks.length)throw Error('单词分类数量无效');
+  const all=new Map(parts.items.map(m=>[m.v2Data.itemId,m])),picked=new Set(),groupIds=new Set(),first=parts.sections.find(s=>s.v2Data.blocks.some(id=>parts.wordBlocks.some(b=>b.v2Data.id===id)));
+  if(!first)throw Error('未找到原单词小节');
+  const newIds=[];
+  for(const group of layout.groups){
+   if(typeof group.id!=='string'||!/^organized-20261024-[a-z0-9-]+$/.test(group.id)||groupIds.has(group.id)||typeof group.title!=='string'||!group.title.trim()||group.title.length>80||!Array.isArray(group.itemIds)||!group.itemIds.length)throw Error('单词分类内容无效');groupIds.add(group.id);newIds.push(group.id);
+   const id='v2:'+parts.course.packageKey+':block:'+group.id;if(snap.learningMaterials.some(m=>m.id===id))throw Error('新分类编号已存在，请勿重复导入');
+   for(const itemId of group.itemIds){const old=all.get(itemId);if(!old||picked.has(itemId))throw Error('分类含缺失或重复词卡');picked.add(itemId);writes.set(old.id,{...old,v2Data:{...old.v2Data,blockId:group.id},updatedAt:Date.now()});}
+   const block={id:group.id,title:group.title,contentType:'word-ref',displayType:'word-cards',topics:[],roles:[],content:{items:group.itemIds},sectionId:first.v2Data.id};
+   writes.set(id,{...learningBlank(id,'knowledge',group.title),schemaVersion:2,v2Kind:'block',v2Data:block,updatedAt:Date.now()});
+  }
+  if(picked.size!==all.size)throw Error('分类没有完整保留全部原词卡');
+  const oldIds=new Set(parts.wordBlocks.map(b=>b.v2Data.id));
+  for(const section of parts.sections){let inserted=false;const ids=[];for(const id of section.v2Data.blocks){if(oldIds.has(id)){if(section.id===first.id&&!inserted){ids.push(...newIds);inserted=true;}}else ids.push(id);}
+   if(cloudStable(ids)===cloudStable(section.v2Data.blocks))continue;
+   writes.set(section.id,{...section,v2Data:{...section.v2Data,blocks:ids},updatedAt:Date.now()});
+  }
+ }
+ let after={...snap,learningMaterials:snap.learningMaterials.map(m=>writes.get(m.id)||m).concat([...writes.values()].filter(m=>!materialIds.has(m.id)))};
+ if(root.grammar!==undefined){
+  if(!Array.isArray(root.grammar)||root.grammar.length>1000)throw Error('词典配套语法更新数量无效');
+  const done=new Set();for(const op of root.grammar){const parent=after.learningMaterials.find(m=>m.id===op.id),w=parent?.contentType==='word'?nextEntries.find(w=>parent.linkedWordSyncIds.includes(w.syncId)):null;
+   const contextOnly=op.contextMeaning===true&&parent&&!parent.analysisOwner&&['word','reading_drill'].includes(parent.contentType)&&op.analysis?.original===parent.sentenceAnalysis?.original&&op.analysis?.translation===parent.sentenceAnalysis?.translation;
+   if((!contextOnly&&(!w||!entryUpdates.some(e=>e.syncId===w.syncId)||op.analysis?.translation!==w.meaning))||done.has(op.id))throw Error('配套语法只能更新本包已整理的词卡或保留原义的词语构词');done.add(op.id);
+   for(const m of await srGrammarWrites(op,after,nextEntries))writes.set(m.id,m);
+   after={...snap,learningMaterials:snap.learningMaterials.map(m=>writes.get(m.id)||m).concat([...writes.values()].filter(m=>!materialIds.has(m.id)))};
+  }
+ }
+ return {entries:nextEntries,entryUpdates,writes,meanings,after};
+}
+async function loOrganizePlan(root,snap,entries,progress=()=>{}){
+ const metadata=await loMetadataPlan(root,snap,entries),repair=await paRepairPlan(root.phonetic,metadata.after,metadata.entries,progress),writes=metadata.writes;
+ for(const m of repair.plan.materials)writes.set(m.id,m);
+ return {plan:{entries:[],entryUpdates:metadata.entryUpdates,materials:[...writes.values()]},after:repair.after,afterEntries:metadata.entries,counts:{...repair.counts,metadata:metadata.entryUpdates.length,meanings:metadata.meanings,courses:root.wordLayouts.length}};
 }
 // Atomic analysis refresh with optional strictly additive lexical cards.
 // Never accept edits to existing dictionary words, audio, placements or deletions.

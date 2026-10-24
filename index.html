@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="86c76323a9b7f42d">
+  <meta name="lao-app-build" content="dbb365437aa2cd08">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3093,7 +3093,7 @@ async function lessonPackageOpen(){learningDraft={kind:'package',dirty:false};le
  $('#lessonPackageForm').onsubmit=async e=>{e.preventDefault();if(learningBusy||!learningDraft?.packagePreview)return;learningBusy=true;try{const preview=learningDraft.packagePreview,choices=preview.wordRows.map((_,i)=>$('#lessonPackageWord'+i).value);if(!$('#lessonPackageConfirmLinks').checked)throw new Error('请勾选确认已核对内容及句子关联。');const course=await lessonPackageSave(preview,choices,$('#lessonPackageTarget').value);learningLesson=course;learningRoute='lesson';learningTab='knowledge';learningResetMulti();learningDraft=null;learningDialog.close();await render();await renderLearning();$('#learningStatus').textContent='整课导入完成。已有资料和录音保留；同一导入包再次导入不会重复创建。';}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
 }
 async function lessonPackagePreview(){
- const input=$('#lessonPackageText').value;let detected;try{detected=JSON.parse(input.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch(_){}if(detected?.format==='lao-chapter-rewrite-v1'){if(detected.source?.courseId!==learningLesson.id)throw Error('请先打开这份任务对应的章节，再导入改编结果。');learningDraft=null;await chapterRewriteOpen();$('#chapterInput').value=input;$('#chapterInput').oninput();await $('#chapterPreview').onclick();return;}if(['lao-lesson-v2','lao-lesson-bundle-v2'].includes(detected?.format)){await lessonV2Preview(detected);return;}
+ const input=$('#lessonPackageText').value;let detected;try{detected=JSON.parse(input.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch(_){}if(detected?.format==='lao-chapter-rewrite-v1'){if(detected.source?.courseId!==learningLesson.id)throw Error('请先打开这份任务对应的章节，再导入改编结果。');learningDraft=null;await chapterRewriteOpen();$('#chapterInput').value=input;$('#chapterInput').oninput();await $('#chapterPreview').onclick();return;}if(['lao-lesson-v2','lao-lesson-bundle-v2','lao-dialogue-replace-v1'].includes(detected?.format)){await lessonV2Preview(detected);return;}
  const data=lessonPackageParse($('#lessonPackageText').value),[snap,entries,chart]=await Promise.all([learningSnapshot(),allEntries(),readAlphabetOverrides()]),courses=learningCourses(snap),key=lessonPackageKey(data),wordRows=lessonPackageWords(data),h=learningEsc;
  const binding=snap.learningMaterials.find(m=>m.id==='package-binding:'+key);
  const matching=courses.filter(c=>c.id===binding?.packageCourseId||c.packageKey===key||(c.textbookName===data.course.textbookName&&c.title===data.course.title&&c.chapterName===data.course.chapterName));
@@ -3166,6 +3166,7 @@ function lessonV2AudioKey(a){return a.source+':'+(a.assetId||a.text);}
 function lessonV2AudioControls(m){return '<details><summary>参考音与核对设置</summary>'+m.audioSources.map((a,i)=>'<p>'+learningEsc(a.source==='gemini'?'Gemini':a.source==='textbook'?'教材原音':a.role==='reference'?'手录参考':'我的跟读')+(a.needsReview?' · 待核对':'')+' '+(a.role!=='follow'&&(a.source!=='user'||a.role==='reference')?'<button data-learn="v2-default-audio" data-id="'+learningEsc(m.id)+'" data-index="'+i+'">设为默认参考</button>':'')+(a.needsReview?'<button data-learn="v2-confirm-audio" data-id="'+learningEsc(m.id)+'" data-index="'+i+'">此录音仍适用</button>':'')+'<button data-learn="v2-remove-audio" data-id="'+learningEsc(m.id)+'" data-index="'+i+'">移除此音频关联</button></p>').join('')+'</details>';}
 function lessonV2Parse(value){
  const d=typeof value==='string'?JSON.parse(value.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')):lessonV2Clone(value);
+ if(d?.format==='lao-dialogue-replace-v1'){if(!Array.isArray(d.replaceDialogueBlocks)||!d.replaceDialogueBlocks.length)throw Error('整组替换缺少目标对话组');d.format='lao-lesson-v2';}
  const text=(v,n,required=false,max=20000)=>{if(typeof v!=='string'||v.length>max||(required&&!v.trim()))throw Error(n+' 必须是有效文字');};
  const list=(v,n)=>{if(!Array.isArray(v)||v.length>100||v.some(s=>typeof s!=='string'||s.length>200))throw Error(n+' 必须是文字数组');};
  const id=(v,n)=>{if(typeof v!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(v))throw Error(n+' 必须使用英文、数字、短横线或下划线');};
@@ -3203,6 +3204,7 @@ function lessonV2Parse(value){
   }
  }
  if(count>1000)throw Error('单课最多 1000 个学习项目');
+ if(d.replaceDialogueBlocks!==undefined){if(!Array.isArray(d.replaceDialogueBlocks)||d.replaceDialogueBlocks.length!==1||d.sections.length!==1||d.sections[0].blocks.length!==1||d.sections[0].blocks[0].contentType!=='dialogue'||d.sections[0].blocks[0].id!==d.replaceDialogueBlocks[0]||!d.sections[0].blocks[0].content.items.length||d.importMode==='replace-course')throw Error('整组替换文件必须只包含一个非空对话组，不允许覆盖整课');}
  if(!Array.isArray(d.uncertain??=[]))throw Error('uncertain 应为数组');
  for(const u of d.uncertain){if(typeof u==='string')text(u,'uncertain');else if(u&&typeof u==='object'){for(const k of ['source','text','question'])text(u[k]??='','uncertain.'+k);}else throw Error('uncertain 格式不正确');}
  return d;
@@ -3232,6 +3234,15 @@ function lessonV2MatchTitle(data,snap){
 }
 async function lessonV2Save(d,preview,options={}){
  d=lessonV2Clone(d);
+ const exactBlocks=new Set(d.replaceDialogueBlocks||[]);
+ if(exactBlocks.size){
+  d=lessonV2Parse(d);if(options.exactDialogueReplacement!==true)throw Error('请在整组替换预览中确认，不可按普通合并导入');
+  const key=lessonPackageKey(d),target=preview.snap.learningMaterials.find(m=>m.id===lessonV2Id(key,'block',[...exactBlocks][0])&&!m.deleted&&m.v2Data?.contentType==='dialogue');
+  const owner=preview.snap.learningMaterials.find(m=>m.courseDefinition?.packageKey===key&&!m.courseDeleted&&!m.coursePurged);
+  if(!target||!owner)throw Error('找不到原对话组；不会创建新课程或改动其他组');
+  for(const {r,b} of lessonV2Rows(d)){const old=preview.snap.learningMaterials.find(m=>m.id===lessonV2Id(key,'item',r.itemId));if(old&&old.v2Data?.blockId!==b.id)throw Error('替换条目属于其他对话组，已停止');}
+  options={...options,replace:false,targetCourseId:owner.courseDefinition.id,changes:lessonV2Incoming(d).map(x=>x.id),order:false,course:false};
+ }
  if(d.sourceRevision!==undefined){
   const ref=d.sourceRevision,course=learningCourses(preview.snap).find(c=>c.id===ref?.courseId&&c.packageKey===lessonPackageKey(d));
   if(!course||typeof ref.hash!=='string'||!/^[a-f0-9]{64}$/.test(ref.hash)||await lessonV2SourceRevision(preview.snap,course,preview.entries)!==ref.hash)throw Error('这份课程自导出后已变化，未覆盖。请重新导出后整理，不要删除原资料绕过检查。');
@@ -3256,10 +3267,12 @@ async function lessonV2Save(d,preview,options={}){
   const old=all.find(m=>m.id===x.id)||all.find(m=>m.id===options.materialOrigins?.[x.id]),accept=!old||chosen.has(x.id);let data=accept?lessonV2Clone(x.data):lessonV2Clone(old.v2Data);
   if(x.kind==='section')data.blocks=options.replace?x.data.blocks:lessonV2MergeOrder(old?.v2Data.blocks,x.data.blocks,options.order);
   if(x.kind==='block'&&lessonV2Displays[data.contentType]&&data.contentType!=='knowledge'){const field=data.contentType==='table'?'rows':'items';data.content[field]=options.replace?(x.data.content?.[field]||[]):lessonV2MergeOrder(old?.v2Data.content?.[field],x.data.content?.[field]||[],options.order);
+   if(exactBlocks.has(data.id))data.content.items=[...x.data.content.items];
    if(options.listInsertion?.blockId===x.id){const ids=options.listInsertion.itemIds,current=data.content[field];if(field!=='items'||!Array.isArray(ids)||ids.length!==current.length||new Set(ids).size!==ids.length||ids.some(id=>!current.includes(id)))throw Error('指定位置插入的项目顺序无效，请重新预览');data.content[field]=[...ids];}
   }
   let m={...(old||lessonV2Record(x.kind,x.id,data.title||data.textLao||'教材内容',data)),id:x.id,schemaVersion:2,v2Kind:x.kind,v2Data:data,updatedAt:now};
   if(x.kind==='item'){
+   if(exactBlocks.has(data.blockId))m.deleted=false;
    const type=data.itemType,w=type==='word-ref'?wordMap.get(learningNorm(data.textLao)):null;
    if(type==='word-ref'&&!w&&(!old||accept))throw Error('词条引用无法解析');
    if(!old||accept){const links=[];for(const raw of data.linkedWords||[]){const matches=words.filter(w=>learningNorm(w.word)===learningNorm(raw)),w=wordMap.get(learningNorm(raw))||(matches.length===1?matches[0]:null);if(w){if(!w.syncId){w.syncId=learningUid();wordWrites.push(w);}links.push(w.syncId);}}
@@ -3267,7 +3280,7 @@ async function lessonV2Save(d,preview,options={}){
     m={...m,contentType:type==='word-ref'?'word':type==='reading'?'reading_drill':'sentence',textLao:type==='table'?data.playableText||'表格项目':data.textLao,translationZh:data.translationZh||'',note:data.note||'',tags:[...new Set([...(data.tags||[]),...(d.sections.flatMap(s=>s.blocks).find(b=>b.id===data.blockId)?.tags||[])])],linkedWordSyncIds:w?[w.syncId]:links,pendingLinkedWords:(data.linkedWords||[]).filter(t=>!words.some(w=>links.includes(w.syncId)&&learningNorm(w.word)===learningNorm(t))),unitType:data.unitType||'sentence',purpose:data.purpose|| (type==='dialogue'?'教材对话':''),schemaVersion:2};
    }
    if(old&&old.textLao!==m.textLao){m.audioSources=m.audioSources.map(a=>a.recordedText&&!a.needsReview&&saTextKey(a.recordedText)===saTextKey(m.textLao)?a:{...a,needsReview:true,recordedText:a.recordedText||old.textLao});m.audioNeedsReview=m.audioSources.some(a=>a.needsReview);}
-   const section=type==='reading'?'reading_drill':type==='word-ref'?'word':'sentence',previous=preview.snap.learningPlacements.find(p=>p.id===courseId+':'+m.id);if(previous?.deleted&&options.replace)placeWrites.push({...previous,deleted:false,updatedAt:now});if(!previous)placeWrites.push({...learningPlacementFor(m.id,section,preview.snap.learningPlacements.length+placeWrites.length,course),schemaVersion:2});
+   const section=type==='reading'?'reading_drill':type==='word-ref'?'word':'sentence',previous=preview.snap.learningPlacements.find(p=>p.id===courseId+':'+m.id);if(previous?.deleted&&(options.replace||exactBlocks.has(data.blockId)))placeWrites.push({...previous,deleted:false,updatedAt:now});if(!previous)placeWrites.push({...learningPlacementFor(m.id,section,preview.snap.learningPlacements.length+placeWrites.length,course),schemaVersion:2});
   }
   if(x.kind==='block'&&data.contentType==='knowledge'){m.textLao=data.title||'知识点';m.note=data.content.body;m.alphabetKeys=data.content.alphabet.flatMap(f=>{const a=alphabet.get(alphabetKey(f))||[];return a.length===1?a:[];});m.unresolvedAlphabet=data.content.alphabet.filter(f=>(alphabet.get(alphabetKey(f))||[]).length!==1);}
   if(x.kind==='block'&&data.contentType==='dialogue'){
@@ -3278,6 +3291,10 @@ async function lessonV2Save(d,preview,options={}){
   if(old){const before={...old},after={...m};delete before.updatedAt;delete after.updatedAt;if(cloudSame(before,after))m.updatedAt=old.updatedAt;}
   materialWrites.push(m);
  }
+ if(exactBlocks.size){const keep=new Set(lessonV2Rows(d).map(({r})=>lessonV2Id(key,'item',r.itemId)));for(const old of all)if(old.v2Kind==='item'&&old.id.startsWith('v2:'+key+':item:')&&exactBlocks.has(old.v2Data?.blockId)&&!keep.has(old.id)&&!old.deleted){
+  const places=preview.snap.learningPlacements.filter(p=>p.materialId===old.id&&!p.deleted);for(const p of places)if(p.lessonId===courseId)placeWrites.push({...p,deleted:true,updatedAt:now});
+  if(!places.some(p=>p.lessonId!==courseId))materialWrites.push({...old,deleted:true,removedFromDialogue:old.v2Data.blockId,removalReason:'用户确认整组替换，旧句不在指定正文中',updatedAt:now});
+ }}
  // Keep the owner relation authoritative when an item/block moves; old lists remain harmless historical order.
  const finalMaterials=new Map(all.map(m=>[m.id,m]));for(const m of materialWrites)finalMaterials.set(m.id,m);
  for(const parent of finalMaterials.values())if(parent.id.startsWith('v2:'+key+':block:')&&parent.v2Data?.contentType==='dialogue'){
@@ -3352,8 +3369,17 @@ function lessonV2MeaningSelect(r,matches,i,j,h){
 function lessonV2MeaningQueue(plans,entries){
  return plans.flatMap((p,i)=>!p.data?[]:lessonV2Words(p.data).flatMap((r,j)=>{const matches=entries.filter(w=>learningNorm(w.word)===learningNorm(r.textLao));return matches.length>1?[{i,j,r,matches,title:p.data.course.title}]:[];}));
 }
+async function lessonV2ExactPreview(raw){
+ const d=lessonV2Parse(raw),snap=await learningSnapshot(),entries=await allEntries(),key=lessonPackageKey(d),b=d.sections[0].blocks[0],old=snap.learningMaterials.find(m=>m.id===lessonV2Id(key,'block',b.id)&&!m.deleted&&m.v2Data?.contentType==='dialogue');if(!old)throw Error('找不到原对话组，不会另建课程');
+ const items=b.content.items,h=learningEsc;
+ learningDraft={kind:'v2-exact-dialogue',dirty:true};learningModal('整组替换：'+d.sections[0].title,'<p>本组原有内容将替换为下列 <strong>'+items.length+' 句</strong>，旧句不会混入或追加。其他对话组、词汇和课程不变。</p><ol>'+items.map(r=>'<li><span lang="lo">'+h(r.textLao)+'</span><br>'+h(r.translationZh)+'</li>').join('')+'</ol><p>未保留的旧句从本组移除；原录音保留以便找回，改写句子的旧音频标记待核对。</p><label><input id="v2ExactConfirmed" type="checkbox" style="width:auto">我确认本组只保留以上'+items.length+'句</label><p><button id="v2ExactSave" disabled>替换本组，移除旧句</button><button id="v2ExactCancel">取消</button></p><p id="v2ExactStatus" role="status"></p>');
+ $('#v2ExactConfirmed').onchange=()=>$('#v2ExactSave').disabled=!$('#v2ExactConfirmed').checked;
+ $('#v2ExactCancel').onclick=()=>{if(!learningBusy){learningDraft=null;learningClose();}};
+ $('#v2ExactSave').onclick=async()=>{if(learningBusy||!$('#v2ExactConfirmed').checked)return;learningBusy=true;$('#v2ExactSave').disabled=true;try{const course=await lessonV2Save(d,{snap,entries,chart:{}},{exactDialogueReplacement:true});learningDraft=null;learningLesson=course;learningRoute='lesson';learningDialog.close();await renderLearning();$('#learningStatus').textContent='已整组替换，只保留指定的'+items.length+'句；其他场景未改动。';}catch(e){$('#v2ExactStatus').textContent='未完成替换：'+e.message;$('#v2ExactSave').disabled=false;}finally{learningBusy=false;}};
+}
 async function lessonV2Preview(raw){
  let root=typeof raw==='string'?JSON.parse(raw.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')):raw;
+ if(root?.replaceDialogueBlocks!==undefined)return lessonV2ExactPreview(root);
  if(new Blob([JSON.stringify(root)]).size>5000000)throw Error('整批导入最多 5 MB');const lessons=root.format==='lao-lesson-bundle-v2'?root.lessons:[root];if(!Array.isArray(lessons)||!lessons.length||lessons.length>20)throw Error('每批需要 1–20 课');
  const snap=await learningSnapshot(),entries=await allEntries(),chart=await readAlphabetOverrides(),seen=new Set();let expectedSnap=snap,expectedEntries=entries;
  const plans=lessons.map(value=>{try{const matched=lessonV2MatchTitle(lessonV2Parse(value),snap),data=matched.data,key=lessonPackageKey(data);if(seen.has(key))throw Error('同一批课程 ID 重复，请先合并');seen.add(key);const old=snap.learningMaterials.find(m=>m.id==='course:v2:'+key);return {data,replace:matched.replace,restoreDeleted:Boolean(old?.courseDeleted&&!old?.coursePurged),changes:lessonV2Changes(data,snap)};}catch(e){return {error:e.message};}});

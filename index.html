@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="e2945915b7d68708">
+  <meta name="lao-app-build" content="cb2ec1bf9613470f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9701,14 +9701,23 @@ document.addEventListener('click',e=>{
 <script data-quick-audio-sync>
 /* Persistent, explicit audio-save outbox. Never enroll a historical database. */
 const qaQueueKey='quickAudioOutboxV1',qaMimes=['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'];
-let qaTimer=null,qaRunning=false,qaDelay=1500;
+let qaTimer=null,qaRunning=false,qaDelay=1500,qaToastTimer=null;
 function qaEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-audio-sync'))!=='off';}catch(_){return false;}}
 function qaProgressEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-practice-sync'))!=='off';}catch(_){return false;}}
 function qaAnyEnabled(){return qaEnabled()||qaProgressEnabled();}
 function qaAllowed(records){return records.every(r=>r.progress)?qaProgressEnabled():qaEnabled();}
 function qaMessage(message){
  if(typeof document==='undefined')return;
- let node=document.querySelector('#quickAudioSyncStatus');if(!node){node=document.createElement('div');node.id='quickAudioSyncStatus';node.setAttribute('role','status');node.style.cssText='position:fixed;bottom:16px;left:16px;max-width:min(420px,calc(100vw - 32px));z-index:1000;padding:9px 13px;border:1px solid #cfe3d9;border-radius:10px;background:#f6fbf8;color:#41675c;font-size:12px;box-shadow:0 3px 14px #173e3012;pointer-events:none';document.body.append(node);}node.textContent=message;node.hidden=!message;
+ clearTimeout(qaToastTimer);
+ let node=document.querySelector('#quickAudioSyncStatus');if(!node){
+  node=document.createElement('div');node.id='quickAudioSyncStatus';node.setAttribute('role','status');node.style.cssText='position:fixed;bottom:calc(84px + env(safe-area-inset-bottom,0px));left:16px;max-width:min(420px,calc(100vw - 32px));box-sizing:border-box;z-index:1000;padding:6px 8px 6px 12px;border:1px solid #cfe3d9;border-radius:10px;background:#f6fbf8;color:#41675c;font-size:12px;box-shadow:0 3px 14px #173e3012';
+  const text=document.createElement('span');text.id='quickAudioSyncMessage';node.append(text);
+  const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','关闭同步提示');close.style.cssText='display:inline-flex;align-items:center;justify-content:center;width:36px;min-width:36px;height:36px;min-height:36px;margin:0 0 0 8px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;font-size:20px;vertical-align:middle;box-shadow:none';
+  close.onclick=()=>{node.hidden=true;clearTimeout(qaToastTimer);};node.append(close);document.body.append(node);
+ }
+ const text=node.querySelector?.('#quickAudioSyncMessage');if(text)text.textContent=message;else node.textContent=message;node.hidden=!message;
+ // Dismissing the toast never pauses uploads or erases the detailed sync status.
+ if(message)qaToastTimer=setTimeout(()=>{node.hidden=true;},/已同步\s*✓/.test(message)?2200:8000);
  const label=document.querySelector('#quickAudioSyncDetail');if(label)label.textContent=message;
 }
 function qaStage(store,records){

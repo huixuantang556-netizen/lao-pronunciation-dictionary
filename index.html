@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="22f9554c97367950">
+  <meta name="lao-app-build" content="db1c50099f437146">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3406,7 +3406,7 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  else if(b.contentType==='knowledge')body='<p class="learn-note">'+h(x.body)+'</p><div class="learn-glyphs">'+(m.alphabetKeys||[]).map(k=>{const [r,c]=k.split(':').map(Number),f=chart[k]??window.learningAlphabetRows()[r]?.[2][c];return f?'<button class="learn-glyph" lang="lo" data-learn="glyph" data-form="'+h(f)+'" data-alphabet-key="'+h(k)+'">'+h(f.replaceAll('x','◌'))+'</button>':'';}).join('')+'</div>'+((m.unresolvedAlphabet||[]).length?'<p>待关联字母：'+h(m.unresolvedAlphabet.join('、'))+'</p>':'');
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
- else body=(b.contentType==='dialogue'?'<div class="learn-card-actions" aria-label="整段对话操作"><button data-learn="play" data-id="'+h(m.id)+'">▶ 播放整段对话</button><button data-dialogue-split="'+h(m.id)+'">✂ 切分已有整段音频</button><button data-learn="v2-stop-dialogue">■ 停止播放</button><button data-learn="detail" data-id="'+h(m.id)+'">录音／音频管理</button></div>':'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
+ else body=(b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
  return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
@@ -3763,6 +3763,30 @@ async function lessonPageAudioMenu(page){
  $('#pageAudioWhole').onclick=async()=>{try{learningDialog.close();await lessonPagePrepare(page);}catch(error){learningError(error);}};
  for(const button of learningDialog.querySelectorAll('[data-page-audio-group]'))button.onclick=async()=>{try{const block=groups[Number(button.dataset.pageAudioGroup)];learningDialog.close();await wordAudioSelect(lessonV2Id(course.packageKey,'block',block.id));}catch(error){learningError(error);}};
 }
+function lessonDialogueControls(id){
+ const h=learningEsc;
+ return '<div class="dialogue-group-player" data-dialogue-player="'+h(id)+'"><div class="dialogue-group-controls" role="group" aria-label="本组对话音频"><button type="button" data-dialogue-action="play">'+lessonIcon('play')+'播放本组</button><button type="button" data-dialogue-action="stop">'+lessonIcon('stop')+'停止</button><button type="button" data-dialogue-action="record">'+lessonIcon('mic')+'录制参考音</button><button type="button" data-dialogue-action="manage">'+lessonIcon('audio')+'音频管理</button></div><p data-page-status role="status"></p></div>';
+}
+async function lessonDialogueAction(action,button){
+ const bar=button.closest('[data-dialogue-player]'),status=bar?.querySelector('[data-page-status]');if(!bar)return;
+ if(action==='stop'){stopPracticeAudio();lessonPageClearProgress(bar);status.textContent='已停止本组播放';return;}
+ if(batchAudioBusy||learningBusy||recorder||learningHasWork())throw Error('请先完成编辑、录音或音频生成');
+ const id=bar.dataset.dialoguePlayer;
+ if(action==='record'){await cfRecord(id,{button,quick:true,autoStart:true});return;}
+ if(action==='manage'){
+  stopPracticeAudio();await learningOpenDetail(id);
+  if(learningDetail===id&&typeof ssOpenManagement==='function')ssOpenManagement(learningDialog,'audio');
+  return;
+ }
+ if(action!=='play')return;
+ const course=learningLesson,snap=await learningSnapshot();
+ if(button.isConnected===false||learningLesson.id!==course.id)return;
+ const data=lessonV2Export(snap,course),block=data.sections.flatMap(s=>s.blocks).find(b=>lessonV2Id(course.packageKey,'block',b.id)===id&&b.contentType==='dialogue');
+ if(!block)throw Error('本组对话已变化，请重新打开课程');
+ const words=lessonPageItems({id:'dialogue',blocks:[block]},course,true);
+ if(!words.length)throw Error('本组暂无可播放的词句');
+ await lessonPageListen({title:block.title||'本组对话',words},bar);
+}
 async function lessonPageSelectMissing(page){
  if(batchAudioBusy||learningBusy||recorder||learningHasWork())throw Error('请先完成编辑、录音或音频生成');
  stopPracticeAudio();
@@ -3857,6 +3881,12 @@ function lessonPageFollow(){
 function lessonPageScheduleFollow(){if(lessonPageFollowFrame)return;if(typeof window==='undefined'||!window.requestAnimationFrame){lessonPageFollow();return;}lessonPageFollowFrame=true;window.requestAnimationFrame(()=>{lessonPageFollowFrame=false;lessonPageFollow();});}
 document.addEventListener('scroll',lessonPageScheduleFollow,true);
 if(typeof window!=='undefined'){window.addEventListener?.('resize',lessonPageScheduleFollow);window.visualViewport?.addEventListener('resize',lessonPageScheduleFollow);window.visualViewport?.addEventListener('scroll',lessonPageScheduleFollow);}
+document.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-dialogue-action]');if(!button||!button.dataset.dialogueAction||e.detail>1)return;
+ e.preventDefault();button.disabled=true;
+ try{await lessonDialogueAction(button.dataset.dialogueAction,button);}catch(error){const status=button.closest('[data-dialogue-player]')?.querySelector('[data-page-status]');if(status)status.textContent=error.message;}
+ finally{button.disabled=false;}
+});
 </script>
 <script data-learning-bundle="course-editor">
 /* In-place course organization; dictionary entries and audio blobs are never replaced. */
@@ -8924,6 +8954,12 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 </script>
 <style data-learning-bundle="study-comfort">
 .cf-mask-controls,.cf-word-controls,.page-progress{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin:.8rem 0}
+.dialogue-group-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+#learningPanel .dialogue-group-controls button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:10px 14px;border:1px solid #d6e7df;border-radius:12px;background:#f1f8f5;color:#24584d}
+#learningPanel .dialogue-group-controls [data-dialogue-action="play"]{background:#087e6d;border-color:#087e6d;color:white}
+.dialogue-group-player [data-page-status]:empty{display:none}
+.dialogue-group-player [data-page-status]{font-size:13px;color:#537368;overflow-wrap:anywhere}
+@media(max-width:600px){#learningPanel .dialogue-group-controls button{flex:1 0 calc(50% - 8px)}}
 #learningPanel .comm-detail .v2-sentences .learn-card>small{grid-column:1/-1;grid-row:2;display:block;max-width:100%;box-sizing:border-box;margin:0;padding:0 14px 10px;font-size:12px;line-height:1.5;color:#8a6b31;overflow-wrap:anywhere}
 @media(min-width:601px){#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-main{grid-column:1;grid-row:1;min-width:0}#learningPanel .comm-detail .v2-sentences .learn-card>.learn-card-actions{grid-column:2;grid-row:1}}
 .page-progress label{flex:1;min-width:180px}.page-progress input{display:block;width:100%}.page-progress span{font-variant-numeric:tabular-nums}

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b036fa9b6a521e08">
+  <meta name="lao-app-build" content="e2945915b7d68708">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9553,7 +9553,7 @@ const btEntry=document.createElement('button');btEntry.type='button';btEntry.cla
 <script data-learning-bundle="mobile-lesson-entry">
 /* Mobile course entry: move existing controls, keep delegates and course data intact. */
 function mleCompact(content){
- if(!content||content.querySelector('.mle-top'))return;
+ if(!content||!window.matchMedia('(max-width:640px)').matches||content.querySelector('.mle-top'))return;
  const quick=content.querySelector('.learn-quick-nav'),title=[...content.children].find(n=>n.tagName==='H2');
  if(!title&&!quick)return;
  content.dataset.mleReady='true';content.classList.add('mle-lesson');
@@ -9587,7 +9587,7 @@ const mleViewport=window.matchMedia('(max-width:640px)');
 mleViewport.addEventListener?.('change',()=>{if(activeView==='learning'&&learningRoute==='lesson'&&!learningBusy&&!learningHasWork()&&!recorder)void renderLearning();});
 </script>
 <style data-learning-bundle="mobile-lesson-entry">
-@media(min-width:0px){
+@media(max-width:640px){
  #learningPanel .mle-top>.lc-course-picker{min-width:0;width:100%;max-width:100%}#learningPanel .mle-top>.lc-course-picker>.lc-picker-button{min-height:44px;height:auto;min-width:0;padding:8px;font-size:14px}
  #learningPanel #learningContent.mle-lesson{padding:0;min-width:0}
  #learningPanel .mle-top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:6px;margin:0 0 12px;padding:0;border:0;position:relative;z-index:5}
@@ -10282,22 +10282,18 @@ document.addEventListener('click',event=>{
 document.addEventListener('pointerover',event=>{if(event.target.closest?.('#viewNav,[data-learning-group],[data-learning-category]'))void lnGetData().catch(()=>{});},{passive:true});
 </script>
 <style data-navigation-fast="navigation-fast.css">
-/* One navigation layout on desktop and phone; no intermediate legacy controls. */
+/* Mobile compaction is mobile-only. Desktop retains its original wide layout. */
 #learningContent[data-navigation-pending]{visibility:hidden;min-height:240px;pointer-events:none}
 @media(min-width:641px){
- #learningPanel .mle-top{grid-template-columns:auto minmax(180px,560px) auto;justify-content:start;gap:10px;margin-bottom:24px;align-items:center}
- #learningPanel .mle-top>button,#learningPanel .mle-more>summary,#learningPanel .mle-top>.lc-course-picker>.lc-picker-button{background:#f2f6f2;border-color:#e1e9e2;border-radius:11px;box-shadow:none;font-size:14px;padding:8px 14px;min-height:44px}
- #learningPanel .mle-more{position:relative}
- #learningPanel .mle-menu{top:50px;left:0;right:auto;width:300px;max-width:calc(100vw - 80px)}
- #learningPanel .mle-lesson>h2{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:25px;line-height:1.5;margin:0 0 24px}
- #learningPanel .mle-chapter-test{font-size:13px;min-height:40px;padding:7px 14px;border-radius:10px;background:#edf6f1;border-color:#cfe1d5;color:#24614e;white-space:nowrap}
- #learningPanel .mle-lesson>.learning-primary-groups{display:flex;max-width:560px;padding:4px;gap:4px;background:#edf2ee;border-radius:13px;margin:0 0 14px}
- #learningPanel .mle-lesson>.learning-primary-groups button{flex:1;min-height:44px;padding:8px 20px;border:0;border-radius:10px;font-size:16px;font-weight:600;background:transparent;color:#6c8076;box-shadow:none}
- #learningPanel .mle-lesson>.learning-primary-groups button[aria-pressed=true]{background:#fff;color:#0f7059;box-shadow:0 2px 6px #1b503a0d}
- #learningPanel .mle-lesson>.learning-secondary-groups{gap:8px;margin:0 0 22px}
- #learningPanel .mle-lesson>.learning-secondary-groups button{font-size:13px;min-height:38px;padding:8px 14px;border:0;border-radius:10px;background:#f0f4f0;color:#687e70;box-shadow:none}
- #learningPanel .mle-lesson>.learning-secondary-groups button[aria-pressed=true]{background:#dcefe5;color:#15694f;font-weight:600}
- #learningPanel .mle-lesson .learn-card-actions button{box-shadow:none}
+ /* Cosmetic changes only: no widths, grid columns, ordering or node movement. */
+ #learningPanel .learn-quick-nav>button,#learningPanel .learn-quick-nav .lc-picker-button{background:#f2f6f2;border-color:#e1e9e2;border-radius:11px;box-shadow:none;font-size:14px}
+ #learningPanel .learning-primary-groups{padding:4px;gap:4px;border-radius:13px;background:#edf2ee}
+ #learningPanel .learning-primary-groups button{border:0;border-radius:10px;background:transparent;color:#6c8076;box-shadow:none}
+ #learningPanel .learning-primary-groups button[aria-pressed=true]{background:#fff;color:#0f7059;box-shadow:0 2px 6px #1b503a0d}
+ #learningPanel .learning-secondary-groups button{border:0;border-radius:10px;background:#f0f4f0;color:#687e70;box-shadow:none}
+ #learningPanel .learning-secondary-groups button[aria-pressed=true]{background:#dcefe5;color:#15694f;font-weight:600}
+ #learningPanel .page-player-controls>button{border:0;border-radius:10px;background:#f0f5f1;color:#417762;box-shadow:none}
+ #learningPanel .page-player-controls>.page-play{background:#087f70;color:#fff}
 }
 </style>
 <script src="./offline.js"></script>

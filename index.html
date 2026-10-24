@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="dbb365437aa2cd08">
+  <meta name="lao-app-build" content="c4e8638eeb050369">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3412,9 +3412,9 @@ async function lessonV2Render(snap,words){if(typeof lessonPageStop==='function')
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
- const sectionHtml=s=>s.numberLab?nlHtml(c):'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
+ const sectionHtml=s=>s.numberLab?nlHtml(c):'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(!grouped&&typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block,!!grouped):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
  return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><div class="learn-course-tools'+(learningSettings?' is-settings':'')+'"><button type="button" data-course-test="course">本章检测</button>'+(learningSettings?'<button type="button" data-learn="course-edit">修改名称／简介</button><button type="button" data-learn="v2-organize">整理分类与内容</button><button type="button" data-analysis-batch>语法分析（文字）</button><button type="button" data-phonetic-batch>读法分析（文字）</button><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button>':'')+'</div>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
- (grouped?grouped.nav+(grouped.sections.length?grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
+ (grouped?grouped.nav+(grouped.sections.length?(typeof lessonGroupedToolbar==='function'?lessonGroupedToolbar(grouped,c):'')+grouped.sections.map(sectionHtml).join(''):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
  '<details class="v2-view-options"><summary>更多查看方式</summary><button data-learn="v2-order">教材顺序（小节切换）</button><button data-learn="v2-category">分类查看</button>'+(learningSettings?'<button data-learn="v2-export">导出带 ID 的课程 JSON</button>':'')+'</details>'+
  (lessonV2Mode==='category'?'<nav class="learn-tabs">'+['all',...types].map(t=>'<button data-learn="v2-filter" data-key="'+h(t)+'" aria-current="'+(lessonV2Filter===t?'page':'false')+'">'+h(({all:'全部',knowledge:'知识','word-ref':'词汇',reading:'朗读',sentence:'句子',dialogue:'对话',table:'表格'})[t]||t)+'</button>').join('')+'</nav>'+d.sections.filter(s=>s.blocks.some(b=>lessonV2Filter==='all'||lessonV2Filter===b.contentType)).map(sectionHtml).join(''):(selected?sectionHtml(selected):'<p>本课暂无小节。</p>')));
@@ -3475,7 +3475,8 @@ async function communicationAction(a,b){
 }
 document.addEventListener('change',e=>{if(e.target.id==='communicationScene'){communicationScene=e.target.value;void renderLearning();}});
 const communicationDialogs=new Map();
-function communicationSection(s,block){
+function communicationSection(s,block,grouped=false){
+ if(grouped)return '<section class="comm-detail">'+s.blocks.map(block).join('')+'</section>';
  const h=learningEsc,ds=s.blocks.filter(b=>b.contentType==='dialogue'),key=learningLesson.id+':'+s.id,selected=ds.find(b=>b.id===communicationDialogs.get(key))||ds[0];
  const nav=ds.length?'<nav class="comm-dialogue-nav" aria-label="切换对话">'+ds.map((b,i)=>'<button data-learn="comm-dialogue" data-section="'+h(key)+'" data-key="'+h(b.id)+'" aria-pressed="'+(b.id===selected.id)+'">'+(i+1)+'. '+h(b.title||'对话')+'</button>').join('')+'</nav>':'';
  return '<section class="comm-detail">'+nav+s.blocks.filter(b=>b.contentType!=='dialogue'||b.id===selected?.id).filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType).map(block).join('')+'</section>';
@@ -3639,10 +3640,14 @@ async function lessonQueueDurations(playlist,current){
 }
 function lessonPageStop(){lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
-function lessonPageItems(section,course){
+function lessonPageItems(section,course,grouped=false){
  let blocks=section.blocks;
- if(course.library==='communication'){const ds=blocks.filter(b=>b.contentType==='dialogue'),selected=ds.find(b=>b.id===communicationDialogs.get(course.id+':'+section.id))||ds[0];blocks=blocks.filter(b=>b.contentType!=='dialogue'||b===selected);}
- return blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||b.contentType===lessonV2Filter).flatMap(b=>b.contentType==='knowledge'?[]:(b.content.items||b.content.rows||[]).map(r=>({id:lessonV2Id(course.packageKey,'item',r.itemId),blockId:lessonV2Id(course.packageKey,'block',b.id),word:r.textLao||r.playableText||'',meaning:r.translationZh||''}))).filter(w=>w.word.trim());
+ if(!grouped&&course.library==='communication'){const ds=blocks.filter(b=>b.contentType==='dialogue'),selected=ds.find(b=>b.id===communicationDialogs.get(course.id+':'+section.id))||ds[0];blocks=blocks.filter(b=>b.contentType!=='dialogue'||b===selected);}
+ return blocks.filter(b=>grouped||lessonV2Mode!=='category'||lessonV2Filter==='all'||b.contentType===lessonV2Filter).flatMap(b=>b.contentType==='knowledge'?[]:(b.content.items||b.content.rows||[]).map(r=>({id:lessonV2Id(course.packageKey,'item',r.itemId),blockId:lessonV2Id(course.packageKey,'block',b.id),word:r.textLao||r.playableText||'',meaning:r.translationZh||''}))).filter(w=>w.word.trim());
+}
+function lessonGroupedToolbar(view,course){
+ const words=view.sections.flatMap(s=>lessonPageItems(s,course,true));
+ return lessonPageToolbarFor(words,view.title,course.id+':grouped');
 }
 function lessonPageToolbar(section,course){
  const words=lessonPageItems(section,course);if(!words.length)return '';
@@ -5771,7 +5776,7 @@ function learningGroupView(data,course){
  const category=categories.some(b=>b.id===state.category)?state.category:'';
  const h=learningEsc;
  const nav='<nav class="learning-primary-groups" aria-label="内容分类">'+[['words','单词'],['dialogue','情景对话']].map(([key,title])=>'<button type="button" data-learning-group="'+key+'" aria-pressed="'+(state.kind===key)+'">'+title+'</button>').join('')+'</nav><nav class="learning-secondary-groups" aria-label="细分类别"><button type="button" data-learning-category="" aria-pressed="'+(!category)+'">全部'+(state.kind==='words'?'单词':'情景')+'</button>'+categories.map(b=>'<button type="button" data-learning-category="'+h(b.id)+'" aria-pressed="'+(category===b.id)+'">'+h(b.title)+'</button>').join('')+(learningSettings?'<button type="button" data-create-course-group="'+state.kind+'">＋ 新建'+(state.kind==='words'?'单词分类':'对话场景')+'</button>':'')+'</nav><details class="learning-original-access"><summary>其他资料与原章节</summary><p>知识点、表格及原章节顺序保留在这里。</p><button type="button" data-learning-group="original">查看原章节</button></details>';
- return {nav,sections:sections.map(s=>({...s,blocks:s.blocks.filter(b=>!category||b.id===category)})).filter(s=>s.blocks.length)};
+ return {nav,title:category?categories.find(b=>b.id===category).title:(state.kind==='words'?'全部单词':'全部情景'),sections:sections.map(s=>({...s,blocks:s.blocks.filter(b=>!category||b.id===category)})).filter(s=>s.blocks.length)};
 }
 learningPanel.addEventListener('click',async e=>{
  const b=e.target.closest('[data-learning-group],[data-learning-category]');if(!b)return;

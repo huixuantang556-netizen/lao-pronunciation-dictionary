@@ -1,5 +1,5 @@
 // Build replaces this token with a digest of the complete app shell.
-const VERSION = '3b0103024a58988a';
+const VERSION = '4007f0f74a4e69bd';
 const PREFIX = 'lao-shell-' + encodeURIComponent(self.registration.scope) + '-';
 const CACHE = PREFIX + VERSION;
 const FILES = ['./', 'manifest.webmanifest', 'offline.js', 'icon-192.png', 'icon-512.png', 'assets/fonts/NotoSansLaoLooped-Variable.woff2', 'assets/fonts/NotoSansLaoLooped-Variable.ttf'];

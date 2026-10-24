@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="3b0103024a58988a">
+  <meta name="lao-app-build" content="4007f0f74a4e69bd">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -544,7 +544,7 @@ async function importCodaClassroom(){
     let ttsSettings={};try{ttsSettings=JSON.parse(localStorage.getItem(workspaceName('lao-tts-settings')))||{};}catch(_){}
     const ttsPending=new Map();let playbackGeneration=0;
     function ttsCache(mode,key,value) {
-      return new Promise((resolve,reject)=>{const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);open.onupgradeneeded=()=>open.result.createObjectStore('audio');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const cache=open.result,tx=cache.transaction('audio',mode),store=tx.objectStore('audio');let result;const req=value?store.put(value,key):store.get(key);req.onsuccess=()=>{result=req.result;};tx.oncomplete=()=>{cache.close();resolve(result);};tx.onabort=()=>{cache.close();reject(tx.error);};tx.onerror=()=>{};};});
+return new Promise((resolve,reject)=>{const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);open.onupgradeneeded=()=>open.result.createObjectStore('audio');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const cache=open.result,tx=cache.transaction('audio',mode),store=tx.objectStore('audio');let result;const req=value?store.put(value,key):store.get(key);req.onsuccess=()=>{result=req.result;};tx.oncomplete=async()=>{cache.close();if(value&&typeof qaDefaultSaved==='function')await qaDefaultSaved(key,value);resolve(result);};tx.onabort=()=>{cache.close();reject(tx.error);};tx.onerror=()=>{};};});
     }
     async function defaultSpeech(text,options={}) {
       const key=JSON.stringify([ttsSettings.endpoint||'',text]);
@@ -552,7 +552,7 @@ async function importCodaClassroom(){
       if(!options.force&&!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;const rows=await cloudCacheRows();const saved=rows.find(row=>{try{return JSON.parse(row.key)[1]===text;}catch(_){return false;}});if(saved?.blob instanceof Blob)return saved.blob;}
       if(!ttsSettings.endpoint||!ttsSettings.token)throw new Error('请先展开“在线发音设置”，配置服务地址和访问口令。');
       if(ttsPending.has(key)){if(options.force)throw Error('本条正在生成，请等待完成后再操作。');return ttsPending.get(key);}
-      const job=(async()=>{speechResultGuard(key);speechRateGate();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),195000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA',...(options.batchPause?{batchPause:true}:{})}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}if(response.status===429)speechRateLimit();const error=new Error(message);error.status=response.status;throw error;}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{if(!options.previewOnly)await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}speechResultClear();return blob;}catch(error){if(error.name==='AbortError'||error.name==='TimeoutError'||error instanceof TypeError||error.status>=500){speechResultUncertain(key);throw new Error('未收到可用音频结果。请求可能已处理并消耗额度；不会自动重试。请至少等待 2 分钟，核对用量后再决定是否重新提交。'+(error.message?' 原因：'+error.message:''));}throw error;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
+const job=(async()=>{speechResultGuard(key);speechRateGate();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),195000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA',...(options.batchPause?{batchPause:true}:{})}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}if(response.status===429)speechRateLimit();const error=new Error(message);error.status=response.status;throw error;}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{if(!options.previewOnly)await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}speechResultClear();return blob;}catch(error){if(error.name==='AbortError'||error.name==='TimeoutError'||error instanceof TypeError||error.status>=500){speechResultUncertain(key);throw new Error('未收到可用音频结果。请求可能已处理并消耗额度；不会自动重试。请至少等待 2 分钟，核对用量后再决定是否重新提交。'+(error.message?' 原因：'+error.message:''));}throw error;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
     }
 function speechResultGuard(key){
  const raw=localStorage.getItem(workspaceName('speech-uncertain-result'));if(!raw)return;let record;try{record=JSON.parse(raw);}catch(_){return;}
@@ -1131,7 +1131,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     restoreTagMode('dictionaryTagMode','any');restoreTagMode('practiceTagMode','all');
     $('#dictionaryTagMode').onchange=()=>{saveTagMode('dictionaryTagMode');dictionaryPage=1;render();};
     $('#practiceTagMode').onchange=()=>{saveTagMode('practiceTagMode');render().then(choosePractice);};
-    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={...codaEntryFields(old),learningState:old?.learningState,noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; if(typeof returnToEntryOrigin==='function')await returnToEntryOrigin();else {await render();choosePractice();}}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
+    $('#entryForm').onsubmit=async e=>{e.preventDefault(); if(noteImagesBusy){alert('图片还在处理中，请稍候保存。');return;} if(recorder){alert('请先停止录音，等录音准备完成。');return;} try{const old=editingId?await getEntry(editingId):null, savedBlob=removePersonalAudio?null:(currentBlob??audioBlobFor(old)), audio=await audioPayload(savedBlob), value={...codaEntryFields(old),learningState:old?.learningState,noteImages:validateNoteImages(noteImageDraft),word:$('#word').value.trim(),ipa:$('#ipa').value.trim(),meaning:$('#meaning').value.trim(),category:$('#category').value.trim(),note:$('#note').value.trim(),syncId:old?.syncId||newSyncId(),syncAliases:old?syncKeys(old):[],...audio,updatedAt:Date.now(),mistakes:Number(old?.mistakes)||0,reviews:Number(old?.reviews)||0,correct:Number(old?.correct)||0,needsExtraPractice:Boolean(old?.needsExtraPractice),lastReviewed:Number(old?.lastReviewed)||0,reviewStats:old?.reviewStats||{}}, id=typeof qaSaveEntry==='function'&&qaEnabled()?await qaSaveEntry(value,editingId,old):editingId?await putEntry({...value,id:editingId}):await addEntry(value), verified=await getEntry(id), verifiedBlob=audioBlobFor(verified); if(savedBlob&&(!verifiedBlob||verifiedBlob.size!==savedBlob.size))throw new Error('录音回读验证失败'); if(!savedBlob&&verifiedBlob)throw new Error('录音删除验证失败'); await requestPersistentStorage(); resetForm(); if(savedBlob)$('#recordStatus').textContent=`已保存并回读验证录音（${savedBlob.size} 字节）。`; if(typeof returnToEntryOrigin==='function')await returnToEntryOrigin();else {await render();choosePractice();}}catch(error){alert(`词条没有保存成功：${error.message||'数据库暂时不可用，请重试。'}`);}};
     $('#cancelButton').onclick=()=>{if(recorder){alert('请先停止录音，等录音准备完成。');return;}resetForm();void returnToEntryOrigin();}; $('#search').oninput=()=>{dictionaryPage=1;render();}; $('#pageSize').onchange=()=>{dictionaryPage=1;render();};
     $('#dictionaryTags').onclick=e=>{const button=e.target.closest('[data-dictionary-tag]');if(!button)return;const tag=button.dataset.dictionaryTag;selectedDictionaryTags.has(tag)?selectedDictionaryTags.delete(tag):selectedDictionaryTags.add(tag);dictionaryPage=1;render();};
     $('#clearDictionaryTags').onclick=()=>{selectedDictionaryTags.clear();dictionaryPage=1;render();};
@@ -1650,6 +1650,7 @@ async function cloudReadRemote(uid,api,table,known,status){
         if(expectedUid&&session?.user.id!==expectedUid)throw new Error('账号已改变，同步已停止。');
         return cloudRequest(path,{...options,token:session.token});
       }
+      window.laoQuickAudioBridge={uid:()=>session?.user.id||null,busy:()=>busy,request:(uid,path,options={})=>authenticatedRequest(path,options,uid)};
       let syncProgress=null,progressRunning=false;
       const status=(message,progress)=>{$('#cloudStatus').textContent=message;if(progressRunning)syncProgress.update(message,progress);if(progressRunning&&window.laoSyncFeedback)window.laoSyncFeedback({running:true,message});};
       function beginProgress(){if(!syncProgress)syncProgress=cloudProgressView($('#cloudStatus'));progressRunning=true;syncProgress.reset();syncProgress.start();status('正在连接云端…');}
@@ -1665,6 +1666,7 @@ async function cloudReadRemote(uid,api,table,known,status){
         $('#cloudEnterButton').classList.toggle('hidden',!session||inAccount);
         for(const id of ['cloudLoginButton','cloudCheckButton','cloudLogoutButton','cloudEmail','cloudPassword','cloudRemember','cloudEnterButton','cloudSyncButton','cloudGuestButton'])$('#'+id).disabled=busy;
         $('#cloudSyncButton').disabled=busy||!inAccount;
+        if(typeof qaKick==='function'&&!busy)qaKick();
       }
       async function cloudRequest(path,{method='GET',body,token,rawBody,blobResponse=false,extraHeaders={}}={}){
         const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
@@ -1722,12 +1724,16 @@ async function cloudReadRemote(uid,api,table,known,status){
         finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
       learningSyncButton.onclick=async()=>{
+        if(typeof window!=='undefined'&&window.laoQuickSyncBusy){status('语音正在上传，请稍后再下载。');return;}
+        if(typeof qaPause==='function')qaPause();
         if(busy)return;if(!session||session.user.id!==cloudWorkspace){status('请先进入同一账号词典，再同步学习资料。');return;}
         busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
         try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status,{direction:'download'});if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
         catch(e){status('学习资料下载未完成：'+e.message+'。本次没有上传；已完成的下载可能已保存，请保留本机资料。');}finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
       const startCloudSync=async(direction='bidirectional')=>{
+        if(typeof window!=='undefined'&&window.laoQuickSyncBusy){status('一条语音正在同步，请稍后再进行完整同步。');return;}
+        if(direction==='download'&&typeof qaPause==='function')qaPause();
         if(busy)return;
         if(!session){status('请先登录。');return;}
         if(session.user.id!==cloudWorkspace){status('请先点击“进入此账号词典”；原本机词典保留不变。');return;}
@@ -1738,6 +1744,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           const task=async()=>{const api=(path,options={})=>syncRequest(uid,path,options);if(await runCloudSync(uid,api,status,{direction}))await learningCloudSync(uid,api,status,{direction,requireUploadConfirmation:true});};
           if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
           else await task();
+          if(direction!=='download'&&typeof qaAfterManual==='function')await qaAfterManual();
         }catch(error){status((direction==='download'?'云端下载未完成：':'双向同步未完成：')+error.message+(direction==='download'?' 本次没有上传；已完成的下载可能已保存，请保留本机数据。':' 已确认并成功上传的项目可能已保存，请保留本机数据。'));}
         finally{endProgress();busy=false;learningSyncButton.disabled=false;downloadSyncButton.disabled=false;updateUI();}
       };
@@ -2483,12 +2490,12 @@ function learningHasWork(){return Boolean(learningBusy||learningRecorder||learni
 async function learningRows(store){if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate&&learningStores.includes(store))return (await learningSnapshot())[store];const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(store,'readonly'),r=t.objectStore(store).getAll();t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(t.error);});}
 async function learningSnapshot(){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return learningReadSnapshot();return scope.snapshot||(scope.snapshot=learningReadSnapshot());}
 async function learningReadSnapshot(){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(learningStores,'readonly'),out={};for(const s of learningStores){const r=t.objectStore(s).getAll();r.onsuccess=()=>out[s]=r.result;}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
-async function learningWrite(rows,expected=null){
+async function learningWrite(rows,expected=null,options={}){
  for(const kind of Object.keys(rows))for(const row of rows[kind])learningValidateRecord(kind,row);
- const d=await openDB(),names=Object.keys(rows),t=d.transaction(names,'readwrite'),done=transactionDone(t);let failure;
- const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);}catch(e){failure=e;t.abort();}};
+ const d=await openDB(),names=Object.keys(rows),quick=options.quickAudio&&typeof qaStage==='function'&&qaEnabled(),t=d.transaction(quick?[...names,'cloud_meta']:names,'readwrite'),done=transactionDone(t);let failure;
+ const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,before:expected?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
  if(expected){let left=names.length;for(const s of names){const q=t.objectStore(s).getAll();q.onsuccess=()=>{if(!cloudSame(q.result,expected[s])){failure=new Error('另一个页面修改了学习材料，请重新打开后再保存。');t.abort();return;}if(--left===0)write();};}}else write();
- try{await done;}catch(e){throw failure||e;}
+ try{await done;}catch(e){throw failure||e;}if(quick)qaKick();
 }
 function learningFindWord(ref,words){return words.find(x=>syncKeys(x).includes(ref));}
 function learningWordMaterial(word){return {id:'word:'+word.syncId,contentType:'word',linkedWordSyncIds:[word.syncId],textLao:'',translationZh:'',tags:[],note:'',focusLetters:[],focusVowels:[],audioSources:[],sourceType:'textbook_vocab',updatedAt:Date.now()};}
@@ -2726,7 +2733,7 @@ function learningRefreshAudioReview(m,text){
  const state=learningAudioReviewState(m,text);
  for(const card of document.querySelectorAll('[data-card-id]')){if(card.dataset.cardId!==m.id)continue;card.dataset.audioReview=String(state.needsReview);if(!state.needsReview){card.querySelector('[data-audio-review-notice]')?.remove();card.querySelector('[data-audio-error]')?.remove();}}
 }
-async function learningSaveRecording({closeAfterSave=false}={}){if(!learningPendingRecording?.size)throw new Error('请先录音。');const session=globalThis.learningRecordingContext,{m,w,snap}=await learningResolve(session?.target||learningDetail);if(m.deleted)throw Error('词条已移除，录音尚未保存');const asset={id:learningUid(),name:(learningRecordingRole==='reference'?'手录参考发音 ':'跟读 ')+new Date().toLocaleString(),blob:learningPendingRecording,updatedAt:Date.now()};const saved={...m,...(learningRecordingRole==='reference'?{audioNeedsReview:false}:{}),audioSources:[...m.audioSources,{source:'user',role:learningRecordingRole,recordedText:w?.word||m.textLao,assetId:asset.id,start:0,end:null}],updatedAt:Date.now()};await learningWrite({learningAudio:[asset],learningMaterials:[{...saved,...(m.schemaVersion===2&&learningRecordingRole==='reference'?{defaultAudioKey:'user:'+asset.id}:{})}]},snap);learningRefreshAudioReview(saved,w?.word||m.textLao);if(session){session.finish(true);return;}if(closeAfterSave){learningPendingRecording=null;learningDraft=null;learningDialog.close();$('#learningStatus').textContent='参考发音已保存';return;}await learningOpenDetail(m.id);}
+async function learningSaveRecording({closeAfterSave=false}={}){if(!learningPendingRecording?.size)throw new Error('请先录音。');const session=globalThis.learningRecordingContext,{m,w,snap}=await learningResolve(session?.target||learningDetail);if(m.deleted)throw Error('词条已移除，录音尚未保存');const asset={id:learningUid(),name:(learningRecordingRole==='reference'?'手录参考发音 ':'跟读 ')+new Date().toLocaleString(),blob:learningPendingRecording,updatedAt:Date.now()};const saved={...m,...(learningRecordingRole==='reference'?{audioNeedsReview:false}:{}),audioSources:[...m.audioSources,{source:'user',role:learningRecordingRole,recordedText:w?.word||m.textLao,assetId:asset.id,start:0,end:null}],updatedAt:Date.now()};await learningWrite({learningAudio:[asset],learningMaterials:[{...saved,...(m.schemaVersion===2&&learningRecordingRole==='reference'?{defaultAudioKey:'user:'+asset.id}:{})}]},snap,{quickAudio:true});learningRefreshAudioReview(saved,w?.word||m.textLao);if(session){session.finish(true);return;}if(closeAfterSave){learningPendingRecording=null;learningDraft=null;learningDialog.close();$('#learningStatus').textContent='参考发音已保存';return;}await learningOpenDetail(m.id);}
 async function learningAudioFields(){const assets=await learningRows('learningAudio');return '<label>上传教材音频<input id="learnAudioFile" type="file" accept="audio/*"></label><label>或使用已保存音轨<select id="learnAudioAsset"><option value="">不添加／保留已有音频</option>'+assets.map(a=>'<option value="'+learningEsc(a.id)+'">'+learningEsc(a.name)+'</option>').join('')+'</select></label><p class="tag-hint">同一音轨可供多条材料使用。每段音频不超过 20 MiB。</p>';}
 async function learningAudioChoice(){const file=$('#learnAudioFile')?.files[0];if(file){if(!file.size||file.size>20971520||!file.type.startsWith('audio/'))throw new Error('请选择不超过 20 MiB 的音频文件。');return {id:learningUid(),name:file.name,blob:file,updatedAt:Date.now()};}const id=$('#learnAudioAsset')?.value;return id?(await learningRows('learningAudio')).find(a=>a.id===id):null;}
 function learningSegment(start,end){const parse=v=>{if(String(v).trim()==='')return null;const n=Number(v);if(!Number.isFinite(n)||n<0)throw new Error('起止时间请填写非负秒数。');return n;};const s=parse(start)??0,e=parse(end);if(e!==null&&e<=s)throw new Error('结束时间必须大于开始时间。');return {start:s,end:e};}
@@ -2914,7 +2921,7 @@ async function learningImportWords(input,choices){if(choices.some(c=>!c))throw n
  const m=rows.learningMaterials.find(m=>m.contentType==='word'&&m.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref)))||learningWordMaterial(w);t.objectStore('learningMaterials').put(m);if(!rows.learningMaterials.some(x=>x.id===m.id))rows.learningMaterials.push(m);const old=rows.learningPlacements.find(p=>p.lessonId===lesson.id&&p.materialId===m.id),p={...learningPlacementFor(m.id,'word',old?.position??rows.learningPlacements.length,lesson),...old,deleted:false,textbookMeaning:r.meaning,textbookNote:r.note,tags:learningTags(r.category),updatedAt:Date.now()};t.objectStore('learningPlacements').put(p);if(!old)rows.learningPlacements.push(p);
  });}catch(e){error=e;t.abort();}};}try{await done;}catch(e){throw error||e;}}
 async function learningReplaceWordRecording(blob){if(!blob?.size||blob.size>20971520||!blob.type.startsWith('audio/'))throw new Error('请选择或录制不超过 20 MiB 的音频。');const {m,w,snap}=await learningResolve(learningDetail);if(!w)throw new Error('此项不是词典词条，请保存为跟读录音。');const payload=await audioPayload(blob),oldBlob=audioBlobFor(w);const assets=[],refs=[...m.audioSources];if(oldBlob){const old={id:learningUid(),name:'原词条录音（替换前）',blob:oldBlob,updatedAt:Date.now()};assets.push(old);refs.push({source:'user',assetId:old.id,start:0,end:null});}
- const d=await openDB(),t=d.transaction(['entries','learningMaterials','learningAudio'],'readwrite'),done=transactionDone(t);let error;const q=t.objectStore('entries').get(w.id),mr=t.objectStore('learningMaterials').getAll(),ar=t.objectStore('learningAudio').getAll();let left=3;const save=()=>{if(--left)return;try{if(!cloudSame(q.result,w)||!cloudSame(mr.result,snap.learningMaterials)||!cloudSame(ar.result,snap.learningAudio))throw new Error('资料刚刚已被修改，请重新打开后保存。');t.objectStore('entries').put({...w,...payload,updatedAt:Date.now()});for(const a of assets)t.objectStore('learningAudio').put(a);t.objectStore('learningMaterials').put({...m,audioSources:refs,updatedAt:Date.now()});}catch(e){error=e;t.abort();}};q.onsuccess=save;mr.onsuccess=save;ar.onsuccess=save;try{await done;}catch(e){throw error||e;}learningPendingRecording=null;await learningOpenDetail(m.id);await render();}
+const d=await openDB(),quick=typeof qaStage==='function'&&qaEnabled(),t=d.transaction(['entries','learningMaterials','learningAudio',...(quick?['cloud_meta']:[])],'readwrite'),done=transactionDone(t);let error;const q=t.objectStore('entries').get(w.id),mr=t.objectStore('learningMaterials').getAll(),ar=t.objectStore('learningAudio').getAll();let left=3;const save=()=>{if(--left)return;try{if(!cloudSame(q.result,w)||!cloudSame(mr.result,snap.learningMaterials)||!cloudSame(ar.result,snap.learningAudio))throw new Error('资料刚刚已被修改，请重新打开后保存。');const entry={...w,...payload,updatedAt:Date.now()},material={...m,audioSources:refs,updatedAt:Date.now()};t.objectStore('entries').put(entry);for(const a of assets)t.objectStore('learningAudio').put(a);t.objectStore('learningMaterials').put(material);if(quick)qaStage(t.objectStore('cloud_meta'),[{table:'lao_dictionary_records',kind:'entry',id:w.syncId,row:entry,before:w},...qaRecordLearning({learningAudio:assets,learningMaterials:[material]}).map(r=>({...r,before:r.kind==='learningMaterials'?m:null}))]);}catch(e){error=e;t.abort();}};q.onsuccess=save;mr.onsuccess=save;ar.onsuccess=save;try{await done;}catch(e){throw error||e;}if(quick)qaKick();learningPendingRecording=null;await learningOpenDetail(m.id);await render();}
 async function learningAuthorAction(a,b){
  if(a==='course-shift'){if(!learningSettings||learningBusy)return true;learningBusy=true;try{await learningReorderCourses(b.dataset.id,b.dataset.target,b.dataset.after==='true');learningCatalogSort='textbook';await renderLearning();$('#learningStatus').textContent='课程顺序已保存。';}finally{learningBusy=false;}return true;}
  if(['course-purge-all','course-purge-none','course-purge'].includes(a)){
@@ -9646,6 +9653,128 @@ document.addEventListener('click',e=>{
 @media(max-width:640px){.nl-unit-strip{grid-template-columns:repeat(3,minmax(0,1fr))}.nl-unit-strip button{min-height:120px}.nl-unit-strip [lang="lo"]{font-size:22px}.nl-unit-strip small{font-size:11px}.nl-heading{margin-bottom:18px}.nl-number-display{padding:18px 8px}.nl-groups{gap:0}.nl-groups button{padding:10px 3px}.nl-groups small{font-size:11px}.nl-comma{padding-top:10px}.nl-chunks>div{flex-basis:calc(50% - 10px);padding:12px}.nl-chunks strong{font-size:22px}.nl-anchors{gap:5px}.nl-anchors strong{font-size:12px}.nl-anchors [lang="lo"]{font-size:25px}.nl-reading{padding:16px}.nl-number-form input{font-size:18px}.nl-tabs{gap:6px}.nl-tabs button{flex-basis:80px;padding:10px 6px;font-size:14px}}
 @media(prefers-reduced-motion:reduce){.nl-lab *{scroll-behavior:auto!important}}
 </style>
+<script data-quick-audio-sync>
+/* Persistent, explicit audio-save outbox. Never enroll a historical database. */
+const qaQueueKey='quickAudioOutboxV1',qaMimes=['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'];
+let qaTimer=null,qaRunning=false,qaDelay=1500;
+function qaEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-audio-sync'))!=='off';}catch(_){return false;}}
+function qaMessage(message){
+ if(typeof document==='undefined')return;
+ let node=document.querySelector('#quickAudioSyncStatus');if(!node){node=document.createElement('div');node.id='quickAudioSyncStatus';node.setAttribute('role','status');node.style.cssText='position:fixed;bottom:16px;left:16px;max-width:min(420px,calc(100vw - 32px));z-index:1000;padding:9px 13px;border:1px solid #cfe3d9;border-radius:10px;background:#f6fbf8;color:#41675c;font-size:12px;box-shadow:0 3px 14px #173e3012;pointer-events:none';document.body.append(node);}node.textContent=message;node.hidden=!message;
+ const label=document.querySelector('#quickAudioSyncDetail');if(label)label.textContent=message;
+}
+function qaStage(store,records){
+ if(!qaEnabled()||!records.length)return;
+ const q=store.get(qaQueueKey);q.onsuccess=()=>{const jobs=q.result||[],targets=records.filter(r=>r.kind!=='learningAudio'),id=(targets.length?targets:records).map(r=>r.table+':'+r.kind+':'+r.id).sort().join('|'),old=jobs.find(j=>j.id===id);
+  const assets=new Map((old?.records||[]).filter(r=>r.kind==='learningAudio').map(r=>[r.id,r]));for(const r of records.filter(r=>r.kind==='learningAudio'))assets.set(r.id,r);
+  const merged=[...assets.values(),...records.filter(r=>r.kind!=='learningAudio')];
+  store.put([...jobs.filter(j=>j.id!==id),{id,token:crypto.randomUUID(),uid:cloudWorkspace,records:merged,createdAt:Date.now()}],qaQueueKey);
+ };
+}
+async function qaEnqueue(records){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t);qaStage(t.objectStore('cloud_meta'),records);await done;qaKick();}
+async function qaDefaultSaved(cacheKey,blob){if(!qaEnabled())return;try{const id=await cloudHash(new Blob([cacheKey]));await qaEnqueue([{table:'lao_dictionary_records',kind:'default_audio',id,cacheKey,blob}]);}catch(e){qaMessage('语音已保存在本机，但待传任务保存失败，请手动同步：'+e.message);}}
+async function qaSaveEntry(value,id,before){
+ const db=await openDB(),t=db.transaction(['entries','cloud_meta'],'readwrite'),done=transactionDone(t),s=t.objectStore('entries'),row={...value,...(id?{id}:{})},q=id?s.put(row):s.add(row);let result;
+ q.onsuccess=()=>{result=q.result;qaStage(t.objectStore('cloud_meta'),[{table:'lao_dictionary_records',kind:'entry',id:row.syncId,row:{...row,id:result},before}]);};await done;qaKick();return result;
+}
+function qaRecordLearning(rows){return Object.entries(rows).flatMap(([kind,rs])=>rs.map(row=>({table:'lao_learning_records',kind,id:row.id,row})));}
+function qaKick(delay=350){clearTimeout(qaTimer);if(!qaEnabled())return;qaTimer=setTimeout(()=>qaDrain().catch(e=>qaMessage('本机已保存；自动同步暂缓：'+e.message)),delay);}
+async function qaReadMeta(){const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction('cloud_meta','readonly'),s=t.objectStore('cloud_meta'),keys=[qaQueueKey,'checkpoint','learningCheckpoint','learningServerRevisions'],out={};for(const key of keys){const q=s.get(key);q.onsuccess=()=>out[key]=q.result|| (key===qaQueueKey?[]:{});}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
+function qaBase(meta,record){const key=record.kind+':'+record.id;return record.table==='lao_learning_records'?meta.learningCheckpoint[key]||null:meta.checkpoint[key]?.value||null;}
+function qaRemoteValue(record,row){return row?{deleted:record.table==='lao_learning_records'?false:!!row.deleted,payload:row.payload}:null;}
+function qaPlan(base,remote,desired){
+ if(cloudSame(remote,desired))return 'same';
+ if(remote&&(!base||!cloudSame(remote,base)))return 'conflict';
+ if(!remote&&base)return 'conflict';
+ return 'write';
+}
+function qaMetadataOnly(record,value){
+ const copy=JSON.parse(JSON.stringify(value));if(record.kind==='learningMaterials'){for(const k of ['audioSources','defaultAudioKey','audioNeedsReview','updatedAt'])delete copy[k];}
+ if(record.kind==='entry')delete copy.updatedAt;return copy;
+}
+function qaCheckHistory(record,base,remote,desired){
+ if(cloudSame(remote,desired)||!record.before)return;
+ if(!base)throw Object.assign(Error('这条资料尚未建立同步基线，请先完整同步一次'),{blocked:true});
+ const previous=record.kind==='entry'?cloudEntryData(record.before):record.before,baseline=record.kind==='entry'?base.payload.entry:base.payload;
+ if(record.kind!=='learningAudio'&&!cloudSame(qaMetadataOnly(record,previous),qaMetadataOnly(record,baseline)))throw Object.assign(Error('此条还有其他未同步修改，请先完整同步核对'),{blocked:true});
+}
+async function qaCurrent(record){
+ if(record.kind==='default_audio'){const blob=await ttsCache('readonly',record.cacheKey);return blob?{...record,blob}:null;}
+ const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction(record.kind==='entry'?'entries':record.kind,'readonly'),q=t.objectStore(record.kind==='entry'?'entries':record.kind).get(record.kind==='entry'?record.row.id:record.id);t.oncomplete=()=>resolve(q.result?{...record,row:q.result}:null);t.onabort=()=>reject(t.error);});
+}
+async function qaDescriptor(uid,blob){if(!(blob instanceof Blob)||!blob.size||blob.size>20971520)throw Error('音频为空或超过20MiB');const mime=(blob.type||'audio/webm').split(';')[0].toLowerCase();if(!qaMimes.includes(mime))throw Error('不支持的音频格式');const sha=await cloudHash(blob);return {path:uid+'/'+sha+'-'+mime.replace(/[^a-z0-9]/g,'_'),sha,mime,size:blob.size};}
+async function qaPrepare(uid,record){
+ if(record.table==='lao_learning_records'){
+  const {blob,...row}=record.row;if(record.kind==='learningAudio')return {...record,payload:{...row,audio:await qaDescriptor(uid,blob)},blob};
+  return {...record,payload:row};
+ }
+ if(record.kind==='default_audio')return {...record,payload:{version:1,cacheKey:record.cacheKey,audio:await qaDescriptor(uid,record.blob)}};
+ const blob=audioBlobFor(record.row);return {...record,payload:{version:1,entry:cloudEntryData(record.row),audio:blob?await qaDescriptor(uid,blob):null},blob};
+}
+async function qaReadRemote(uid,api,record){
+ const path='/rest/v1/'+record.table+'?select=*&owner_id=eq.'+encodeURIComponent(uid)+'&record_kind=eq.'+record.kind+'&record_id=eq.'+encodeURIComponent(record.id)+'&limit=1';
+ const rows=await api(path);if(!Array.isArray(rows)||rows.length>1)throw Error('单条云端记录返回异常');const r=rows[0];if(r&&(r.owner_id!==uid||r.record_kind!==record.kind||r.record_id!==record.id||!Number.isSafeInteger(r.revision)||r.revision<1))throw Error('单条云端记录身份异常');return r||null;
+}
+async function qaUploadBlob(api,uid,record,remote){
+ const a=record.payload.audio;if(!record.blob||cloudSame(remote?.payload?.audio,a))return;
+ try{await api('/storage/v1/object/lao-dictionary-audio/'+a.path,{method:'POST',rawBody:record.blob,extraHeaders:{'Content-Type':a.mime,'x-upsert':'false'}});}
+ catch(e){if(![400,409].includes(e.status))throw e;const old=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(old.size!==a.size||await cloudHash(old)!==a.sha)throw Error('云端同名音频校验不符');}
+}
+async function qaAck(record,row){
+ const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),key=record.kind+':'+record.id,value=qaRemoteValue(record,row);
+ if(record.table==='lao_learning_records'){const b=s.get('learningCheckpoint'),v=s.get('learningServerRevisions');let left=2;const save=()=>{if(--left)return;s.put({...b.result,[key]:value},'learningCheckpoint');s.put({...v.result,[key]:row.revision},'learningServerRevisions');};b.onsuccess=save;v.onsuccess=save;}
+ else{const q=s.get('checkpoint');q.onsuccess=()=>s.put({...q.result,[key]:{revision:row.revision,value}},'checkpoint');}
+ await done;
+}
+async function qaRemove(token){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).filter(j=>j.token!==token),qaQueueKey);await done;}
+async function qaDependencies(uid,api,record,all){
+ if(record.kind!=='learningMaterials')return;
+ const row=record.row,meta=await qaReadMeta();
+ // Never publish a card pointing at an absent historical audio asset or word.
+ for(const id of new Set((row.audioSources||[]).map(a=>a.assetId).filter(Boolean))){if(all.some(r=>r.kind==='learningAudio'&&r.id===id)||meta.learningCheckpoint['learningAudio:'+id])continue;if(!await qaReadRemote(uid,api,{table:'lao_learning_records',kind:'learningAudio',id}))throw Object.assign(Error('此词卡还有未同步的旧录音，请先做一次完整同步'),{blocked:true});}
+ for(const id of row.linkedWordSyncIds||[]){if(meta.checkpoint['entry:'+id]?.value?.deleted===false)continue;if(!await qaReadRemote(uid,api,{table:'lao_dictionary_records',kind:'entry',id}))throw Object.assign(Error('关联词条尚未上云，请先做一次完整同步'),{blocked:true});}
+}
+async function qaRunJob(job,api){
+ if(!(await qaReadMeta())[qaQueueKey].some(j=>j.token===job.token))return;
+ const records=await Promise.all(job.records.map(r=>qaPrepare(job.uid,r)));
+ records.sort((a,b)=>(a.kind==='learningMaterials')-(b.kind==='learningMaterials'));
+ // Preflight EVERY record before uploading any blob; stale cards are never silently pushed.
+ const plan=[];for(const record of records){await qaDependencies(job.uid,api,record,records);const meta=await qaReadMeta(),remote=await qaReadRemote(job.uid,api,record),desired={deleted:false,payload:record.payload},current=await qaCurrent(record);if(!current||!cloudSame((await qaPrepare(job.uid,current)).payload,record.payload)){
+   // Full sync or another edit may have made this queued version obsolete. Never replay it.
+   if(current&&cloudSame(qaRemoteValue(record,remote),{deleted:false,payload:(await qaPrepare(job.uid,current)).payload})){await qaRemove(job.token);return;}
+   throw Object.assign(Error('词卡在保存后又有修改，请完整同步核对；旧版本不会自动回写'),{blocked:true});
+  }const base=qaBase(meta,record),action=qaPlan(base,qaRemoteValue(record,remote),desired);qaCheckHistory(record,base,qaRemoteValue(record,remote),desired);if(action==='conflict')throw Object.assign(Error('这条资料有云端冲突，请用完整同步核对；本机录音保留'),{blocked:true});plan.push({record,remote,action});}
+ for(const p of plan){if(!qaEnabled())throw Object.assign(Error('已暂停自动上传'),{blocked:true});if(p.action==='same'){await qaAck(p.record,p.remote);continue;}await qaUploadBlob(api,job.uid,p.record,p.remote);const row={kind:p.record.kind,id:p.record.id,payload:p.record.payload,revision:p.remote?.revision??null,deleted:false};await cloudBatchWrite(job.uid,api,p.record.table,[row],()=>{});await qaAck(p.record,row.result);}
+ await qaRemove(job.token);
+}
+async function qaDrain(){
+ if(qaRunning||!qaEnabled()||navigator.onLine===false)return;
+ const bridge=window.laoQuickAudioBridge;if(!bridge||bridge.uid()!==cloudWorkspace)return;if(bridge.busy()){qaKick(3000);return;}
+ if(!navigator.locks){qaMessage('本机已保存 · 此浏览器不支持安全的跨页面自动同步，请使用手动同步');return;}
+ qaRunning=true;window.laoQuickSyncBusy=true;
+ try{
+  const run=async()=>{const all=(await qaReadMeta())[qaQueueKey],jobs=all.filter(j=>j.uid===cloudWorkspace&&!j.blocked);if(!jobs.length){if(all.length)qaMessage('本机已保存 · '+all.length+'项需完整同步核对：'+(all[0].blocked||'待处理'));return;}
+   qaMessage('本机已保存 · 正在同步本次语音…');
+   for(const job of jobs){if(!qaEnabled()||bridge.uid()!==job.uid)break;try{await qaRunJob(job,(p,o)=>bridge.request(job.uid,p,o));}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
+   const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次语音已同步 ✓');if(pending.some(j=>!j.blocked))qaKick(500);qaDelay=1500;
+  };
+  if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+cloudWorkspace,{ifAvailable:true},lock=>lock?run():qaKick(2000));else await run();
+ }catch(e){qaMessage('本机已保存 · 网络同步未完成，将重试：'+e.message);qaDelay=Math.min(60000,qaDelay*2);qaKick(qaDelay);}
+ finally{qaRunning=false;window.laoQuickSyncBusy=false;}
+}
+async function qaBlock(token,message){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(j=>j.token===token?{...j,blocked:message}:j),qaQueueKey);await done;}
+async function qaAfterManual(){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(({blocked,...j})=>j),qaQueueKey);await done;qaKick();}
+function qaPause(){localStorage.setItem(workspaceName('quick-audio-sync'),'off');clearTimeout(qaTimer);const toggle=document.querySelector('#quickAudioSyncToggle');if(toggle)toggle.checked=false;qaMessage('自动上传已暂停；本机录音和待传任务保留');}
+function qaMount(){
+ const anchor=document.querySelector('#cloudLoggedIn');if(!anchor||document.querySelector('#quickAudioSyncSettings'))return;
+ const box=document.createElement('div');box.id='quickAudioSyncSettings';box.innerHTML='<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input id="quickAudioSyncToggle" type="checkbox" style="width:auto">短录音保存后自动同步</label><p class="tag-hint">仅自动处理本次更新后新保存的语音，不扫描历史资料。离线留在本机，重新打开后续传；冲突需手动核对。仅下载会暂停自动上传。</p><p id="quickAudioSyncDetail" class="tag-hint" role="status"></p><button type="button" id="quickAudioSyncRetry">重试待传语音</button>';
+ anchor.after(box);const toggle=box.querySelector('input');toggle.checked=qaEnabled();toggle.disabled=!cloudWorkspace;toggle.onchange=()=>{localStorage.setItem(workspaceName('quick-audio-sync'),toggle.checked?'on':'off');toggle.checked?qaKick():qaPause();};box.querySelector('button').onclick=()=>{if(!qaEnabled()){qaMessage('请先开启短录音自动同步');return;}qaAfterManual().catch(e=>qaMessage(e.message));};
+}
+if(typeof window!=='undefined'){
+ window.addEventListener('online',()=>qaKick());window.addEventListener('pageshow',()=>qaKick());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')qaKick();});
+ qaMount();qaKick(1000);
+}
+</script>
 <script src="./offline.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="bbdbd4ecde4fefdb">
+  <meta name="lao-app-build" content="4f99b78b252ba17d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2780,7 +2780,7 @@ async function learningAction(e){
  try{
   if(['play','play-card','glyph','gemini','audio','word-audio','compare'].includes(a))$('#learningStatus').textContent='🔊 正在准备发音…';
   if(learningRecorder&&!['record','record-reference'].includes(a))throw new Error('请先停止跟读录音。');
-  if(learningPendingRecording&&!['record','record-reference','preview-recording','save-recording','save-word-recording','play','audio','own','gemini'].includes(a)){if(!confirm('本次跟读尚未保存，放弃录音并继续？'))return;learningPendingRecording=null;}
+  if(learningPendingRecording&&!['record','record-reference','preview-recording','save-recording','save-word-recording','play','play-card','audio','own','gemini','word-audio','word-audio-play','compare'].includes(a)){if(!confirm('本次跟读尚未保存，放弃录音并继续？'))return;learningPendingRecording=null;}
   if(a==='reference-alphabet'||a==='reference-pronunciation'){await learningOpenReference(a==='reference-alphabet'?'alphabet':'pronunciation');return;}
   if(a==='coda'){openCodaFrom('learning','dead');return;}
   if(a==='catalog-back'){if(learningHasWork()||recorder)throw Error('请先完成编辑或录音，再返回目录');learningResetMulti();stopPracticeAudio();if(typeof lbSelectCourse==='function')lbSelectCourse(learningLesson);learningRoute=learningLesson.library==='communication'?'communication':'teaching';await renderLearning();return;}
@@ -5695,13 +5695,19 @@ function studyRecallPrompt(reverse){return reverse?'请回忆答案，点击卡�
 function studyRecallCardHtml({question,reverse=false,favorite='',examples='',h=learningEsc}){return '<div class="practice-card" data-recall-card><p class="recall-prompt">'+studyRecallPrompt(reverse)+'</p><div class="question-row" style="flex-wrap:wrap"><div class="question-ipa" '+(!reverse?'lang="lo"':'')+'>'+h(question)+'</div>'+favorite+'<button type="button" data-recall-play hidden>▶ 播放</button><button type="button" data-recall-detail hidden>详情 / 参考发音</button></div><div class="study-translation" data-recall-answer hidden aria-live="polite"></div><section class="study-examples" aria-label="已有例句">'+examples+'</section><div class="practice-submit"><button type="button" class="recall-reveal" data-recall-reveal>点击揭晓 · 听发音</button></div><div class="practice-footer"><div class="practice-mark-options" role="group" aria-label="掌握程度"><button type="button" data-recall-grade="red" disabled>陌生</button><button type="button" data-recall-grade="yellow" disabled>模糊</button><button type="button" data-recall-grade="green" disabled>熟悉</button></div><div class="practice-navigation"><button type="button" data-recall-previous>上一题</button><button type="button" data-recall-next>下一题</button></div></div><p class="study-audio-status" data-recall-status role="status"></p></div>';}
 let studyCardRun=0,studyCardItem=null,studyCardRevealed=false;
 let studyCardFlow=studyRecallFlow();
+function studyUniqueExamples(rows,snap){
+ const groups=new Map(),assets=new Set((snap.learningAudio||[]).filter(a=>!a.deleted&&a.blob).map(a=>a.id));
+ const playable=m=>(m.audioSources||[]).some(a=>a.role!=='follow'&&!a.needsReview&&assets.has(a.assetId));
+ for(const row of rows){const key=String(row.textLao||'').normalize('NFC').replace(/\s+/gu,'');if(!key)continue;const group=groups.get(key)||[];group.push(row);groups.set(key,group);}
+ return [...groups.values()].map(group=>{const primary=group.find(playable)||group[0],translations=[...new Set(group.map(m=>String(m.translationZh||'').trim()).filter(Boolean))];return {...primary,translationZh:translations.filter(t=>!translations.some(other=>other!==t&&other.includes(t))).join('／'),exampleSourceIds:group.map(m=>m.id)};});
+}
 function studyExamples(item,snap,forceWords=false){
  const keys=new Set(syncKeys(item)),hidden=new Set((snap.learningPlacements||[]).filter(p=>p.deleted).map(p=>p.materialId)),active=new Set((snap.learningPlacements||[]).filter(p=>!p.deleted).map(p=>p.materialId));
  const letter=!forceWords&&(item._vowelRule||item._practiceType==='letter'||$('#practiceKind').value==='letters');
  const rows=(snap.learningMaterials||[]).filter(m=>!m.deleted&&['sentence','dialogue'].includes(m.contentType)&&m.textLao&&m.textLao!==item.word&&(!hidden.has(m.id)||active.has(m.id)));
  const linked=m=>(m.linkedWordSyncIds||[]).some(k=>keys.has(k));
  const match=m=>linked(m)||(letter?letterExampleMatch(item.word,m.textLao):String(item.word||'').trim()&&letterExampleCanonical(m.textLao).includes(letterExampleCanonical(item.word)));
- const seen=new Set();return rows.filter(match).sort((a,b)=>Number(linked(b))-Number(linked(a))).filter(m=>{const key=m.textLao+'|'+(m.translationZh||'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,3);
+ return studyUniqueExamples(rows.filter(match).sort((a,b)=>Number(linked(b))-Number(linked(a))),snap).slice(0,3);
 }
 function studyLao(node,text,placeholder=false){node.removeAttribute('aria-label');node.textContent=text||'';node.lang='lo';if(placeholder&&/[xX◌]/.test(text||''))node.innerHTML=codaVowelDisplay(String(text).replace(/[xX]/g,'◌'));}
 const studyPanel=$('#practicePanel'),studyCard=$('#practiceCard');
@@ -6002,8 +6008,11 @@ async function saOpenNested(id,button){
  if(parent&&learningDetail===id){letterDetailParents.push(parent);letterDetailBackButton();}
 }
 async function saPlay(id,options={}){
- const current=typeof options.isCurrent==='function'?options.isCurrent:()=>true;
- if(learningHasWork()||recorder)throw Error('请先保存正在编辑的内容或完成录音。');
+ const blocked=()=>Boolean((typeof learningBusy!=='undefined'&&learningBusy)||(typeof learningRecorder!=='undefined'&&learningRecorder)||(typeof learningDraft!=='undefined'&&learningDraft?.dirty)||recorder);
+ const current=()=>!blocked()&&(typeof options.isCurrent!=='function'||options.isCurrent());
+ // A stopped, unsaved take is safe to keep while listening for comparison.
+ // Navigation/editing guards stay strict; never play into an active microphone.
+ if(blocked())throw Error('请先保存正在编辑的内容或停止正在进行的录音。');
  if(!id)throw Error('请先保存解析。');
  const {m,w,snap}=await learningResolve(id);if(!current())return;if(m.deleted)throw Error('资料已删除或尚未同步。');
  const manual=recordedReference(m,snap)||(w?await recordedReferenceForWord(w):null);if(!current())return;if(manual){await learningPlayBlob(manual.blob,manual.start||0,manual.end??null);return;}
@@ -7630,7 +7639,7 @@ function ssCompose(detail,resolved,id){
  if(w&&ipa?.textContent.trim())main.append(ipa);else ipa?.remove();
  const components=w&&trusted?saWords(a).filter(x=>saTextKey(x.lao)!==saTextKey(w.word)):[],wholeFallback=w&&trusted&&ssGrammarRows(a).length&&ssGrammarRows(a).every(g=>/^整体词语[／/]/u.test(g.pattern));
  if(components.length){const parts=ssGroup('构词与组成词','ss-word-parts');const list=ssElement('div','sa-words');list.innerHTML=components.map(x=>saUnitHtml(x,[x.meaning,x.role].filter(Boolean).join(' · '))).join('');parts.append(list);main.append(parts);}
- if(draft)main.append(draft);main.append(status);
+ if(draft){draft.classList.add('ss-recording-dock');draft.setAttribute('aria-label','本次录音：可先试听单词对比，再保存');main.prepend(draft);}main.append(status);
  const warning=detail.querySelector('.learn-audio-warning');if(warning)main.append(warning);
  const stale=existing?.querySelector('.ss-stale-warning');if(stale)main.append(stale);
  if(trusted){const grammar=wholeFallback?'':ssGrammarHtml(a);if(grammar){const title=w?'构词与用法':'语法要点',section=ssGroup(title,'ss-grammar');section.innerHTML='<h3>'+title+'</h3>'+grammar;main.append(section);}else if(wholeFallback)main.append(ssElement('p','ss-whole-word-fallback','当前保存的分析仅有整体释义，尚未完成组成词拆分。'));if(quiz){const summary=quiz.querySelector('summary');if(summary)summary.textContent='语法小测验';main.append(quiz);}}
@@ -9141,10 +9150,16 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 }
 .cf-inline-recorder{margin-top:12px;padding:14px;border:1px solid #8ebbad;border-radius:12px;background:#f2faf6}
 .cf-inline-recorder button{min-height:44px;margin:4px}
+/* Keep the sentence take reachable above expanding word cards; preserve original controls. */
+#learningDialog .ss-reading>#learningRecordingDraft.ss-recording-dock{position:sticky;top:-1px;z-index:15;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;margin:0 0 10px;background:var(--paper,#fff);border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 12px #153f3010}
+#learningDialog .ss-reading>#learningRecordingDraft.ss-recording-dock>button{flex:0 1 auto;width:auto!important;min-height:40px!important;padding:7px 12px!important;margin:0!important;font-size:13px!important;line-height:1.3;border-radius:9px}
+#learningDialog .ss-reading>#learningRecordingDraft.ss-recording-dock>p{flex-basis:100%;font-size:11px;line-height:1.4;margin:0;color:var(--muted)}
+#learningDialog .ss-reading>#learningRecordingDraft.ss-recording-dock:has(button:disabled):not(:has(button:not(:disabled))){display:none}
+#learningDialog:has([data-letter-detail-back]) .ss-reading>#learningRecordingDraft.ss-recording-dock{top:52px}
 @media(max-width:760px){
  #learningDialog [data-quick-reference]>#learningReferenceRecord,.cf-inline-recorder>[data-cf-control="learningReferenceRecord"]{display:block;width:100%;min-height:52px;margin:16px 0 22px!important}
  #learningDialog #learningRecordingDraft,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;padding-top:16px;margin-top:12px;border-top:1px solid #dce8e2}
- #learningDialog #learningRecordingDraft>button,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]>button{min-height:52px;width:100%;margin:0!important;padding:12px 8px}
+ #learningDialog #learningRecordingDraft>button,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]>button{min-height:44px;width:auto;margin:0!important;padding:7px 12px;font-size:13px}
  #learningDialog #learningRecordingDraft>p,.cf-inline-recorder>[data-cf-control="learningRecordingDraft"]>p{grid-column:1/-1;margin-top:4px}
 }
 #learningDialog .wsl-card .wsl-word-actions.cf-word-controls{display:grid;grid-template-columns:minmax(70px,1fr) minmax(60px,1fr) minmax(76px,1fr) 40px;gap:8px;align-items:center;max-width:560px;margin:12px 0 4px}

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="afb17915677b2b87">
+  <meta name="lao-app-build" content="b036fa9b6a521e08">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3699,7 +3699,7 @@ const lessonPageFullToolbar=lessonPageToolbarFor;
 lessonPageToolbarFor=function(...args){return lessonPageFullToolbar(...args)
  .replace('class="page-play">','class="page-play" aria-label="播放整页" title="播放整页">')
  .replace('播放整页</button>','<span class="page-player-label">播放整页</span></button>')
- .replace('aria-label="暂停／继续">暂停／继续</button>','aria-label="暂停／继续" title="暂停／继续"><span class="page-player-mobile" aria-hidden="true">⏯</span><span class="page-player-label">暂停／继续</span></button>')
+ .replace('aria-label="暂停／继续">暂停／继续</button>','aria-label="暂停／继续" title="暂停／继续"><span class="page-player-mobile" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6v12M15 6v12"/></svg></span><span class="page-player-label">暂停／继续</span></button>')
  .replace(/<p data-page-status role="status">[^<]*<\/p>/,'<p data-page-status role="status"></p>');};
 function lessonIcon(type){
  const paths={play:'<path d="m8 5 11 7-11 7Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',audio:'<path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/>'};
@@ -10202,17 +10202,6 @@ function ccFastContext(queue,course,direction,snap){
  #learningPanel .mle-lesson .learn-block-heading h3{font-size:17px;line-height:1.5;margin:0;font-weight:600}
  #learningPanel .mle-lesson .learn-group-test{min-height:40px;padding:6px 9px;font-size:11px;border:0;border-radius:9px;background:#edf5ee;color:#537760}
  #learningPanel .mle-lesson .learn-knowledge>.tag-hint{font-size:11px;line-height:1.5;color:#87948b;margin:0 0 10px}
- #learningPanel .mle-lesson .learn-card-grid{gap:10px;align-items:stretch}
- #learningPanel .mle-lesson .learn-card{display:flex;flex-direction:column;border:1px solid #dfe9e0;border-radius:14px;background:#fff;box-shadow:0 2px 8px #123d2505}
- #learningPanel .mle-lesson .learn-card-main{flex:1;align-content:start;min-height:102px;padding:12px 12px 10px!important;gap:5px}
- #learningPanel .mle-lesson .learn-card-main strong{font-size:25px!important;line-height:1.55;color:#156e55;letter-spacing:0}
- #learningPanel .mle-lesson .learn-card-main span{font-size:12px!important;line-height:1.6;color:#758579}
- #learningPanel .mle-lesson .learn-card-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 36px;gap:2px;align-items:center;border-top:1px solid #f1f4f0;margin:0 9px;padding:4px 0}
- #learningPanel .mle-lesson .learn-card-actions>button{flex:0 0 auto;width:36px;min-width:36px;height:44px;min-height:44px;padding:9px!important;font-size:17px;border:0;border-radius:9px;background:transparent;color:#628675;box-shadow:none}
- #learningPanel .mle-lesson .learn-card-actions>button svg{width:18px;height:18px;display:block}
- #learningPanel .mle-lesson .learn-card-actions>button:not(.fv-button){width:100%;min-width:0}
- #learningPanel .mle-lesson .learn-card-actions>.fv-button{margin-left:auto;color:#8b7d98}
- #learningPanel .mle-lesson .learn-card-actions>button:active{background:#e8f3eb}
  #learningDialog:has(.course-recall){padding:16px 14px;border-radius:22px;max-height:90dvh}
  #learningDialog:has(.course-recall)>header h2{font-size:18px;margin:0 0 12px;line-height:1.5}
  #learningDialog .course-recall .practice-card{padding:6px 0 0;border:0;box-shadow:none}
@@ -10227,7 +10216,29 @@ function ccFastContext(queue,course,direction,snap){
  #learningDialog .course-recall .practice-navigation{margin-top:10px}
  #learningDialog .course-recall .practice-navigation button{font-size:13px;min-height:44px;padding:8px 12px}
 }
-@media(max-width:360px){#learningPanel .mle-lesson .learn-card-actions>button{width:31px;min-width:31px}#learningPanel .mle-lesson .learn-card-main strong{font-size:23px!important}#learningPanel .mle-lesson>h2{font-size:19px}}
+@media(max-width:360px){#learningPanel .mle-lesson>h2{font-size:19px}}
+/* Player only: keep the approved chapter navigation and the original word cards intact. */
+#learningPanel .mle-lesson .lesson-page-player:not(.page-player-floating){display:flex;flex-direction:column;align-items:stretch;gap:10px;margin:8px 0 16px;padding:12px 14px;border:1px solid #e0e8e2;border-radius:13px;background:#fff;box-shadow:none}
+#learningPanel .mle-lesson .lesson-page-player:not(.page-player-floating) .page-player-heading{display:flex;flex:0 0 auto;align-items:baseline;justify-content:space-between;gap:12px;width:100%;margin:0}
+#learningPanel .mle-lesson .lesson-page-player .page-player-heading strong{order:-1;font-size:14px;line-height:1.5;font-weight:600}
+#learningPanel .mle-lesson .lesson-page-player .page-player-kicker{margin:0;font-size:11px;letter-spacing:0;color:#8a9a91}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:6px;width:100%;min-width:0}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>[data-page-action]{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:44px;min-width:44px;height:44px;min-height:44px;margin:0;padding:11px!important;border:0;border-radius:11px;background:#f0f5f1;color:#417762;box-shadow:none}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>[data-page-action=play]{background:#087f70;color:#fff}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>[data-page-action] svg{width:20px;height:20px}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls .page-player-label{display:none}
+#learningPanel .mle-lesson .lesson-page-player .page-player-mobile{display:inline-flex;align-items:center;justify-content:center;font-size:18px}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>.page-player-more,#learningPanel .mle-lesson .lesson-page-player .page-player-controls>.cf-mask-controls{position:static;flex:0 0 auto;margin:0;border:0}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>details>summary{min-height:44px;height:44px;padding:10px 7px;gap:6px;font-size:12px;line-height:24px;border:0;border-radius:9px;color:#678174}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>details[open]{flex:1 0 100%;order:3;min-width:0}
+#learningPanel .mle-lesson .lesson-page-player .page-player-controls>details[open]>summary{justify-content:flex-start;background:#f4f7f3;padding-inline:10px}
+/* Inline expansion stays inside the player, including at 320px and in floating mode. */
+#learningPanel .mle-lesson .lesson-page-player .page-player-more>div,#learningPanel .mle-lesson .lesson-page-player .cf-mask-menu{position:static;inset:auto;transform:none;width:100%;min-width:0;max-width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:6px 0 0;padding:10px;border:1px solid #e0e8e2;border-radius:10px;background:#fafcf9;box-shadow:none}
+#learningPanel .mle-lesson .lesson-page-player .page-player-more label{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;margin:0;font-size:12px}
+#learningPanel .mle-lesson .lesson-page-player .page-player-more select{flex:0 0 94px;width:94px;min-width:94px;max-width:94px;height:36px;min-height:36px;margin:0;font-size:12px}
+#learningPanel .mle-lesson .lesson-page-player .page-player-more input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0}
+#learningPanel .mle-lesson .lesson-page-player .page-player-more>div>button{min-height:40px;width:100%;padding:8px 10px!important;font-size:12px!important;border:0;border-radius:8px;background:#edf4ee;justify-content:center}
+#learningPanel .mle-lesson .lesson-page-player .cf-mask-menu button{width:100%;min-width:0;min-height:40px;padding:8px 10px!important;font-size:12px!important;white-space:normal}
 </style>
 <script data-navigation-fast="navigation-fast.js">
 /* Read-only navigation data. Saves, audio playback and sync retain their fresh reads. */

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="4244be6b8e446748">
+  <meta name="lao-app-build" content="769b9b735a981efe">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -633,7 +633,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     const addEntry=item=>withStore('readwrite',store=>request(store.add(item)));
     const putEntry=item=>withStore('readwrite',store=>request(store.put(item)));
     const deleteEntry=id=>withStore('readwrite',store=>request(store.delete(id)));
-    async function allEntries() { const read=async()=>(await withStore('readonly',store=>request(store.getAll()))).sort((a,b)=>b.updatedAt-a.updatedAt),scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;return scope?(scope.entries||(scope.entries=read())):read(); }
+    async function allEntries() { const read=async()=>(await withStore('readonly',store=>request(store.getAll()))).sort((a,b)=>b.updatedAt-a.updatedAt),scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));return scope?(scope.entries||(scope.entries=read())):read(); }
     function audioDataBuffer(value) { if(value instanceof ArrayBuffer)return value; if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength); return null; }
     function audioBlobFor(item) { if(typeof item?.audioDataUrl==='string'&&item.audioDataUrl){try{return dataURLToBlob(item.audioDataUrl);}catch(_){return null;}} const buffer=audioDataBuffer(item?.audioData); if(buffer)return new Blob([buffer],{type:item.audioType||'audio/webm'}); return item?.audio instanceof Blob?item.audio:null; }
     function hasAudio(item) { return Boolean(audioBlobFor(item)); }
@@ -2488,10 +2488,11 @@ const learningUid=()=>crypto.randomUUID();
 // UI lists may be sorted by updatedAt; record identity/content, not list order, determines concurrency.
 function learningSameRecords(a,b){const ordered=rows=>[...rows].sort((x,y)=>(typeof x.id+':'+x.id).localeCompare(typeof y.id+':'+y.id));return Array.isArray(a)&&Array.isArray(b)&&cloudSame(ordered(a),ordered(b));}
 function learningHasWork(){return Boolean(learningBusy||learningRecorder||learningPendingRecording||learningDraft?.dirty);}
-async function learningRows(store){if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate&&learningStores.includes(store))return (await learningSnapshot())[store];const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(store,'readonly'),r=t.objectStore(store).getAll();t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(t.error);});}
-async function learningSnapshot(){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return learningReadSnapshot();return scope.snapshot||(scope.snapshot=learningReadSnapshot());}
+async function learningRows(store){if(((typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)||(typeof dfDetailScope!=='undefined'&&dfDetailScope))&&learningStores.includes(store))return (await learningSnapshot())[store];const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(store,'readonly'),r=t.objectStore(store).getAll();t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(t.error);});}
+async function learningSnapshot(){const scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));if(!scope)return learningReadSnapshot();return scope.snapshot||(scope.snapshot=learningReadSnapshot());}
 async function learningReadSnapshot(){const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction(learningStores,'readonly'),out={};for(const s of learningStores){const r=t.objectStore(s).getAll();r.onsuccess=()=>out[s]=r.result;}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}
 async function learningWrite(rows,expected=null,options={}){
+ if(expected?.detailReadOnly)throw Error('详情预览只用于阅读，请重新打开编辑操作以读取最新资料');
  for(const kind of Object.keys(rows))for(const row of rows[kind])learningValidateRecord(kind,row);
  const d=await openDB(),names=Object.keys(rows),quick=typeof qaStage==='function'&&(options.quickAudio&&qaEnabled()||options.quickProgress&&qaProgressEnabled()),t=d.transaction(quick?[...names,'cloud_meta']:names,'readwrite'),done=transactionDone(t);let failure;
  const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,...(options.quickProgress?{progress:true}:{}),before:expected?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
@@ -2629,7 +2630,7 @@ async function learningGlyph(form,details=false){
  if(!details&&matches.length<=1){if(matches.length){const w=matches[0],snap=await learningSnapshot(),m=snap.learningMaterials.find(m=>m.contentType==='word'&&m.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref))),ref=m?.audioSources.filter(learningIsReference).at(-1);if(ref){const asset=snap.learningAudio.find(a=>a.id===ref.assetId);if(!asset)throw new Error('教材原音尚未同步到本机。');await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);}else await learningWordSpeech(w);}else{const text=form.split('|')[0],blob=await learningCachedSpeech(text)||await defaultSpeech(text);await learningPlayBlob(blob);}return;}
  const examples=typeof letterExamplesHtml==='function'?await letterExamplesHtml(form):'';learningModal(form.replaceAll('x','◌')+' · 词典资料',(matches.length?matches.map(w=>'<section><h3 lang="lo">'+learningEsc(w.word)+'</h3><p>'+learningEsc(w.ipa||'')+' '+learningEsc(w.meaning||'')+'</p><p>'+learningEsc(w.note||'暂无备注')+'</p>'+noteImagesMarkup(w.noteImages)+'<button data-learn="word-audio" data-word="'+w.id+'">▶ 已有发音</button><button data-learn="word-detail" data-word="'+w.id+'">完整资料</button></section>').join(''):'<p>词库中还没有对应资料。可以在“老语字母”中添加此字母的词条及录音。</p>')+examples);
 }
-async function learningResolve(id){const scope=typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate;if(!scope)return learningReadResolved(id);scope.resolved||=new Map();if(!scope.resolved.has(id))scope.resolved.set(id,learningReadResolved(id));return scope.resolved.get(id);}
+async function learningResolve(id){const scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));if(!scope)return learningReadResolved(id);scope.resolved||=new Map();if(!scope.resolved.has(id))scope.resolved.set(id,learningReadResolved(id));return scope.resolved.get(id);}
 async function learningReadResolved(id){const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);let m=snap.learningMaterials.find(x=>x.id===id);if(!m&&id.startsWith('word:')){const w=learningFindWord(id.slice(5),words);if(w)m=snap.learningMaterials.find(x=>x.contentType==='word'&&x.linkedWordSyncIds.some(ref=>syncKeys(w).includes(ref)))||learningWordMaterial(w);}if(!m)throw new Error('这条学习材料不存在。');return {m,snap,words,w:m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null};}
 async function learningPlayBlob(blob,start=0,end=null){
  stopPracticeAudio();const generation=playbackGeneration;practiceAudioUrl=URL.createObjectURL(blob);const a=practiceAudio=new Audio(practiceAudioUrl);
@@ -7590,6 +7591,7 @@ showView=function(view,...args){
 @media(max-width:560px){#learningDialog:has(.ss-detail){padding:14px;width:calc(100vw - 20px);box-sizing:border-box}#learningDialog .ss-reading .wsl-sentence,#learningDialog .ss-original{font-size:24px;line-height:1.95}#learningDialog .ss-main-actions{gap:6px}#learningDialog .ss-main-actions button{font-size:13px;padding:8px 10px;min-height:44px}#learningDialog .ss-main-actions .ss-manage-toggle{margin-left:0}#learningDialog .ss-reading .learn-meaning,#learningDialog .ss-reading .wsl-translation{font-size:16px}#learningDialog .ss-management button{min-height:44px}#learningDialog .ss-reading .wsl-card{padding:10px}#learningDialog .ss-grammar-item p{font-size:14px}}
 /* Never paint the legacy detail while asynchronous enrichers are composing it. */
 #learningDialog[data-ss-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
+#learningDialog[data-df-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
 #learningDialog .ss-quick-management{display:contents}#learningDialog .ss-quick-management button{border-color:#aacdc0}#learningDialog .ss-quick-management [data-ss-regenerate]{background:#edf6f3;color:#087f70}
 </style>
 <script data-learning-bundle="sentence-study-layout">
@@ -7661,7 +7663,7 @@ learningOpenDetail=function(id){
  const request=++ssDetailRequest;learningDialog.setAttribute('data-ss-building','true');learningDialog.setAttribute('aria-busy','true');
  const build=async()=>{
   if(request!==ssDetailRequest)return;
-  ssDetailRenderGate={request,id};
+  ssDetailRenderGate={...(typeof dfDetailScope==='undefined'?null:dfDetailScope),request,id};
   try{await ssPreviousDetail(id);if(request!==ssDetailRequest)return;if(learningDetail!==id)throw Error('词句已变化，请重新打开');const resolved=await learningResolve(id);if(request!==ssDetailRequest)return;if(learningDetail!==id||resolved.m.deleted)throw Error('词句已修改、删除或尚未同步');const detail=learningDialog.querySelector('.learn-detail');if(!detail)throw Error('词句详情未能完整加载，请重试');ssCompose(detail,resolved,id);
   }catch(error){if(request===ssDetailRequest){ssDetailRenderGate=null;learningModal('词句暂时无法打开','<p>'+learningEsc(error.message)+'</p>');}throw error;
   }finally{if(ssDetailRenderGate?.request===request)ssDetailRenderGate=null;if(request===ssDetailRequest){learningDialog.removeAttribute('data-ss-building');learningDialog.removeAttribute('aria-busy');if(!learningDialog.open)learningDialog.showModal();}}
@@ -9828,6 +9830,70 @@ if(typeof document!=='undefined'){
  // Only an explicit pending marker from a post-update save is resumed, not old local history.
  if(practiceAutoPending())practiceAutoFlush();
 }
+</script>
+<script data-detail-fast>
+/* Read-only detail acceleration. Editing, recording and sync always read fresh data. */
+let dfDetailScope=null,dfRevision=0,dfData=null,dfLoading=null,dfOpenRun=0,dfQueue=Promise.resolve(),dfActive=null,dfWarmTimer=null,dfIndexes=new WeakMap();
+const dfViews=new Map(),dfDbProxies=new WeakMap(),dfStampKey=workspaceName('detail-content-revision-v1');
+let dfStamp='';try{dfStamp=localStorage.getItem(dfStampKey)||'';}catch(_){}
+function dfInvalidate(notify=false){
+ dfRevision++;dfData=null;dfLoading=null;dfViews.clear();dfIndexes=new WeakMap();
+ if(notify){dfStamp=Date.now()+':'+crypto.randomUUID();try{localStorage.setItem(dfStampKey,dfStamp);}catch(_){}dfChannel?.postMessage(dfStamp);}
+ clearTimeout(dfWarmTimer);dfWarmTimer=setTimeout(()=>{if(document.visibilityState!=='hidden')dfGetData().catch(()=>{});},1200);
+}
+let dfChannel=null;try{if(typeof BroadcastChannel==='function'){dfChannel=new BroadcastChannel(workspaceName('detail-content-v1'));dfChannel.onmessage=e=>{if(e.data!==dfStamp){dfStamp=e.data;dfInvalidate();}};}}catch(_){}
+function dfCheckStamp(){try{const now=localStorage.getItem(dfStampKey)||'';if(now!==dfStamp){dfStamp=now;dfInvalidate();}}catch(_){}}
+const dfOriginalOpenDB=openDB;
+openDB=async function(...args){
+ const db=await dfOriginalOpenDB(...args);if(dfDbProxies.has(db))return dfDbProxies.get(db);
+ const proxy=new Proxy(db,{get(target,key){
+  if(key==='transaction')return (names,mode,...rest)=>{const t=target.transaction(names,mode,...rest),list=typeof names==='string'?[names]:Array.from(names);
+   if(mode==='readwrite'&&list.some(n=>['entries','learningMaterials','learningPlacements','learningAudio'].includes(n)))t.addEventListener('complete',()=>dfInvalidate(true),{once:true});return t;};
+  const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+ }});dfDbProxies.set(db,proxy);return proxy;
+};
+async function dfReadTextSnapshot(){
+ const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction(['learningMaterials','learningPlacements'],'readonly'),snap={learningAudio:[],detailReadOnly:true};for(const name of ['learningMaterials','learningPlacements']){const q=t.objectStore(name).getAll();q.onsuccess=()=>snap[name]=q.result;}t.oncomplete=()=>resolve(snap);t.onabort=()=>reject(t.error||Error('详情文字读取失败'));});
+}
+async function dfGetData(){
+ dfCheckStamp();if(dfData&&Date.now()-dfData.at<120000)return dfData;if(dfLoading)return dfLoading;
+ const revision=dfRevision,task=(async()=>{
+  const [snap,words]=await Promise.all([dfReadTextSnapshot(),withStore('readonly',store=>request(store.getAll())).then(rows=>rows.sort((a,b)=>b.updatedAt-a.updatedAt))]);
+  if(revision!==dfRevision)return dfGetData();const result={snap,words,revision,at:Date.now()};dfData=result;return result;
+ })();dfLoading=task;try{return await task;}finally{if(dfLoading===task)dfLoading=null;}
+}
+function dfViewKey(id){return JSON.stringify([id,learningLesson?.id||'',learningSettings,...['expandPronunciation','expandExamples','revealAudio'].map(k=>typeof appPreference==='function'?appPreference(k):null)]);}
+function dfRemember(key,id,revision){
+ if(revision!==dfRevision||learningDetail!==id||learningHasWork()||recorder||learningDialog.querySelector('[data-letter-detail-back]')||!learningDialog.querySelector('.ss-detail'))return;
+ dfViews.delete(key);dfViews.set(key,{id,revision,at:Date.now(),nodes:[...learningDialog.childNodes],className:learningDialog.className});while(dfViews.size>5)dfViews.delete(dfViews.keys().next().value);
+}
+const dfOriginalDetail=learningOpenDetail;
+learningOpenDetail=function(id){
+ dfCheckStamp();if(dfActive?.id===id)return dfActive.promise;
+ const key=dfViewKey(id),cached=dfViews.get(key),nested=learningDialog.open&&!!learningDialog.querySelector('.learn-detail');
+ if(!dfActive&&cached&&cached.revision===dfRevision&&Date.now()-cached.at<60000&&!learningHasWork()&&!recorder&&!learningSettings&&!(typeof letterDetailParents!=='undefined'&&letterDetailParents.length)){
+  if(typeof lessonPageBeginDetail==='function')lessonPageBeginDetail();learningDetail=id;learningDraft=null;learningPendingRecording=null;
+  learningDialog.className=cached.className;learningDialog.replaceChildren(...cached.nodes);learningDialog.scrollTop=0;if(typeof ssSetManagement==='function')ssSetManagement(learningDialog,false);learningDialog.removeAttribute('aria-busy');learningDialog.removeAttribute('data-ss-building');if(!learningDialog.open)learningDialog.showModal();dfViews.delete(key);dfViews.set(key,cached);return Promise.resolve();
+ }
+ const run=++dfOpenRun;learningDialog.setAttribute('data-df-building','true');learningDialog.setAttribute('aria-busy','true');
+ const build=async()=>{
+  if(run!==dfOpenRun)return;
+  try{
+   const data=await dfGetData();if(run!==dfOpenRun)return;
+   dfDetailScope={snapshot:Promise.resolve(data.snap),entries:Promise.resolve(data.words),resolved:new Map(),revision:data.revision};
+   await dfOriginalDetail(id);if(run!==dfOpenRun)return;if(data.revision!==dfRevision)throw Error('资料刚更新，请重新打开，避免显示旧版本');
+   if(!nested)dfRemember(key,id,data.revision);
+  }catch(e){if(run===dfOpenRun){dfDetailScope=null;learningModal('词句暂时无法打开','<p>'+learningEsc(e.message)+'</p>');}throw e;}
+  finally{dfDetailScope=null;if(run===dfOpenRun){learningDialog.removeAttribute('data-df-building');learningDialog.removeAttribute('aria-busy');}}
+ };
+ const promise=dfQueue.catch(()=>{}).then(build);dfQueue=promise;dfActive={id,promise};const clear=()=>{if(dfActive?.promise===promise)dfActive=null;};promise.then(clear,clear);return promise;
+};
+if(typeof ssCancelDetail==='function'){const cancel=ssCancelDetail;ssCancelDetail=function(){dfOpenRun++;dfActive=null;if(dfDetailScope)dfDetailScope.cancelled=true;learningDialog.removeAttribute('data-df-building');return cancel();};}
+if(typeof cwIndex==='function'){const original=cwIndex;cwIndex=function(entries,materials){let byMaterials=dfIndexes.get(entries);if(!byMaterials){byMaterials=new WeakMap();dfIndexes.set(entries,byMaterials);}let index=byMaterials.get(materials);if(!index){index=original(entries,materials);byMaterials.set(materials,index);}return index;};}
+window.addEventListener('storage',e=>{if(e.key===dfStampKey){dfStamp=e.newValue||'';dfInvalidate();}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){dfCheckStamp();dfGetData().catch(()=>{});}});
+document.addEventListener('pointerover',e=>{if(e.target.closest?.('[data-learn="word-detail"],[data-learn="play-card"],[data-wsl-detail],[data-cw-target]'))dfGetData().catch(()=>{});},{passive:true});
+const dfWarm=()=>dfGetData().then(data=>{if(typeof cwIndex==='function')cwIndex(data.words,data.snap.learningMaterials);}).catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dfWarm,{timeout:2000});else dfWarmTimer=setTimeout(dfWarm,1000);
 </script>
 <script src="./offline.js"></script>
 </body>

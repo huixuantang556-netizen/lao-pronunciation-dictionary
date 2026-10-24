@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="9ac51883c22a196a">
+  <meta name="lao-app-build" content="22f9554c97367950">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3763,12 +3763,29 @@ async function lessonPageAudioMenu(page){
  $('#pageAudioWhole').onclick=async()=>{try{learningDialog.close();await lessonPagePrepare(page);}catch(error){learningError(error);}};
  for(const button of learningDialog.querySelectorAll('[data-page-audio-group]'))button.onclick=async()=>{try{const block=groups[Number(button.dataset.pageAudioGroup)];learningDialog.close();await wordAudioSelect(lessonV2Id(course.packageKey,'block',block.id));}catch(error){learningError(error);}};
 }
+async function lessonPageSelectMissing(page){
+ if(batchAudioBusy||learningBusy||recorder||learningHasWork())throw Error('请先完成编辑、录音或音频生成');
+ stopPracticeAudio();
+ const words=await lessonPageResolve(page.words),snap=await learningSnapshot(),cache=new Map();
+ for(const r of await cloudCacheRows()){try{cache.set(JSON.parse(r.key)[1],r.blob);}catch(_){}}
+ const missing=words.filter(w=>!lessonPageAsset(w,snap,cache)),ids=new Set(missing.map(w=>w.id)),h=learningEsc;
+ batchDialog.innerHTML='<h2>只补缺少的单条发音</h2><p>已自动勾选缺少可用单条发音的 '+missing.length+' 项。可以取消不需要的句子；已有单条发音不会被替换。有整段原音但尚未切分的句子也会列出，可取消并返回切分原音，避免重复合成。</p><div style="max-height:50vh;overflow:auto">'+words.map(w=>'<label style="display:block;padding:8px 0"><input type="checkbox" data-page-missing-id="'+h(w.id)+'" '+(ids.has(w.id)?'checked':'disabled')+'> <span lang="lo">'+h(w.word)+'</span> · '+h(w.meaning||'')+' · '+(ids.has(w.id)?'缺少单条发音':'已有发音，保留')+'</label>').join('')+'</div><p><button id="pageMissingContinue" '+(!missing.length?'disabled':'')+'>下一步：仅合成勾选项</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
+ $('#pageMissingContinue').onclick=async()=>{try{
+  const selectedIds=new Set([...batchDialog.querySelectorAll('[data-page-missing-id]')].filter(b=>b.checked&&!b.disabled).map(b=>b.dataset.pageMissingId));
+  const selected=missing.filter(w=>selectedIds.has(w.id));if(!selected.length)throw Error('请至少勾选一项缺音');
+  await lessonPagePrepare({title:page.title+' · 仅补缺音（'+selected.length+' 项）',words:selected});
+ }catch(error){batchNotice(error.message);}};
+ if(!batchDialog.open)batchDialog.showModal();
+}
 async function lessonPagePrepare(page,fromBatch=false){
  if(batchAudioBusy||recorder||learningHasWork())throw Error('请先完成正在进行的编辑或录音，并进入课程设置。');
  if(!fromBatch&&typeof batchParentView!=='undefined')batchParentView=null;
  stopPracticeAudio();const words=await lessonPageResolve(page.words);
  batchDialog.innerHTML='<h2>本页合成与切分</h2><p>'+learningEsc(page.title)+' · '+words.length+' 项。不限 30 项，每批最多 5,000 字符。长页面分批生成，整页播放会自动按顺序衔接各段。</p><p>完整原音会保留。切分页可选择替换已有单条默认音，手录参考音不受影响；不选替换时只补充缺音。</p><label>从第 <input id="pageFrom" type="number" min="1" max="'+words.length+'" value="1"> 项</label><label>到第 <input id="pageTo" type="number" min="1" max="'+words.length+'" value="'+words.length+'"> 项</label><p><label><input id="pageForce" type="checkbox">重新生成所选整段（不用旧缓存，可能消耗额度；成功后替换整段默认音）</label></p><p><button id="pageGenerate">合成／打开已有整段并切分</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  batchDialog.insertAdjacentHTML('beforeend','<details><summary>核对本页顺序</summary><ol>'+words.map(w=>'<li>'+learningEsc(w.word)+' · '+learningEsc(w.meaning)+'</li>').join('')+'</ol></details>');
+ batchDialog.insertAdjacentHTML('afterbegin','<p><button id="pageMissingOnly">只补缺少的词句发音（可勾选）</button></p>');
+ $('#pageMissingOnly').onclick=async()=>{try{await lessonPageSelectMissing(page);}catch(error){batchNotice(error.message);}};
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
  $('#pageGenerate').onclick=async()=>{if(batchAudioBusy)return;batchAudioBusy=true;$('#pageGenerate').disabled=true;
   try{

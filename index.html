@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="079ac7abed931c0f">
+  <meta name="lao-app-build" content="362142bc968fbf25">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -10335,6 +10335,36 @@ document.addEventListener('pointerover',event=>{if(event.target.closest?.('#view
  #learningPanel .learning-secondary-groups button[aria-pressed=true]{background:#dcefe5;color:#15694f;font-weight:600}
  #learningPanel .page-player-controls>button{border:0;border-radius:10px;background:#f0f5f1;color:#417762;box-shadow:none}
  #learningPanel .page-player-controls>.page-play{background:#087f70;color:#fff}
+}
+/* A quiet listening strip. Limit the new surface to the in-page player;
+   the scroll-following player retains its positioning and safe-area rules. */
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating){flex-direction:row;align-items:center;justify-content:space-between;gap:12px 24px;padding:14px 0;margin:12px 0 18px;border:0;border-top:1px solid #e3ebe7;border-bottom:1px solid #e3ebe7;border-radius:0;background:transparent;box-shadow:none}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading{display:flex;flex:0 1 auto;align-items:baseline;justify-content:flex-start;gap:12px;width:auto;min-width:0;margin:0}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading strong{order:-1;font-size:14px;font-weight:600;line-height:1.5;color:#244c42}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-kicker{margin:0;font-size:11px;letter-spacing:0;line-height:1.5;color:#7b8f85;white-space:nowrap}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls{display:flex;flex:0 1 auto;align-items:center;justify-content:flex-end;gap:4px;width:auto;min-width:0}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action]{display:inline-flex;align-items:center;justify-content:center;width:40px;min-width:40px;height:40px;min-height:40px;padding:10px!important;margin:0;border:0;border-radius:50%;background:transparent;color:#52776a;box-shadow:none}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play]{width:auto;min-width:112px;padding:10px 16px!important;border-radius:24px;background:#087f70;color:#fff;gap:7px}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action] svg{width:18px;height:18px}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=pause] .page-player-label{display:none}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-mobile{display:inline-flex;align-items:center;justify-content:center}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play] .page-player-label{display:inline;font-size:12px;font-weight:500}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>summary{display:flex;align-items:center;justify-content:center;box-sizing:border-box;gap:5px;height:40px;min-height:40px;padding:8px 10px;font-size:12px;font-weight:400;color:#52776a;border:0;border-radius:8px;background:transparent}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action]:hover{background:#e8f2ec;color:#176751}
+#learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play]:hover{background:#076c60;color:#fff}
+#learningPanel #learningContent .lesson-page-player :is(button,summary):focus-visible{outline:2px solid #087f70;outline-offset:3px}
+@media(max-width:640px){
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating){flex-direction:column;align-items:stretch;gap:8px;padding:12px 0;margin:6px 0 12px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading{width:100%;justify-content:space-between;gap:8px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading strong{font-size:13px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-kicker{font-size:10px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls{width:100%;justify-content:flex-start;gap:2px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action]{width:44px;min-width:44px;height:44px;min-height:44px;padding:12px!important}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play]{width:44px;min-width:44px;padding:12px!important;border-radius:50%;margin-right:4px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play] .page-player-label{display:none}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>summary{height:44px;min-height:44px;padding:10px 6px;font-size:11px;gap:4px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]{flex:1 0 100%;order:3}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]>summary{justify-content:flex-start;background:#f1f6f2}
 }
 </style>
 <script data-interaction-fast>

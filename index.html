@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="1965942ff9c600c2">
+  <meta name="lao-app-build" content="7997f141ed423c05">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4859,7 +4859,7 @@ async function reviewRate(id,color){
  const item=await practiceGetItem(id);if(!item||version!==practiceRequest)return;
  const {events}=await reviewWriteAttempt(item,direction,question,{...(question.checked?{checked:true,correct:question.correct,checkedAt:question.checkedAt}:{}),rating:color});
  await markPracticeEntry(id,color);
- const state=reviewState(events,reviewKeys(item),direction);question.rated=true;
+ const state=reviewState(events,reviewKeys(item),direction);question.rated=true;question.rating=color;
  reviewNotice='已记为'+reviewLabels[color]+' · 下次 '+reviewTime(state.nextReviewAt);
  $('#reviewFeedback').textContent=reviewNotice;persistPractice();
  if($('#reviewHistory').open)await reviewDrawHistory();
@@ -5775,6 +5775,8 @@ async function studyRender(run){
  $('#questionPrompt').textContent=studyRecallPrompt(reverse);
  if(!reverse)studyLao($('#questionIPA'),item.word,$('#practiceKind').value==='letters'||item._vowelRule);
  $('#showAnswer').disabled=false;
+ const previousRating=practiceRound?.history?.[practiceRound.cursor];
+ if(previousRating?.rated)await studyCardFlow.reveal(()=>studyRevealAnswer(false));
  let snap;try{snap=await learningSnapshot();}catch(e){if(run===studyCardRun)studyStatus.textContent='例句暂时无法读取：'+e.message;return;}if(run!==studyCardRun||request!==practiceRequest||id!==practiceId)return;
  for(const m of studyExamples(item,snap)){
   const row=document.createElement('article'),lo=document.createElement('p'),zh=document.createElement('p'),play=document.createElement('button'),detail=document.createElement('button'),actions=document.createElement('div');
@@ -5812,7 +5814,7 @@ async function studyPlaySaved(item,run){
   studyStatus.textContent='';await learningPlayBlob(blob,start,end);
  }catch(e){if(run===studyCardRun&&id===practiceId&&request===practiceRequest&&activeView==='practice')studyStatus.textContent='未能播放：'+e.message+'；请点播放重试。';}
 }
-async function studyRevealAnswer(){
+async function studyRevealAnswer(withAudio=true){
  if(studyCardRevealed||!studyCardItem||$('#showAnswer').disabled||practiceRound?.completed)return;
  const run=studyCardRun,item=studyCardItem;
  studyCardRevealed=true;studyCard.classList.add('study-revealed');$('#showAnswer').hidden=true;
@@ -5822,10 +5824,12 @@ async function studyRevealAnswer(){
  else answer.textContent=item.ipa?'/'+item.ipa+'/':'';
  translation.textContent=item.meaning||'';studyTranslation.append(answer,translation);
  $('#practicePlay').hidden=false;$('#practiceDetail').hidden=false;$('#practiceNotes').hidden=!item.note;
- for(const b of $('#practiceMarkControls').querySelectorAll('button'))b.disabled=false;
+ const previousRating=practiceRound?.history?.[practiceRound.cursor];
+ for(const b of $('#practiceMarkControls').querySelectorAll('button')){b.disabled=false;b.setAttribute('aria-pressed',String(previousRating?.rating===b.dataset.practiceMark));}
+ if(previousRating?.rated)$('#practiceMarkStatus').textContent='可以重新选择掌握程度；修改不会增加答题次数。';
  // Keep the persisted answer text compatible with round history and device handoff.
  $('#practiceResult').textContent='答案是：'+fullAnswer(item,practiceDirection);persistPractice();
- if(typeof appPreference!=='function'||appPreference('revealAudio'))await studyPlaySaved(item,run);
+ if(withAudio&&(typeof appPreference!=='function'||appPreference('revealAudio')))await studyPlaySaved(item,run);
 }
 async function studyReveal(){if(!studyCardItem||$('#showAnswer').disabled||practiceRound?.completed)return;return studyCardFlow.reveal(studyRevealAnswer);}
 const studyOriginalGrade=$('#practiceMarkControls').onclick;
@@ -6464,8 +6468,8 @@ function courseCheckSession(queue,course,direction,snap,options={}){
    revealedAt=at;persist();
    card.classList.add('study-revealed');answer.hidden=false;answer.textContent=direction==='lao'?r.zh:r.lao;if(direction==='zh')answer.lang='lo';
    reveal.hidden=true;$('[data-recall-play]').hidden=false;$('[data-recall-detail]').hidden=false;
-   for(const b of grades())b.disabled=ratings.has(at);
-   if(ratings.has(at))status.textContent='本题已保存：'+({red:'陌生',yellow:'模糊',green:'熟悉'})[ratings.get(at)]+'；回看不重复记分。';
+   for(const b of grades()){b.disabled=false;b.setAttribute('aria-pressed',String(ratings.get(at)===b.dataset.recallGrade));}
+   if(ratings.has(at))status.textContent='本题已保存：'+({red:'陌生',yellow:'模糊',green:'熟悉'})[ratings.get(at)]+'；可以重新选择，修改不会增加答题次数。';
    if(withAudio&&(typeof appPreference!=='function'||appPreference('revealAudio')))await play();
   });}
   reveal.onclick=()=>show();
@@ -6477,7 +6481,9 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   for(const b of card.querySelectorAll('[data-cc-example]'))b.onclick=()=>play(b.dataset.ccExample);
   for(const b of card.querySelectorAll('[data-cc-detail]'))b.onclick=()=>openDetail(b.dataset.ccDetail,b);
   for(const b of grades())b.onclick=()=>flow.grade(async()=>{
-   if(!current()||ratings.has(at))return;for(const n of grades())n.disabled=true;
+   if(!current())return;
+   if(ratings.get(at)===b.dataset.recallGrade){index++;draw();return;}
+   for(const n of grades())n.disabled=true;
    try{if(fast)await fast.save(r,b.dataset.recallGrade,attempts[at]);else{await pendingReviewRecord(r,course,direction,b.dataset.recallGrade,attempts[at],{practice:true});await markPracticeEntry(r.reviewWord?.id||'material:'+r.id,b.dataset.recallGrade);}ratings.set(at,b.dataset.recallGrade);persist();if(current()){index++;draw();}}
    catch(e){if(current()){status.textContent='结果尚未保存：'+e.message;for(const n of grades())n.disabled=false;}}
   });
@@ -8029,7 +8035,14 @@ async function rrRead(){const [snap,words]=await Promise.all([learningSnapshot()
 async function rrAttempt(item,direction,rating,id,source='review',cursor=null){
  const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]),current=rrCatalog(snap,words).find(w=>reviewKeys(w).some(k=>reviewKeys(item).includes(k)));
  if(!current||rrSignature(current)!==rrSignature(item))throw Error('词句已修改或删除，请重新打开本轮');
- if(snap.learningMaterials.some(m=>m.id===id))return;
+ const previous=snap.learningMaterials.find(m=>m.id===id);
+ if(previous){
+  const op=previous.rollingReview;
+  if(source!=='consolidation')return;
+  if(!op||op.type!=='attempt'||op.target!==reviewTarget(current)||op.direction!==direction||op.signature!==rrSignature(current))throw Error('检测保存编号冲突');
+  if(op.rating!==rating)await learningWrite({learningMaterials:[{...previous,rollingReview:{...op,rating},updatedAt:Date.now()}]},snap,{quickProgress:true});
+  return;
+ }
  const at=Date.now(),membership=rrModel(snap,words).rows.find(r=>r.direction===direction&&reviewKeys(r.item).some(k=>reviewKeys(current).includes(k)));
  const ops=[];if(!membership)ops.push({version:1,type:'membership',at:at-1,direction,status:'active',targets:[reviewTarget(current)]});
  ops.push({version:1,type:'attempt',id,at,target:reviewTarget(current),direction,rating,source,signature:rrSignature(current)});if(cursor)ops.push(cursor);await rrSave(ops,snap);
@@ -10192,9 +10205,9 @@ function ccFastContext(queue,course,direction,snap){
    const m=material.result,w=entry?.result;if(!m||m.deleted)throw Error('此题已移除，请重新开始检测');
    if(row.reviewWord){if(!w||w.word!==row.lao||(w.meaning||'')!==row.zh||!syncKeys(w).includes(row.reviewWord.syncId)||!(m.linkedWordSyncIds||[]).some(ref=>syncKeys(w).includes(ref)))throw Error('此词或教材关联已变化，请重新开始检测');}
    else if(m.textLao!==row.lao||m.translationZh!==row.zh)throw Error('此句已修改，请重新开始检测');
-   if(event.result){const op=event.result.rollingReview;if(!op||op.target!==target||op.direction!==skill||op.signature!==signature)throw Error('检测保存编号冲突');return;}
+   if(event.result){const op=event.result.rollingReview;if(!op||op.target!==target||op.direction!==skill||op.signature!==signature)throw Error('检测保存编号冲突');if(op.rating===rating)return;const record=rows.find(record=>record.id===id);record.rollingReview={...op,rating};}
    for(const record of rows)ms.put(record);
-   const records=rows.map(record=>({table:'lao_learning_records',kind:'learningMaterials',id:record.id,row:record,before:null,progress:true}));
+   const records=rows.map(record=>({table:'lao_learning_records',kind:'learningMaterials',id:record.id,row:record,before:record.id===id?event.result||null:null,progress:true}));
    if(w){const updated={...w,learningState:rating,updatedAt:at};es.put(updated);records.push({table:'lao_dictionary_records',kind:'entry',id:w.syncId,row:updated,before:w,progress:true});
     const map=validateAlphabetOverrides(chart.result||{});alphabetRows.forEach((r,ri)=>r[2].forEach((original,ci)=>{const key=ri+':'+ci,forms=(Object.hasOwn(map,key)?map[key]:original).split('|').map(x=>x.trim()).filter(Boolean);if(forms.length&&alphabetMatches({forms},[w]).length)map['color:'+key]=rating;}));meta.put(map,'alphabetCells');
    }else{const updated={...m,practiceReview:{...m.practiceReview,learningState:rating},updatedAt:at};ms.put(updated);records.push({table:'lao_learning_records',kind:'learningMaterials',id:m.id,row:updated,before:m,progress:true});}

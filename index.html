@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="7997f141ed423c05">
+  <meta name="lao-app-build" content="c9d5fabae7815ecd">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -271,7 +271,7 @@
           <details><summary>给 AI 的整理提示词（展开后可复制）</summary><textarea id="bulkPrompt" readonly aria-label="给 AI 的整理提示词"></textarea></details>
           <label>粘贴整理后的词本<textarea id="bulkText" spellcheck="false" placeholder="老挝语 | IPA | 中文 | 标签 | 备注&#10;ກ |  |  | 辅音,基本辅音 | 待补音标&#10;ນ້ຳ |  | 水 | 生活 | "></textarea></label>
           <button type="button" id="pasteBulkButton" class="mobile-paste">粘贴</button> <button type="button" id="bulkPreviewButton">检查并预览</button> <button type="button" class="primary" id="bulkSaveButton" disabled>确认批量添加</button>
-          <p>完全相同的词条（五列内容相同）会跳过；不同词义或备注会保留为独立词条。录音可在添加后逐条补录。批量添加不用于更新已有词条。</p>
+          <p>完全相同的词条会跳过；同写法但释义、标签或备注不同的内容会提示核对，避免再新增重复词卡。已有词纠错请打开原词卡修改，或导入经过核对的专项整理文件。录音可在添加后补录，同词共用参考音。</p>
           <p id="bulkStatus" class="bulk-status" aria-live="polite"></p><div id="bulkPreview" class="bulk-preview"></div>
         </details>
       </section>
@@ -565,7 +565,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
       stopPracticeAudio();const generation=playbackGeneration;
       try{if(source==='auto'){const clip=await recordedReferenceForWord(item);if(generation!==playbackGeneration)return;if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}const own=source==='default'?null:audioBlobFor(item);if(source==='personal'&&!own)throw new Error('这个词条没有自己的录音。');if(!own)$('#ttsStatus').textContent='正在准备默认发音…';const blob=own||await defaultSpeech(item.word);if(generation!==playbackGeneration)return;practiceAudioUrl=URL.createObjectURL(blob);practiceAudio=new Audio(practiceAudioUrl);const playing=practiceAudio;playing.onended=()=>{if(practiceAudio===playing)stopPracticeAudio();};await playing.play();if(!own)$('#ttsStatus').textContent='正在播放默认发音；它与自己的录音分别保留。';}catch(error){if(generation!==playbackGeneration)return;stopPracticeAudio();$('#ttsStatus').textContent=error.message;alert(error.name==='AbortError'?'语音生成超时，请重试。':error.message);}
     }
-    const bulkPrompt = '请把我接下来提供的杂乱老挝语词本整理成可直接粘贴导入的表格文本。第一行必须是：老挝语 | IPA | 中文 | 标签 | 备注。每行一个词条或字母，严格五列，用半角竖线 | 分隔。只有老挝语必填；原文缺失或不能确定的 IPA、中文等请留空，不要猜测补写，字母没有中文意思可以留空。多个标签用中文或英文逗号分隔。备注可保留发音要点、例句和记忆方法；单元格内换行写成 <br>，正文中的竖线改成全角 ｜。忠实保留老挝语拼写、IPA 声调与附加符号，同形词的不同词义分别成行。不输出解释、编号或额外表格。下面是我的原始词本：';
+    const bulkPrompt = '请整理为五列文本，表头必须是：老挝语 | IPA | 中文 | 标签 | 备注。每行一个完整写法的主词卡，同写法的不同常用义项合并到中文列，以词性及语境区分；不得因来源、课次或释义不同重复成行。拼写、调号和重复符号不同的词不擅自合并。原文缺失或不确定的 IPA／词义留空，疑点写备注。真实单词标签用“主题·名称,词性·名称”；主题从：食物与饮品、数字与计量、时间与日历、亲属与人际、人称与称呼、国家与地名、职业与机构、学习与交流、身体与健康、衣着与配饰、颜色与外观、交通与旅行、居住与日用品、方位与地点、自然与农事、动物、社交与礼貌、情绪与状态、状态与性质、文化与活动、交易与费用、常用动作、感知与认知、语法与功能表达中选择，可多个。字母／元音／无实际词义的拼读练习使用对象·辅音字母、对象·元音字形或对象·拼读练习，勿伪造词义。课次、字母教学用途和例句放备注，不用中辅音等标签代替真实词义主题。每行严格五列，半角 | 分隔，内容中的竖线改为全角 ｜，换行写<br>。忠实保留老挝语和IPA附加符号，不编造出处。不输出额外解释。此入口仅添加新词，已有词纠错须更新原词卡，不能伪装成新增。以下为原始资料：';
     let bulkReadyText = null;
     function parseBulkText(text) {
       const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/), entries=[], errors=[];
@@ -839,6 +839,7 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       let committed=false;
       try {
         const backup=JSON.parse(await file.text());
+        if(backup?.format==='lao-library-maintenance-v1'){await importLibraryMaintenance(backup);return;}
         if(backup?.format==='lao-shared-words-v1'){await importSharedWords(backup);return;}
         if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
         if(['lao-phonetic-repair-v1','lao-study-refresh-v1','lao-library-organize-v1'].includes(backup?.format)){const applied=await importPhoneticRepair(backup);if(!applied)$('#backupStatus').textContent='已取消资料更新，未修改本机资料。';return;}
@@ -7041,7 +7042,7 @@ function paBasis(target){
 }
 function paCurrent(target,digest){try{return paCompatibleDigest(target.m.pronunciationAnalysis?.ruleDigest,digest)&&target.m.pronunciationAnalysis?.basisKey===cloudStable(paBasis(target));}catch(_){return false;}}
 function paCandidates(snap,entries,sentences=[]){
- const lookup=paLookup(snap,entries),rows=new Map(),add=(id,label)=>{try{const target=paResolve(id,snap,entries,lookup);if(rows.has(target.m.id))return;const basis=paBasis(target);if(target.text?.trim())rows.set(target.m.id,{id:target.m.id,...target,label,kind:basis.mode==='word'?'words':'sentences'});}catch(_){}};
+ const lookup=paLookup(snap,entries),rows=new Map(),add=(id,label)=>{try{const target=paResolve(id,snap,entries,lookup);if(rows.has(target.m.id)||/[\p{Script=Han}]/u.test(target.text)&&!/[\u0e80-\u0eff]/u.test(target.text))return;const basis=paBasis(target);if(target.text?.trim())rows.set(target.m.id,{id:target.m.id,...target,label,kind:basis.mode==='word'?'words':'sentences'});}catch(_){}};
  for(const w of entries)if(w.syncId&&w.word?.trim())add('word:'+w.syncId,'词典单词'+(w.category?' · '+w.category:''));
  for(const m of snap.learningMaterials)if(!m.deleted&&!m.phoneticProfile&&(m.contentType==='word'||m.contentType==='reading_drill'||m.analysisOwner))add(m.id,m.source||'已收录词语／拼读资料');
  for(const row of sentences)add(row.m.id,row.label);
@@ -7215,6 +7216,12 @@ async function paRepairPlan(root,snap,entries,progress=()=>{}){
    if(a?.format!=='lao-segment-pronunciation-v1'||a.ruleDigest!==digest||a.original!==resolved.text||a.basisKey!==cloudStable(basis))throw Error('修复分析与当前原文、语法分段不一致');
    if(a.segments?.length!==basis.segments.length)throw Error('修复分析分段数量不一致');for(let j=0;j<basis.segments.length;j++){const s=a.segments[j],b=basis.segments[j];if(s.index!==j||s.original!==b.original||s.chinese!==b.chinese)throw Error('修复分段身份不一致');for(const w of s.words||[])if(!b.words.some(v=>v.lao===w.lao&&v.meaning===w.meaning&&v.role===w.role&&v.target===w.target))throw Error('不能通过发音修复改写原语法词义或词典关联');}
    next={...target,pronunciationAnalysis:a,updatedAt:Date.now()};annotated++;
+  }else if(op.kind==='detach-non-lao'){
+   if(!old||old.deleted||old.phoneticProfile||!old.pronunciationAnalysis||!/[\p{Script=Han}]/u.test(old.textLao)||/[\u0e80-\u0eff]/u.test(old.textLao))throw Error('只能清理误挂在中文说明上的发音分析');
+   next={...old,updatedAt:Date.now()};delete next.pronunciationAnalysis;
+  }else if(op.kind==='retire'){
+   if(!old?.phoneticProfile||old.deleted||old.audioSources?.length||snap.learningPlacements.some(p=>p.materialId===op.id))throw Error('不能归档带音频或课程关联的缓存');
+   next={...old,deleted:true,repairReason:'无在用关联的旧发音缓存；本次整理归档，原记录保留以便恢复',updatedAt:Date.now()};archived++;
   }else if(op.kind==='archive'){
    if(!old?.phoneticProfile||old.deleted||!op.redirectTo||op.redirectTo===op.id||old.audioSources?.length||snap.learningPlacements.some(p=>p.materialId===op.id))throw Error('不能归档该记录或存在音频／课程关联');
    next={...old,deleted:true,repairRedirectTo:op.redirectTo,repairReason:'重复或经复核的历史版本，关联已迁移；保留原记录以便恢复',updatedAt:Date.now()};archived++;
@@ -10145,7 +10152,7 @@ function swPlan(root,snap,entries){
   if(!prior){const richest=members.filter(m=>m.textLao===w.word&&m.translationZh===w.meaning).sort((a,b)=>Number(!!b.sentenceAnalysis)-Number(!!a.sentenceAnalysis))[0];if(richest)for(const key of ['sentenceAnalysis','pronunciationAnalysis'])if(richest[key])hub={...hub,[key]:richest[key]};}
   hub={...hub,id:hubId,textLao:w.word,translationZh:w.meaning,contentType:'word',linkedWordSyncIds:[ref],sharedWordHub:true,sharedWordAliases:syncKeys(w),sharedWordTarget:undefined,audioSources:refs,updatedAt:now};
   const latest=refs.filter(a=>a.source==='user'&&a.role==='reference'&&!a.needsReview).at(-1);if(latest)hub={...hub,audioNeedsReview:false,defaultAudioKey:'user:'+latest.assetId};materials.set(hubId,hub);
-  for(const m of members)if(m.id!==hubId){materials.set(m.id,{...m,sharedWordTarget:hubId,updatedAt:now});occurrences++;}
+  for(const m of members)if(m.id!==hubId){materials.set(m.id,{...m,...(m.sharedWordHub?{sharedWordHub:false}:{}),sharedWordTarget:hubId,updatedAt:now});occurrences++;}
  }
  let speechLocations=0;const speechIds=new Set();for(const group of root.speechGroups||[]){
   if(!/^shared-speech:[a-f0-9]{64}$/.test(group.id)||speechIds.has(group.id)||!Array.isArray(group.members)||group.members.length<2||group.members.length>10000)throw Error('同句共用分组无效');speechIds.add(group.id);
@@ -10439,6 +10446,49 @@ function ccCheckpointRead(key,data,course,snap,words){
   return {...saved,queue};
  }catch(_){return null;}
 }
+</script>
+<script data-maintenance="library-maintenance.js">
+/* One atomic, source-checked library maintenance import; live audio is read locally. */
+async function lmPlan(root,snap,entries,progress=()=>{}){
+ if(root?.format!=='lao-library-maintenance-v1'||root.version!==1)throw Error('词库整理文件格式无效');
+ const shared=swPlan(root.shared,snap,entries),byEntry=new Map(shared.entryUpdates.map(w=>[w.id,w]));
+ const merged=entries.filter(w=>!shared.deletes.includes(w.id)).map(w=>byEntry.get(w.id)||w);
+ const organized=await loOrganizePlan(root.organize,shared.after,merged,progress),materials=new Map(shared.materials.map(m=>[m.id,m]));
+ for(const m of organized.plan.materials)materials.set(m.id,m);
+ for(const w of organized.plan.entryUpdates)byEntry.set(w.id,w);
+ for(const m of materials.values())learningValidateRecord('learningMaterials',m);
+ return {entryUpdates:[...byEntry.values()],deletes:shared.deletes,materials:[...materials.values()],audio:shared.audio,after:organized.after,afterEntries:organized.afterEntries,counts:{...organized.counts,...shared.counts}};
+}
+async function importLibraryMaintenance(root){
+ if(learningHasWork()||recorder||learningSyncRunning)throw Error('请先完成编辑、录音或同步');
+ const origin=workspaceName('shared-words'),dialog=document.createElement('dialog');dialog.className='pa-repair-dialog';
+ dialog.innerHTML='<h2>词库、标签与发音整理</h2><p data-lm-status role="status">正在核对原文、词条及分析…</p><p><button type="button" data-lm-apply disabled>应用整批整理</button><button type="button" data-lm-close>取消／关闭</button></p>';
+ document.body.append(dialog);dialog.showModal();const status=dialog.querySelector('[data-lm-status]'),apply=dialog.querySelector('[data-lm-apply]');let busy=false,closed=false;
+ const close=()=>{if(busy)return;closed=true;dialog.close();dialog.remove();};dialog.querySelector('[data-lm-close]').onclick=close;dialog.oncancel=e=>{e.preventDefault();close();};
+ try{const [snap,entries]=await Promise.all([learningSnapshot(),allEntries()]),plan=await lmPlan(root,snap,entries,m=>{if(!closed)status.textContent=m;});if(closed)return;
+  const n=plan.counts;status.textContent='合并 '+n.mergedEntries+' 张重复词典卡；'+n.occurrences+' 个位置共用 '+n.hubs+' 个主词条；整理 '+n.metadata+' 条标签／备注；更新 '+n.annotated+' 张发音关联，新增 '+n.created+' 份分析，归档 '+n.archived+' 份旧缓存。应用前请保留含音频的完整备份。';apply.disabled=false;
+  apply.onclick=async()=>{if(busy)return;busy=true;apply.disabled=true;try{await swCommit(plan,snap,entries,origin);status.textContent='整理已保存。请完成一次云端同步，让其他设备收到整理结果。';await render();}catch(e){status.textContent='未应用整理：'+e.message+'。请重新导出核查。';}finally{busy=false;}};
+ }catch(e){if(!closed)status.textContent='未应用整理：'+e.message;}
+}
+</script>
+<script data-maintenance="word-topic-picker.js">
+/* Topic selection edits the existing category field; no separate vocabulary copies. */
+const tpThemes=['食物与饮品','数字与计量','时间与日历','亲属与人际','人称与称呼','国家与地名','职业与机构','学习与交流','身体与健康','衣着与配饰','颜色与外观','交通与旅行','居住与日用品','方位与地点','自然与农事','动物','社交与礼貌','情绪与状态','状态与性质','文化与活动','交易与费用','常用动作','感知与认知','语法与功能表达'];
+const tpSplit=s=>String(s||'').split(/[,，;；]/u).map(s=>s.trim()).filter(Boolean);
+const tpCategory=document.querySelector('#category'),tpForm=document.querySelector('#entryForm');
+const tpBox=document.createElement('details');tpBox.className='topic-picker';tpBox.innerHTML='<summary>勾选主题标签</summary><p class="tag-hint">按词义选择，可多选。教材课次和字母练习用途写在备注中；字母、拼读练习可继续使用“对象·”标签。</p><div data-topic-choices></div>';
+tpCategory.closest('label').after(tpBox);tpCategory.placeholder='例如：主题·交通与旅行，词性·动词';
+const tpStyle=document.createElement('style');tpStyle.textContent='.topic-picker{margin:4px 0 14px}.topic-picker>summary{min-height:44px;display:flex;align-items:center;color:#376e59;font-size:13px}.topic-picker [data-topic-choices]{display:flex;flex-wrap:wrap;gap:6px}.topic-picker label{display:flex;align-items:center;gap:6px;min-height:40px;margin:0;padding:6px 9px;border:1px solid #dce8df;border-radius:9px;font-size:12px;background:#f7faf7}.topic-picker input[type=checkbox]{width:16px;min-height:0;margin:0;accent-color:#087f70}.topic-picker label:has(input:checked){background:#deeee5;border-color:#9bc7af}';document.head.append(tpStyle);
+function tpRefresh(){const selected=new Set(tpSplit(tpCategory.value)),themes=[...new Set([...tpThemes.map(t=>'主题·'+t),...selected].filter(t=>t.startsWith('主题·')))];const choices=tpBox.querySelector('[data-topic-choices]');choices.replaceChildren();for(const tag of themes){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=tag;input.checked=selected.has(tag);label.append(input,document.createTextNode(tag.slice(3)));choices.append(label);}}
+tpBox.addEventListener('change',e=>{if(e.target.type!=='checkbox')return;const tags=new Set(tpSplit(tpCategory.value));if(e.target.checked)tags.add(e.target.value);else tags.delete(e.target.value);tpCategory.value=[...tags].join(',');tpCategory.dispatchEvent(new Event('input',{bubbles:true}));});
+tpCategory.addEventListener('input',tpRefresh);tpBox.addEventListener('toggle',()=>{if(tpBox.open)tpRefresh();});tpForm.addEventListener('reset',()=>queueMicrotask(tpRefresh));
+const tpShowView=showView;showView=function(view,...args){const result=tpShowView(view,...args);if(view==='add')tpRefresh();return result;};tpRefresh();
+const tpSubmit=tpForm.onsubmit;let tpSaving=false;
+tpForm.onsubmit=async function(e){e.preventDefault();if(tpSaving)return;tpSaving=true;try{if(recorder||noteImagesBusy)return await tpSubmit.call(this,e);if(!editingId){const key=swNorm(document.querySelector('#word').value),words=await allEntries(),same=words.filter(w=>swNorm(w.word)===key);if(same.length>1){alert('这个写法对应多张旧词卡，请先整理或打开已有词卡修改；本次不会再新增。');return;}if(same.length===1){if(!confirm('词典已有“'+same[0].word+'”。将用本次内容更新原词卡，保留已有录音与学习记录。继续？'))return;const images=[...new Set([...(same[0].noteImages||[]),...noteImageDraft])];if(images.length>3){alert('原词卡与本次备注图片合计超过3张，请打开原词卡选择保留的图片。');return;}loadNoteImages({...same[0],noteImages:images});editingId=same[0].id;}}return await tpSubmit.call(this,e);}finally{tpSaving=false;}};
+const tpGuidelines='词卡规则：同一完整老挝语写法使用一张主词卡，多个常用义项在该卡中按词性和语境列出，不因教材来源另建词卡。不同拼写／调号不得擅自合并；语境词义和例句放在教材／句子引用中。主题标签从给定列表选择一至数项，格式“主题·名称”；词性使用“词性·名词”等；字母／元音／拼读练习使用“对象·”标签。课次、中辅音等辅助学习用途放备注，不能代替单词的语义主题。已有词卡纠错应更新原ID并预览，不能走新增词卡流程。';
+const tpPlanBulk=planBulk;planBulk=function(rows,existing){const seen=new Map(existing.map(w=>[swNorm(w.word),w]));for(const row of rows){const key=swNorm(row.word),old=seen.get(key);if(old&&legacyEntryKey(old)!==legacyEntryKey(row))throw Error('“'+row.word+'”已有同写法词卡或在本批中重复。请合并义项后更新已有词卡；不会因释义或标签不同另建重复词卡。');seen.set(key,row);}return tpPlanBulk(rows,existing);};
+const tpSabTask=sabTask;sabTask=function(...args){const task=tpSabTask(...args);task.instructions+=' '+tpGuidelines+' 本任务只填写句子分析，不创建词典卡；组合词与组成词均只列实际出现在原文中的内容，词义以本句为准。';task.dictionaryCardGuidance={themes:tpThemes};return task;};
+const tpCompact=paCompactTask;paCompactTask=async function(...args){const task=await tpCompact(...args);task.instructions+=' 本任务只维护发音分析：同文词卡应共享分析和参考音，不按不同来源重复生成，不改变词典主题或义项。';return task;};
 </script>
 <script src="./offline.js"></script>
 </body>

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="362142bc968fbf25">
+  <meta name="lao-app-build" content="b2afc76b6e4bf91b">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -10358,12 +10358,15 @@ document.addEventListener('pointerover',event=>{if(event.target.closest?.('#view
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading{width:100%;justify-content:space-between;gap:8px}
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-heading strong{font-size:13px}
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-kicker{font-size:10px}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls{width:100%;justify-content:flex-start;gap:2px}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action]{width:44px;min-width:44px;height:44px;min-height:44px;padding:12px!important}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play]{width:44px;min-width:44px;padding:12px!important;border-radius:50%;margin-right:4px}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play] .page-player-label{display:none}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>summary{height:44px;min-height:44px;padding:10px 6px;font-size:11px;gap:4px}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]{flex:1 0 100%;order:3}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;gap:6px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action]{grid-column:span 2;box-sizing:border-box;width:100%;min-width:0;height:44px;min-height:44px;padding:8px 4px!important;border-radius:10px;background:#eef4f0;gap:5px;font-size:11px;white-space:nowrap}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=play]{width:100%;min-width:0;padding:8px 4px!important;border-radius:10px;margin:0;background:#087f70;color:#fff}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action] .page-player-label{display:inline;font-size:11px;font-weight:500}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action] svg{width:16px;height:16px}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action=stop]::after{content:'停止'}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details{grid-column:span 3;min-width:0;position:static;margin:0}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>summary{height:44px;min-height:44px;padding:10px 6px;font-size:11px;gap:6px;color:#6b8176}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]{grid-column:1/-1;order:3}
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]>summary{justify-content:flex-start;background:#f1f6f2}
 }
 </style>

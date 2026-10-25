@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c9d5fabae7815ecd">
+  <meta name="lao-app-build" content="8b91ca068a83e7b6">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3439,12 +3439,12 @@ async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop===
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
  else body=(b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
- return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+'</section>';};
+ return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  const selected=d.sections.find(s=>s.id===lessonV2Sections.get(c.id))||d.sections[0];
  if(selected)lessonV2Sections.set(c.id,selected.id);
- const sectionHtml=s=>s.numberLab?nlHtml(c):'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(!grouped&&typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block,!!grouped):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>');
+ const sectionHtml=s=>(s.numberLab?nlHtml(c):'<button data-course-test="section" data-key="'+h(s.id)+'">检测本小节</button>'+(!grouped&&typeof lessonPageToolbar==='function'?lessonPageToolbar(s,c):'')+(c.library==='communication'&&typeof communicationSection==='function'?communicationSection(s,block,!!grouped):'<section class="v2-section" aria-label="'+h(s.title)+'"><h3>'+h(s.title)+'</h3><p class="tag-hint">'+h([...s.topics,...s.roles].join(' · '))+'</p>'+s.blocks.filter(b=>lessonV2Mode!=='category'||lessonV2Filter==='all'||lessonV2Filter===b.contentType) .map(block).join('')+'</section>'))+(!grouped&&typeof learningSubsectionNav==='function'?learningSubsectionNav(d.sections,s.id,false):'');
  return (grouped||c.library!=='communication'?'':'<button type="button" data-learning-group="words">← 核心单词 / 情景对话</button>')+'<h2>'+h(c.title)+'</h2><p>'+h(c.description||'')+'</p><div class="learn-course-tools'+(learningSettings?' is-settings':'')+'"><button type="button" data-course-test="course">本章检测</button>'+(learningSettings?'<button type="button" data-learn="course-edit">修改名称／简介</button><button type="button" data-learn="v2-organize">整理分类与内容</button><button type="button" data-analysis-batch>语法分析（文字）</button><button type="button" data-phonetic-batch>读法分析（文字）</button><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button>':'')+'</div>'+(c.sceneMetadata?'<details><summary>场景与目标</summary><p>'+h((c.sceneMetadata.scenes||[]).join('、'))+'</p><p>'+h(c.sceneMetadata.context||'')+'</p><p>'+h((c.sceneMetadata.goal||[]).join('、'))+'</p></details>':'')+
  (grouped?grouped.nav+(grouped.sections.length?(typeof lessonGroupedContent==='function'?lessonGroupedContent(grouped,c,sectionHtml):grouped.sections.map(sectionHtml).join('')):'<p class="learn-empty">此分类暂无内容。</p>'):
 '<nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+d.sections.map(s=>'<button data-learn="v2-section" data-key="'+h(s.id)+'" aria-current="'+(lessonV2Mode==='order'&&selected?.id===s.id?'page':'false')+'">'+h(s.title)+'</button>').join('')+'</nav>'+
@@ -5871,6 +5871,17 @@ if(typeof document!=='undefined')document.addEventListener('click',async e=>{
  }catch(error){learningError(error);}
 });
 function learningGroupKind(block){return block.contentType==='word-ref'?'words':['sentence','dialogue','reading'].includes(block.contentType)?'dialogue':'other';}
+function learningSubsectionNav(items,current,grouped=true){
+ const at=items.findIndex(item=>item.id===current);if(at<0||items.length<2)return '';
+ const h=learningEsc,button=(offset,label)=>{const item=items[at+offset];return '<button type="button" data-subsection-step '+(grouped?'data-learning-category="'+h(item?.id||'')+'"':'data-learn="v2-section" data-key="'+h(item?.id||'')+'"')+(item?'':' disabled')+'><span>'+label+(offset>0?' →':'')+'</span><small>'+h(item?.title||(offset>0?'已是最后一小节':'已是第一小节'))+'</small></button>';};
+ return '<nav class="learning-subsection-nav" aria-label="小节切换">'+button(-1,'← 上一小节')+'<span class="subsection-position">'+(at+1)+' / '+items.length+'</span>'+button(1,'下一小节')+'</nav>';
+}
+function learningGroupFooter(data,course,blockId){
+ const state=learningGroupState.get(course.id)||{kind:'words',category:''};if(course.library!=='communication'||state.kind==='original')return '';
+ const items=data.sections.flatMap(s=>s.blocks.filter(b=>learningGroupKind(b)===state.kind).map(b=>({id:b.id,title:b.title||s.title})));
+ return learningSubsectionNav(items,blockId);
+}
+let learningGroupNavigating=false;
 function learningGroupView(data,course){
  const state=learningGroupState.get(course.id)||{kind:'words',category:''};
  if(course.library!=='communication'||state.kind==='original')return null;
@@ -5882,12 +5893,13 @@ function learningGroupView(data,course){
  return {nav,title:category?categories.find(b=>b.id===category).title:(state.kind==='words'?'全部单词':'全部情景'),sections:sections.map(s=>({...s,blocks:s.blocks.filter(b=>!category||b.id===category)})).filter(s=>s.blocks.length)};
 }
 learningPanel.addEventListener('click',async e=>{
- const b=e.target.closest('[data-learning-group],[data-learning-category]');if(!b)return;
- try{if(learningHasWork())throw Error('请先保存编辑或结束录音');
+ const b=e.target.closest('[data-learning-group],[data-learning-category]');if(!b||b.disabled||learningGroupNavigating)return;
+ try{if(learningHasWork())throw Error('请先保存编辑或结束录音');learningGroupNavigating=true;
  const state=learningGroupState.get(learningLesson.id)||{kind:'words',category:''};
  learningGroupState.set(learningLesson.id,b.hasAttribute('data-learning-group')?{kind:b.dataset.learningGroup,category:''}:{...state,category:b.dataset.learningCategory});
  lessonV2Mode='order';stopPracticeAudio();await renderLearning();
- }catch(error){learningError(error);}
+ if(b.hasAttribute('data-subsection-step'))document.querySelector('#learningContent .learn-block-heading')?.scrollIntoView({block:'start',behavior:'instant'});
+ }catch(error){learningError(error);}finally{learningGroupNavigating=false;}
 });
 // Reuse the tested single-click/double-click and parent-dialog stack from alphabet examples.
 const groupedRelated=learningRelatedHtml;
@@ -10489,6 +10501,28 @@ const tpGuidelines='词卡规则：同一完整老挝语写法使用一张主词
 const tpPlanBulk=planBulk;planBulk=function(rows,existing){const seen=new Map(existing.map(w=>[swNorm(w.word),w]));for(const row of rows){const key=swNorm(row.word),old=seen.get(key);if(old&&legacyEntryKey(old)!==legacyEntryKey(row))throw Error('“'+row.word+'”已有同写法词卡或在本批中重复。请合并义项后更新已有词卡；不会因释义或标签不同另建重复词卡。');seen.set(key,row);}return tpPlanBulk(rows,existing);};
 const tpSabTask=sabTask;sabTask=function(...args){const task=tpSabTask(...args);task.instructions+=' '+tpGuidelines+' 本任务只填写句子分析，不创建词典卡；组合词与组成词均只列实际出现在原文中的内容，词义以本句为准。';task.dictionaryCardGuidance={themes:tpThemes};return task;};
 const tpCompact=paCompactTask;paCompactTask=async function(...args){const task=await tpCompact(...args);task.instructions+=' 本任务只维护发音分析：同文词卡应共享分析和参考音，不按不同来源重复生成，不改变词典主题或义项。';return task;};
+</script>
+<script data-maintenance="lesson-navigation.js">
+/* Course-title typography and bottom navigation; no stored course data is edited. */
+function ltChineseNumber(value){
+ const n=Number(value);if(!Number.isInteger(n)||n<0||n>9999)return String(value);if(!n)return '零';
+ const digits='零一二三四五六七八九',units=['','十','百','千'];let result='',zero=false;
+ for(let at=3;at>=0;at--){const digit=Math.floor(n/10**at)%10;if(digit){if(zero)result+='零';result+=digits[digit]+units[at];zero=false;}else if(result&&n%10**at)zero=true;}
+ return result.replace(/^一十/,'十');
+}
+function ltChapterTitle(value){return String(value||'').replace(/第\s*([0-9０-９]+)\s*([课章])/gu,(_,digits,unit)=>'第'+ltChineseNumber(digits.normalize('NFKC'))+unit);}
+function ltCourseView(course){return {...course,title:ltChapterTitle(course.title),chapterName:ltChapterTitle(course.chapterName)};}
+const ltPicker=learningCoursePicker;learningCoursePicker=function(courses,...args){return ltPicker(courses.map(ltCourseView),...args);};
+const ltChoices=lcChoiceRows;lcChoiceRows=function(options,courses,query='',current=''){return ltChoices(options.map(o=>({...o,text:o.text+' '+ltChapterTitle(o.text)})),courses.map(ltCourseView),query,current);};
+function ltText(node){for(const child of node.childNodes||[]){if(child.nodeType===3){const next=ltChapterTitle(child.nodeValue);if(next!==child.nodeValue)child.nodeValue=next;}else if(child.nodeType===1)ltText(child);}}
+function ltDecorate(){
+ const selector='#learningContent h2,#learningContent h3,#learningContent .lc-picker-button>span,#learningContent [data-course-jump] option,#learningContent .learn-lesson small,#learningDialog h2,#learningDialog .lc-choice-list strong,#learningDialog .lc-choice-list small,.sc-course h3,.sc-course small';
+ for(const node of document.querySelectorAll(selector))ltText(node);
+}
+const ltRender=renderLearning;renderLearning=async function(...args){await ltRender(...args);ltDecorate();};
+const ltAction=lessonV2Action;lessonV2Action=async function(action,button){const result=await ltAction(action,button);if(action==='v2-section'&&button.hasAttribute('data-subsection-step'))document.querySelector('#learningContent .v2-section-tabs')?.scrollIntoView({block:'start',behavior:'instant'});return result;};
+const ltStyle=document.createElement('style');ltStyle.textContent='#learningPanel .learning-subsection-nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin:24px 0 4px;padding-top:16px;border-top:1px solid #e1e9e3}#learningPanel .learning-subsection-nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;min-width:0;min-height:52px;padding:9px 12px;border:0;border-radius:10px;background:#f0f5f1;color:#326957;text-align:left;font-size:13px;line-height:1.5}#learningPanel .learning-subsection-nav button:last-child{align-items:flex-end;text-align:right}#learningPanel .learning-subsection-nav button small{max-width:100%;font-size:11px;font-weight:400;color:#738a7d;white-space:normal;overflow-wrap:anywhere}#learningPanel .learning-subsection-nav button:disabled{opacity:.45;background:transparent;cursor:default}#learningPanel .subsection-position{font-size:11px;color:#8a9b91;white-space:nowrap}#learningPanel .learn-block-heading{scroll-margin-top:18px}@media(max-width:640px){#learningPanel .learning-subsection-nav{gap:8px;margin-top:20px}#learningPanel .learning-subsection-nav button{padding:9px 10px;font-size:12px}#learningPanel .learning-subsection-nav button small{font-size:10px}}';document.head.append(ltStyle);
+ltDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(ltDecorate).observe(document.body,{childList:true,subtree:true,characterData:true});
 </script>
 <script src="./offline.js"></script>
 </body>

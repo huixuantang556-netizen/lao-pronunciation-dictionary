@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c70b404474145d5e">
+  <meta name="lao-app-build" content="3519ea38a506e560">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -2825,7 +2825,7 @@ async function learningAction(e){
   if(a==='drill-preview'){await learningDrillPreview();return;}
   if(a==='preview-import'){await learningPreview();return;}
   if(a==='focus'){const {m,w}=await learningResolve(id);if(w)await putEntry({...w,needsExtraPractice:!w.needsExtraPractice,updatedAt:Date.now()});else await learningWrite({learningMaterials:[{...m,focused:!m.focused,updatedAt:Date.now()}]});await renderLearning();return;}
-  if(a==='edit-word'){learningDialog.close();await $('#entries').onclick({target:{closest:()=>({dataset:{edit:b.dataset.word}})}});return;}
+  if(a==='edit-word'){if(typeof ccBeginWordEdit==='function')ccBeginWordEdit();learningDialog.close();await $('#entries').onclick({target:{closest:()=>({dataset:{edit:b.dataset.word}})}});return;}
  }catch(error){const status=learningDialog.open?$('#learningDialogStatus'):$('#learningStatus');if(status)status.textContent=error.message;const card=b?.closest?.('.learn-card');if(card){let notice=card.querySelector('[data-audio-error]');if(!notice){notice=document.createElement('small');notice.dataset.audioError='';notice.setAttribute('role','status');card.append(notice);}notice.textContent=error.message;}}
 }
 learningPanel.onclick=learningAction;learningDialog.addEventListener('click',learningAction);
@@ -3798,7 +3798,7 @@ async function lessonPageAudioMenu(page){
 }
 function lessonDialogueControls(id){
  const h=learningEsc;
- return '<div class="dialogue-group-player" data-dialogue-player="'+h(id)+'"><div class="dialogue-group-controls" role="group" aria-label="本组对话音频"><button type="button" data-dialogue-action="play">'+lessonIcon('play')+'播放本组</button><button type="button" data-dialogue-action="stop">'+lessonIcon('stop')+'停止</button><button type="button" data-dialogue-action="record">'+lessonIcon('mic')+'录制参考音</button><button type="button" data-dialogue-action="manage">'+lessonIcon('audio')+'音频管理</button></div><p data-page-status role="status"></p></div>';
+ return '<div class="dialogue-group-player" data-dialogue-player="'+h(id)+'"><div class="dialogue-group-controls" role="group" aria-label="本组对话音频"><button type="button" data-dialogue-action="play">'+lessonIcon('play')+'播放本组</button><button type="button" data-dialogue-action="stop">'+lessonIcon('stop')+'停止</button><button type="button" data-dialogue-action="manage">'+lessonIcon('audio')+'音频管理</button></div><p data-page-status role="status"></p></div>';
 }
 async function lessonDialogueAction(action,button){
  const bar=button.closest('[data-dialogue-player]'),status=bar?.querySelector('[data-page-status]');if(!bar)return;
@@ -5681,6 +5681,26 @@ window.prepareLaoAppUpdate=async function(){handoffGuard();persistPractice();if(
 [data-recall-grade="green"]{background:#e5f3e8;border-color:#bcdac2;color:#28603a}
 .ap-course-check{margin:18px 0;border-top:1px solid #e3ece7;padding-top:12px}.ap-course-check label{display:block;margin:12px 0}.ap-course-check select{width:100%;min-height:44px;font-size:16px;box-sizing:border-box}
 .study-example-actions{display:none;gap:10px;flex-wrap:wrap;margin-top:8px}.study-revealed .study-example-actions{display:flex}.study-example-actions button{min-height:44px;margin:0;padding:10px 16px;border-radius:10px;background:#fff;border:1px solid #c8ded4;color:#183e36;font-size:16px}
+/* Desktop chapter checks: example text and actions share one row; mobile stays stacked. */
+@media(min-width:641px){
+ #learningDialog:has(.course-recall){width:min(1040px,calc(100vw - 48px));max-width:calc(100vw - 48px);max-height:94dvh;padding:20px 28px}
+ #learningDialog .course-recall .practice-card{max-width:none;padding:8px 0;border:0}
+ #learningDialog .course-recall .recall-prompt{margin:4px 0;font-size:13px}
+ #learningDialog .course-recall .question-row{margin:8px 0;min-height:60px;gap:8px}
+ #learningDialog .course-recall .question-ipa{font-size:38px;line-height:1.5}
+ #learningDialog .course-recall .study-translation{font-size:19px}
+ #learningDialog .course-recall .study-examples{margin:8px 0}
+ #learningDialog .course-recall .study-example{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;padding:8px 0}
+ #learningDialog .course-recall .study-example>p{grid-column:1;margin:2px 0;line-height:1.5}
+ #learningDialog .course-recall .study-example>[lang=lo]{font-size:21px}
+ #learningDialog .course-recall .study-example-translation{font-size:15px}
+ #learningDialog .course-recall .study-example-actions{grid-column:2;grid-row:1 / span 2;align-self:center;justify-content:flex-end;margin:0;gap:8px}
+ #learningDialog .course-recall .study-example-actions button{min-height:40px;padding:8px 12px;font-size:14px}
+ #learningDialog .course-recall .practice-mark-options button{min-height:44px;font-size:16px}
+ #learningDialog .course-recall .practice-navigation{margin:4px 0 0}
+ #learningDialog .course-recall .practice-navigation button{min-height:40px;font-size:14px}
+ #learningDialog .course-recall .study-audio-status:empty{display:none}
+}
 #practicePanel .practice-mark-options{display:flex;flex:1;gap:10px}
 #practicePanel #practiceMarkControls{width:100%}#practicePanel .practice-mark-label{display:none}
 #practicePanel .practice-mark-options button{flex:1;min-height:54px;border-radius:12px;font-size:18px}
@@ -6450,7 +6470,7 @@ let courseCheckRun=0;
 function courseCheckSession(queue,course,direction,snap,options={}){
  let index=options.resume?.index||0,revealedAt=options.resume?.revealedAt??-1;const ratings=new Map(options.resume?.ratings||[]),attempts=options.resume?.attempts||queue.map(()=>'review-event:'+crypto.randomUUID()),h=learningEsc;
  const persist=()=>typeof ccCheckpointSave!=='function'||ccCheckpointSave(options.checkpointKey,{queue:queue.map(r=>({id:r.id,lao:r.lao,zh:r.zh,group:r.group})),direction,index,ratings:[...ratings],attempts,revealedAt,scopeLabel:options.scopeLabel});
- const fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;
+ let fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;
  function draw(){
   stopPracticeAudio();const run=++courseCheckRun;
   if(index>=queue.length){
@@ -6462,7 +6482,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   const r=queue[index],at=index,flow=studyRecallFlow(),item=r.reviewWord||{_practiceMaterialId:r.id,word:r.lao,meaning:r.zh};
   const checkpointOK=persist();if(typeof sfWarm==='function'){sfWarm(r.id);if(queue[index+1])sfWarm(queue[index+1].id);}
   const examples=direction==='lao'?(fast?fast.examples(item):studyExamples(item,snap,true)):[];
-  const exampleHtml=examples.map(m=>'<article class="study-example"><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" data-cc-example="'+h(m.id)+'">▶ 例句</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
+  const exampleHtml=examples.map(m=>'<article class="study-example"><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" aria-label="播放例句" title="播放例句" data-cc-example="'+h(m.id)+'">▶</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
   learningModal('检测 · '+(index+1)+' / '+queue.length,'<div class="cc-session-meta"><span>'+h(options.scopeLabel||'章节检测')+' · '+queue.length+' 项</span><small>'+h(r.group)+'</small></div><div class="cc-progress" role="progressbar" aria-label="本轮进度" aria-valuemin="0" aria-valuemax="'+queue.length+'" aria-valuenow="'+index+'"><span style="width:'+(index/queue.length*100)+'%"></span></div><div class="course-recall">'+studyRecallCardHtml({question:direction==='lao'?r.lao:r.zh,reverse:direction==='zh',examples:exampleHtml,favorite:typeof fvMarkup==='function'?fvMarkup({target:r.reviewWord?'word:'+r.reviewWord.syncId:r.id}):'',h})+'</div>');
   const card=$('[data-recall-card]'),answer=$('[data-recall-answer]'),reveal=$('[data-recall-reveal]'),status=$('[data-recall-status]');
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
@@ -6472,7 +6492,20 @@ function courseCheckSession(queue,course,direction,snap,options={}){
    if(!flow.revealed||!current())return;
    const parent=typeof letterDetailCapture==='function'?letterDetailCapture(button):null;
    stopPracticeAudio();suspended=true;
-   if(parent){parent.onRestore=()=>{suspended=false;};letterDetailParents.push(parent);}
+   if(parent){
+    const owner=typeof workspaceName==='function'?workspaceName('chapter-check'):'',detailRevision=typeof dfRevision==='number'?dfRevision:null;
+    const refresh=async(force=false)=>{try{
+     if(run!==courseCheckRun||owner&&(workspaceName('chapter-check')!==owner))return;
+     if(!force&&(detailRevision===null||detailRevision===dfRevision)){suspended=false;return;}
+     const fresh=typeof ccReadCourse==='function'?await ccReadCourse():{snap:await learningSnapshot(),words:await allEntries()};
+     if(run!==courseCheckRun||owner&&(workspaceName('chapter-check')!==owner))return;
+     const saved={queue,direction,index,ratings:[...ratings],attempts:[...attempts],revealedAt},next=typeof ccReconcile==='function'?ccReconcile(saved,lessonV2Export(fresh.snap,course),course,fresh.snap,fresh.words):saved;
+     if(!next){suspended=false;learningModal('本轮题目已移除','<p>此范围已没有可检测题目。原已保存的学习记录保留。</p>');return;}
+     queue=next.queue;index=next.index;revealedAt=next.revealedAt;ratings.clear();for(const [i,rating]of next.ratings)ratings.set(i,rating);attempts.splice(0,attempts.length,...next.attempts);snap=fresh.snap;
+     fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;suspended=false;draw();
+    }catch(error){suspended=false;learningError(error);}};
+    parent.onRestore=()=>{void refresh();};parent.courseCheckReturn=()=>refresh(true);letterDetailParents.push(parent);
+   }
    try{await learningOpenDetail(target);if(parent)letterDetailBackButton();}
    catch(error){if(parent)letterDetailBackButton();else suspended=false;learningError(error);}
   }
@@ -7761,9 +7794,11 @@ learningOpenDetail=function(id){
 /* Real attempts only. Reuses append-only review events and the existing scheduler. */
 reviewDirections.meaningToSpeech='口述 · 中文→老语';
 function prCatalog(snap,words){
- const items=practiceBuildCatalog(words,snap,learningCourses(snap)),seen=new Set(items.map(reviewTarget));
+ const courses=learningCourses(snap),visible=new Set(courses.map(c=>c.id)),refsByMaterial=new Map();
+ for(const p of snap.learningPlacements||[]){if(p.deleted||!visible.has(p.lessonId))continue;let refs=refsByMaterial.get(p.materialId);if(!refs){refs=[];refsByMaterial.set(p.materialId,refs);}refs.push({id:p.lessonId});}
+ const items=practiceBuildCatalog(words,snap,courses),seen=new Set(items.map(reviewTarget));
  for(const m of snap.learningMaterials){if(m.deleted||!['word','sentence','reading_drill'].includes(m.contentType)||!m.textLao?.trim()||!m.translationZh?.trim()||seen.has('material:'+m.id))continue;
-  const refs=snap.learningPlacements.filter(p=>!p.deleted&&p.materialId===m.id&&learningCourses(snap).some(c=>c.id===p.lessonId)).map(p=>({id:p.lessonId}));
+  const refs=refsByMaterial.get(m.id)||[];
   if(refs.length){const item=practiceMaterialItem(m,refs);if(m.contentType==='word')item._practiceType='words';items.push(item);seen.add('material:'+m.id);}
  }return items;
 }
@@ -8009,7 +8044,7 @@ function rrValid(op){
 const rrOldValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row?.rollingReview!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||!row.id.startsWith('rolling-review:')||!rrValid(row.rollingReview)))throw Error('学习清单记录格式无效');return rrOldValidate(kind,row);};
 function rrOperations(snap){return snap.learningMaterials.filter(m=>!m.deleted&&rrValid(m.rollingReview)).map(m=>({...m.rollingReview,id:m.id})).sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id));}
-async function rrSave(ops,snap=undefined){if(typeof learningBusy==='boolean'&&learningBusy)throw Error('正在同步或保存资料，请稍后再操作');const expected=snap||await learningSnapshot(),chunks=[];for(const op of ops){if(!rrValid(op))throw Error('清单参数无效');if(op.type==='membership')for(let i=0;i<op.targets.length;i+=100)chunks.push({...op,targets:op.targets.slice(i,i+100)});else chunks.push(op);}const latest=rrOperations(expected).at(-1)?.at||0;const rows=chunks.map((raw,i)=>{const op={...raw,at:Math.max(raw.at,latest+i+1)};return {...learningBlank(op.id||'rolling-review:'+crypto.randomUUID(),'knowledge','学习清单记录'),rollingReview:op,updatedAt:op.at};});await learningWrite({learningMaterials:rows},expected);}
+async function rrSave(ops,snap=undefined){if(typeof learningBusy==='boolean'&&learningBusy)throw Error('正在同步或保存资料，请稍后再操作');const expected=snap||await learningSnapshot(),chunks=[];for(const op of ops){if(!rrValid(op))throw Error('清单参数无效');if(op.type==='membership')for(let i=0;i<op.targets.length;i+=100)chunks.push({...op,targets:op.targets.slice(i,i+100)});else chunks.push(op);}const latest=rrOperations(expected).at(-1)?.at||0;const rows=chunks.map((raw,i)=>{const op={...raw,at:Math.max(raw.at,latest+i+1)};return {...learningBlank(op.id||'rolling-review:'+crypto.randomUUID(),'knowledge','学习清单记录'),rollingReview:op,updatedAt:op.at};});await learningWrite({learningMaterials:rows},expected,{quickProgress:true});}
 function rrAdvance(state,rating,at){const next=reviewAdvance(state,rating,at);if(rating==='red')next.resumeStage=Math.min(2,next.resumeStage||1);if(rating==='yellow'&&state?.phase==='normal'&&at>=state.nextReviewAt)next.stage=Math.max(1,state.stage-1);return next;}
 function rrModel(snap,words,now=Date.now()){
  const ops=rrOperations(snap),members=new Map(),attempts=new Map();let goals={newGoal:10,reviewGoal:30};
@@ -10454,17 +10489,37 @@ document.addEventListener('click',e=>{
 },true);
 </script>
 <script data-course-check-resume>
-/* Device/account-local test cursor. Never replay a rating or replace changed lesson text. */
+/* Device/account-local test cursor. Reconcile edited questions without discarding the round. */
 function ccCheckpointKey(course,scope,key){return workspaceName('chapter-check-resume-v1')+':'+JSON.stringify([course.id,scope,key]);}
 function ccCheckpointSave(key,value){if(!key)return true;try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,JSON.stringify({...value,version:1}));return true;}catch(_){return false;}}
 function ccCheckpointRead(key,data,course,snap,words){
  try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.version!==1||!Array.isArray(saved.queue)||!saved.queue.length||saved.queue.length>10000||!['lao','zh'].includes(saved.direction)||!Number.isInteger(saved.index)||saved.index<0||saved.index>=saved.queue.length||!Array.isArray(saved.ratings)||!Array.isArray(saved.attempts)||saved.attempts.length!==saved.queue.length)return null;
-  const current=new Map(courseCheckGroups(data,course,snap,words,'course','','all').flatMap(g=>g.items).map(r=>[r.id,r])),seen=new Set(),queue=[];
-  for(const old of saved.queue){const r=current.get(old.id);if(!r||r.lao!==old.lao||r.zh!==old.zh||seen.has(r.id))return null;seen.add(r.id);queue.push({...r,group:old.group});}
-  if(saved.attempts.some(id=>typeof id!=='string'||!id.startsWith('review-event:'))||saved.ratings.some(p=>!Array.isArray(p)||!Number.isInteger(p[0])||p[0]<0||p[0]>=queue.length||!['red','yellow','green'].includes(p[1])))return null;
-  return {...saved,queue};
+  if(saved.attempts.some(id=>typeof id!=='string'||!id.startsWith('review-event:'))||saved.ratings.some(p=>!Array.isArray(p)||!Number.isInteger(p[0])||p[0]<0||p[0]>=saved.queue.length||!['red','yellow','green'].includes(p[1])))return null;
+  return ccReconcile(saved,data,course,snap,words);
  }catch(_){return null;}
 }
+function ccReconcile(saved,data,course,snap,words){
+ const current=new Map(courseCheckGroups(data,course,snap,words,'course','','all').flatMap(g=>g.items).map(r=>[r.id,r])),seen=new Set(),queue=[],attempts=[],positions=new Map(),changed=new Set();
+ for(const [i,old]of saved.queue.entries()){
+  if(seen.has(old.id))return null;seen.add(old.id);const r=current.get(old.id);if(!r)continue;
+  const next=queue.length;positions.set(i,next);queue.push({...r,group:old.group});
+  const different=r.lao!==old.lao||r.zh!==old.zh;if(different)changed.add(i);attempts.push(different?'review-event:'+crypto.randomUUID():saved.attempts[i]);
+ }
+ if(!queue.length)return null;
+ const index=positions.get(saved.index)??[...positions].find(([old])=>old>saved.index)?.[1]??queue.length-1;
+ return {...saved,queue,attempts,index,ratings:saved.ratings.filter(([old])=>positions.has(old)&&!changed.has(old)).map(([old,rating])=>[positions.get(old),rating]),revealedAt:changed.has(saved.revealedAt)?-1:positions.get(saved.revealedAt)??-1,updatedQuestions:changed.size,removedQuestions:saved.queue.length-queue.length};
+}
+let ccEntryReturn=null;
+function ccBeginWordEdit(){
+ const parent=[...letterDetailParents].reverse().find(p=>p.courseCheckReturn);if(!parent)return;
+ ccEntryReturn={owner:workspaceName('chapter-check'),restore:parent.courseCheckReturn};
+}
+const ccOriginalEntryReturn=typeof returnToEntryOrigin==='function'?returnToEntryOrigin:async()=>{};
+returnToEntryOrigin=async function(...args){
+ const saved=ccEntryReturn;if(!saved)return ccOriginalEntryReturn(...args);ccEntryReturn=null;
+ if(saved.owner!==workspaceName('chapter-check'))throw Error('账号已改变，无法恢复原检测');
+ entryReturnOrigin=null;await showView('learning');await saved.restore();
+};
 </script>
 <script data-maintenance="library-maintenance.js">
 /* One atomic, source-checked library maintenance import; live audio is read locally. */
@@ -10530,6 +10585,100 @@ const ltRender=renderLearning;renderLearning=async function(...args){await ltRen
 const ltAction=lessonV2Action;lessonV2Action=async function(action,button){const result=await ltAction(action,button);if(action==='v2-section'&&button.hasAttribute('data-subsection-step'))document.querySelector('#learningContent .v2-section-tabs')?.scrollIntoView({block:'start',behavior:'instant'});return result;};
 const ltStyle=document.createElement('style');ltStyle.textContent='#learningPanel .learning-subsection-nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin:24px 0 4px;padding-top:16px;border-top:1px solid #e1e9e3}#learningPanel .learning-subsection-nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;min-width:0;min-height:52px;padding:9px 12px;border:0;border-radius:10px;background:#f0f5f1;color:#326957;text-align:left;font-size:13px;line-height:1.5}#learningPanel .learning-subsection-nav button:last-child{align-items:flex-end;text-align:right}#learningPanel .learning-subsection-nav button small{max-width:100%;font-size:11px;font-weight:400;color:#738a7d;white-space:normal;overflow-wrap:anywhere}#learningPanel .learning-subsection-nav button:disabled{opacity:.45;background:transparent;cursor:default}#learningPanel .subsection-position{font-size:11px;color:#8a9b91;white-space:nowrap}#learningPanel .learn-block-heading{scroll-margin-top:18px}@media(max-width:640px){#learningPanel .learning-subsection-nav{gap:8px;margin-top:20px}#learningPanel .learning-subsection-nav button{padding:9px 10px;font-size:12px}#learningPanel .learning-subsection-nav button small{font-size:10px}}';document.head.append(ltStyle);
 ltDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(ltDecorate).observe(document.body,{childList:true,subtree:true,characterData:true});
+</script>
+<script data-maintenance="progress-receive.js">
+/* Receive progress only. Never fetch audio, replace an active round, or replay pending uploads. */
+let qpTimer=null,qpRunning=false,qpDelay=15000;
+const qpFields=['reviews','correct','mistakes','needsExtraPractice','lastReviewed','reviewStats','learningState'];
+function qpSame(a,b){return cloudSame(a??null,b??null);}
+function qpOperation(row){return !!(row.rollingReview||row.reviewEvent||row.roundResult||row.practiceHandoff);}
+function qpMerge(local,remote,base,kind){
+ if(kind==='learningMaterials'&&qpOperation(remote)){
+  if(!local||qpSame(local,remote))return remote;
+  return base&&qpSame(local,base)?remote:null;
+ }
+ if(!local||!base)return null;
+ const strip=x=>{const c={...x};delete c.updatedAt;if(kind==='entry')for(const k of qpFields)delete c[k];else delete c.practiceReview;return c;};
+ if(!qpSame(strip(local),strip(remote)))return null;
+ const fields=kind==='entry'?qpFields:['practiceReview'],out={...local};
+ for(const k of fields){if(!qpSame(local[k],remote[k])&&!qpSame(local[k],base[k]))return null;if(Object.hasOwn(remote,k))out[k]=remote[k];else delete out[k];}
+ out.updatedAt=remote.updatedAt;return out;
+}
+async function qpIndex(uid,api,table){
+ const learning=table==='lao_learning_records',filter=learning?'or=(record_id.like.rolling-review:*,record_id.like.review-event:*,record_id.like.practice-round:*,record_id.like.practice-handoff:*,payload->practiceReview.not.is.null)':'or=('+qpFields.map(k=>'payload->entry->'+k+'.not.is.null').join(',')+')';
+ const result=[];for(let offset=0;offset<100000;offset+=500){const rows=await api('/rest/v1/'+table+'?select=owner_id,record_kind,record_id,revision&owner_id=eq.'+encodeURIComponent(uid)+'&record_kind=eq.'+(learning?'learningMaterials':'entry')+'&'+filter+'&order=record_id.asc&limit=500&offset='+offset);if(!Array.isArray(rows))throw Error('进度索引格式异常');for(const r of rows){if(r.owner_id!==uid||r.record_kind!==(learning?'learningMaterials':'entry')||typeof r.record_id!=='string'||!Number.isSafeInteger(r.revision)||r.revision<1)throw Error('进度索引身份异常');result.push(r);}if(rows.length<500)return result;}throw Error('进度索引过大，请手动核对同步');
+}
+async function qpFetch(uid,api,table,index,meta){
+ const learning=table==='lao_learning_records',changed=index.filter(r=>(learning?meta.learningServerRevisions[r.record_kind+':'+r.record_id]:meta.checkpoint[r.record_kind+':'+r.record_id]?.revision)!==r.revision),out=[];
+ for(let at=0;at<changed.length;at+=50){const batch=changed.slice(at,at+50);let rows;
+  try{rows=await api('/rest/v1/rpc/lao_sync_read_v1',{method:'POST',body:{target_table:table,keys:batch.map(r=>({record_kind:r.record_kind,record_id:r.record_id,revision:r.revision}))}});}
+  catch(e){if(e.status!==404)throw e;rows=(await Promise.all(batch.map(r=>qaReadRemote(uid,api,{table,kind:r.record_kind,id:r.record_id})))).filter(Boolean);}
+  const wanted=new Map(batch.map(r=>[r.record_id,r.revision]));if(!Array.isArray(rows)||rows.length!==batch.length)throw Error('接收期间进度已变化，下次重新核对');const seen=new Set();
+  for(const r of rows){if(r.owner_id!==uid||r.record_kind!==(learning?'learningMaterials':'entry')||wanted.get(r.record_id)!==r.revision||seen.has(r.record_id)||!r.payload)throw Error('进度内容身份或版本异常');seen.add(r.record_id);out.push({...r,table});}
+ }return out;
+}
+async function qpApply(uid,rows){
+ if(uid!==cloudWorkspace||window.laoQuickAudioBridge?.uid()!==uid)throw Error('账号已切换，取消接收');
+ const db=await openDB();if(uid!==cloudWorkspace)throw Error('账号已切换，取消接收');
+ const t=db.transaction(['entries','learningMaterials','cloud_meta'],'readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta');let count=0,blocked=0,failure;
+ const names=['checkpoint','learningCheckpoint','learningServerRevisions',qaQueueKey],meta={};let left=names.length;
+ const begin=()=>{if(--left)return;try{
+  if(uid!==cloudWorkspace||window.laoQuickAudioBridge?.uid()!==uid)throw Error('账号已切换');
+  const pending=new Set((meta[qaQueueKey]||[]).filter(j=>j.uid===uid).flatMap(j=>j.records.map(r=>r.table+':'+r.kind+':'+r.id)));
+  const entries=t.objectStore('entries'),materials=t.objectStore('learningMaterials'),all=entries.getAll();
+  all.onsuccess=()=>{try{const words=new Map();for(const w of all.result)for(const k of syncKeys(w))words.set(k,w);let waiting=rows.length;
+   const finish=()=>{if(--waiting>0)return;s.put(meta.checkpoint||{},'checkpoint');s.put(meta.learningCheckpoint||{},'learningCheckpoint');s.put(meta.learningServerRevisions||{},'learningServerRevisions');};
+   for(const r of rows){const key=r.record_kind+':'+r.record_id,isEntry=r.record_kind==='entry';
+    const known=isEntry?meta.checkpoint?.[key]?.revision:meta.learningServerRevisions?.[key];
+    if(known>=r.revision){finish();continue;}
+    if(r.deleted||pending.has(r.table+':'+key)){blocked++;finish();continue;}
+    const apply=local=>{try{
+     if(uid!==cloudWorkspace||window.laoQuickAudioBridge?.uid()!==uid)throw Error('账号已切换');
+     const base=isEntry?meta.checkpoint?.[key]?.value?.payload:meta.learningCheckpoint?.[key]?.payload,remote=isEntry?r.payload.entry:r.payload;
+     if(!remote||(!isEntry&&remote.id!==r.record_id)||(isEntry&&!syncKeys(remote).includes(r.record_id)))throw Error('进度编号不一致');
+     if(isEntry&&!qpSame(base?.audio,r.payload.audio)){blocked++;finish();return;}
+     const value=qpMerge(isEntry&&local?cloudEntryData(local):local,remote,isEntry?base?.entry:base,r.record_kind);
+     if(!value){blocked++;finish();return;}
+     if(!isEntry){learningValidateRecord('learningMaterials',value);if(!qpOperation(value)&&!value.practiceReview){blocked++;finish();return;}}
+     const next=isEntry?{...local,...value,id:local.id}:value;
+     if(!qpSame(next,local)){(isEntry?entries:materials).put(next);count++;}
+     if(isEntry){meta.checkpoint||={};meta.checkpoint[key]={revision:r.revision,value:{deleted:false,payload:r.payload}};}
+     else{meta.learningCheckpoint||={};meta.learningServerRevisions||={};meta.learningCheckpoint[key]={deleted:false,payload:r.payload};meta.learningServerRevisions[key]=r.revision;}finish();
+    }catch(e){failure=e;t.abort();}};
+    if(isEntry)apply(words.get(r.record_id));else{const q=materials.get(r.record_id);q.onsuccess=()=>apply(q.result);}
+   }
+  }catch(e){failure=e;t.abort();}};
+ }catch(e){failure=e;t.abort();}};
+ for(const name of names){const q=s.get(name);q.onsuccess=()=>{meta[name]=q.result;begin();};}
+ try{await done;}catch(e){throw failure||e;}return {count,blocked};
+}
+function qpStatus(message){const node=document.querySelector('#quickProgressReceiveDetail');if(node)node.textContent=message;}
+function qpKick(delay=15000){clearTimeout(qpTimer);qpTimer=setTimeout(()=>qpReceive(),delay);}
+async function qpReceive(){
+ if(qpRunning)return;
+ const bridge=window.laoQuickAudioBridge,uid=cloudWorkspace;
+ if(!qaProgressEnabled()||!uid||bridge?.uid()!==uid||navigator.onLine===false||document.visibilityState==='hidden'){qpKick();return;}
+ if(bridge.busy()||window.laoQuickSyncBusy||learningSyncRunning||learningHasWork()||recorder){qpKick(3000);return;}
+ if(!navigator.locks){qpStatus('此浏览器不支持安全的跨页面自动接收，请手动同步');qpKick();return;}
+ qpRunning=true;
+ try{await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},async lock=>{if(!lock)return;
+  const api=cloudDownloadOnlyApi((p,o)=>bridge.request(uid,p,o)),meta=await qaReadMeta();let rows=[];
+  for(const table of ['lao_learning_records','lao_dictionary_records'])rows.push(...await qpFetch(uid,api,table,await qpIndex(uid,api,table),meta));
+  if(uid!==cloudWorkspace||bridge.uid()!==uid||!qaProgressEnabled()||bridge.busy())return;
+  const result=rows.length?await qpApply(uid,rows):{count:0,blocked:0};
+  qpStatus(result.blocked?'已接收 '+result.count+' 项进度；'+result.blocked+' 项因本机待传修改或版本冲突保留，需完整同步核对':'已核对其他设备进度 · '+new Date().toLocaleTimeString());
+  if(result.count&&uid===cloudWorkspace&&activeView==='learning'&&learningRoute==='study'&&!learningDialog.open&&!learningHasWork())await scRender();
+ });qpDelay=15000;
+ }catch(e){qpStatus('自动接收暂缓，本机数据保留：'+e.message);qpDelay=Math.min(120000,qpDelay*2);}
+ finally{qpRunning=false;qpKick(qpDelay);}
+}
+if(typeof window!=='undefined'){
+ const qpOldMount=qaMount;
+ qaMount=function(){qpOldMount();const box=document.querySelector('#quickAudioSyncSettings');if(!box||document.querySelector('#quickProgressReceiveDetail'))return;const detail=document.createElement('p');detail.id='quickProgressReceiveDetail';detail.className='tag-hint';detail.setAttribute('role','status');detail.textContent='进度双向自动同步：前台约每15秒检查，回到页面立即补查；不会自动接续或替换当前练习。';box.append(detail);const toggle=box.querySelector('#quickPracticeSyncToggle');if(toggle){const old=toggle.onchange;toggle.onchange=()=>{old?.();qpKick(500);};const label=toggle.parentElement;if(label?.lastChild?.nodeType===3)label.lastChild.textContent='背词进度自动上传与接收';}};
+ qaMount();const qpNote=document.querySelector('#quickAudioSyncSettings p.tag-hint');if(qpNote)qpNote.textContent='新保存的录音自动上传；背词评级、清单和已保存练习断点自动上传与接收。前台定期检查，离线后回到页面补查；不覆盖待传修改，不自动替换当前练习。录音接收及其他资料仍需完整同步。';
+ for(const event of ['online','pageshow','focus'])window.addEventListener(event,()=>qpKick(500));
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')qpKick(500);});qpKick(2000);
+}
 </script>
 <script src="./offline.js"></script>
 </body>

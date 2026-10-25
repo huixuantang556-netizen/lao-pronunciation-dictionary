@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="8b91ca068a83e7b6">
+  <meta name="lao-app-build" content="308aa7ae45636dda">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5877,7 +5877,7 @@ function learningSubsectionNav(items,current,grouped=true){
  return '<nav class="learning-subsection-nav" aria-label="小节切换">'+button(-1,'← 上一小节')+'<span class="subsection-position">'+(at+1)+' / '+items.length+'</span>'+button(1,'下一小节')+'</nav>';
 }
 function learningGroupFooter(data,course,blockId){
- const state=learningGroupState.get(course.id)||{kind:'words',category:''};if(course.library!=='communication'||state.kind==='original')return '';
+ const state=learningGroupState.get(course.id)||{kind:'words',category:''};if(course.library!=='communication'||state.kind==='original'||!state.category||state.category!==blockId)return '';
  const items=data.sections.flatMap(s=>s.blocks.filter(b=>learningGroupKind(b)===state.kind).map(b=>({id:b.id,title:b.title||s.title})));
  return learningSubsectionNav(items,blockId);
 }

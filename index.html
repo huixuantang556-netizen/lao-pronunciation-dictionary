@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="53b6fd9df6920345">
+  <meta name="lao-app-build" content="cd1f62705c436432">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1674,8 +1674,9 @@ async function cloudReadRemote(uid,api,table,known,status){
         $('#cloudSyncButton').disabled=busy||!inAccount;
         if(typeof qaKick==='function'&&!busy)qaKick();
       }
-      async function cloudRequest(path,{method='GET',body,token,rawBody,blobResponse=false,extraHeaders={}}={}){
+      async function cloudRequest(path,{method='GET',body,token,rawBody,blobResponse=false,extraHeaders={},signal:externalSignal}={}){
         const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+        const abort=()=>controller.abort();if(externalSignal?.aborted)abort();else externalSignal?.addEventListener('abort',abort,{once:true});
         try{
           const headers={apikey:publishableKey,...extraHeaders};
           if(token)headers.Authorization='Bearer '+token;
@@ -1693,7 +1694,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           if(error.name==='AbortError')throw new Error('连接超时，请检查网络后重试。');
           if(error instanceof TypeError)throw new Error('无法连接云端，请检查网络；也可以在 GitHub 网页上重试。');
           throw error;
-        }finally{clearTimeout(timer);}
+        }finally{clearTimeout(timer);externalSignal?.removeEventListener('abort',abort);}
       }
       async function checkConnection(){
         await ensureSession();
@@ -1730,25 +1731,23 @@ async function cloudReadRemote(uid,api,table,known,status){
         finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
       learningSyncButton.onclick=async()=>{
-        if(typeof window!=='undefined'&&window.laoQuickSyncBusy){status('语音正在上传，请稍后再下载。');return;}
         if(typeof qaPause==='function')qaPause();
         if(busy)return;if(!session||session.user.id!==cloudWorkspace){status('请先进入同一账号词典，再同步学习资料。');return;}
         busy=true;learningSyncButton.disabled=true;updateUI();beginProgress();
-        try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status,{direction:'download'});if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
+        try{const uid=session.user.id,task=()=>learningCloudSync(uid,(path,options={})=>syncRequest(uid,path,options),status,{direction:'download'});if(typeof qaWithManualSync==='function')await qaWithManualSync(uid,task);else if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw Error('另一个页面正在同步');return task();});else await task();}
         catch(e){status('学习资料下载未完成：'+e.message+'。本次没有上传；已完成的下载可能已保存，请保留本机资料。');}finally{endProgress();busy=false;learningSyncButton.disabled=false;updateUI();}
       };
       const startCloudSync=async(direction='bidirectional')=>{
-        if(typeof window!=='undefined'&&window.laoQuickSyncBusy){status('一条语音正在同步，请稍后再进行完整同步。');return;}
         if(direction==='download'&&typeof qaPause==='function')qaPause();
         if(busy)return;
         if(!session){status('请先登录。');return;}
         if(session.user.id!==cloudWorkspace){status('请先点击“进入此账号词典”；原本机词典保留不变。');return;}
         busy=true;learningSyncButton.disabled=true;downloadSyncButton.disabled=true;updateUI();beginProgress();
         try{
-          await checkConnection();
           const uid=session.user.id;
-          const task=async()=>{const api=(path,options={})=>syncRequest(uid,path,options);if(await runCloudSync(uid,api,status,{direction}))await learningCloudSync(uid,api,status,{direction,requireUploadConfirmation:true});};
-          if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
+          const task=async()=>{await checkConnection();const api=(path,options={})=>syncRequest(uid,path,options);if(await runCloudSync(uid,api,status,{direction}))await learningCloudSync(uid,api,status,{direction,requireUploadConfirmation:true});};
+          if(typeof qaWithManualSync==='function')await qaWithManualSync(uid,task);
+          else if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+uid,{ifAvailable:true},lock=>{if(!lock)throw new Error('另一个页面正在同步，请稍后重试。');return task();});
           else await task();
           if(direction!=='download'&&typeof qaAfterManual==='function')await qaAfterManual();
         }catch(error){status((direction==='download'?'云端下载未完成：':'双向同步未完成：')+error.message+(direction==='download'?' 本次没有上传；已完成的下载可能已保存，请保留本机数据。':' 已确认并成功上传的项目可能已保存，请保留本机数据。'));}
@@ -9836,6 +9835,23 @@ document.addEventListener('click',e=>{
 /* Persistent, explicit audio-save outbox. Never enroll a historical database. */
 const qaQueueKey='quickAudioOutboxV1',qaMimes=['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'];
 let qaTimer=null,qaRunning=false,qaDelay=1500,qaToastTimer=null;
+let qaController=null;
+const qaManualKey=()=>workspaceName('quick-sync-manual-lease-v1');
+function qaManualPending(){try{const lease=JSON.parse(localStorage.getItem(qaManualKey())||'null');return !!lease&&lease.until>Date.now();}catch(_){return false;}}
+function qaYield(){return Object.assign(Error('手动同步优先，自动待传任务保留'),{qaYielded:true});}
+function qaCheckYield(controller){if(controller.signal.aborted||qaManualPending())throw qaYield();}
+// Never clear a busy flag to let two writers overlap. Abort actual fetches and
+// wait for their lock to release; interrupted jobs remain in the durable outbox.
+async function qaWithManualSync(uid,task){
+ if(!navigator.locks){if(qaRunning)throw Error('自动同步仍在结束，请稍后重试；本机录音保留。');return task();}
+ const token=crypto.randomUUID(),write=()=>{let old;try{old=JSON.parse(localStorage.getItem(qaManualKey())||'null');}catch(_){}if(old&&old.token!==token&&old.until>Date.now())throw Error('另一个页面正在手动同步，请等待完成；本机资料保留。');localStorage.setItem(qaManualKey(),JSON.stringify({token,until:Date.now()+90000}));};
+ write();clearTimeout(qaTimer);qaController?.abort();
+ const heartbeat=setInterval(()=>{try{write();}catch(_){}},15000),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+ qaMessage('正在切换到手动同步，自动待传任务保留…');
+ try{return await navigator.locks.request('lao-cloud-sync-'+uid,{signal:controller.signal},async()=>{clearTimeout(timer);return task();});}
+ catch(e){if(e.name==='AbortError')throw Error('另一页面仍占用同步，暂未开始本次操作。请保存该页面的编辑后刷新旧页面；本机录音与待传任务保留。');throw e;}
+ finally{clearTimeout(timer);clearInterval(heartbeat);try{const lease=JSON.parse(localStorage.getItem(qaManualKey())||'null');if(lease?.token===token)localStorage.removeItem(qaManualKey());}catch(_){}qaKick(1000);}
+}
 function qaEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-audio-sync'))!=='off';}catch(_){return false;}}
 function qaProgressEnabled(){try{return Boolean(cloudWorkspace)&&localStorage.getItem(workspaceName('quick-practice-sync'))!=='off';}catch(_){return false;}}
 function qaAnyEnabled(){return qaEnabled()||qaProgressEnabled();}
@@ -9943,19 +9959,19 @@ async function qaRunJob(job,api){
  await qaRemove(job.token);
 }
 async function qaDrain(){
- if(qaRunning||!qaAnyEnabled()||navigator.onLine===false)return;
+ if(qaRunning||qaManualPending()||!qaAnyEnabled()||navigator.onLine===false){if(qaManualPending())qaKick(3000);return;}
  const bridge=window.laoQuickAudioBridge;if(!bridge||bridge.uid()!==cloudWorkspace)return;if(bridge.busy()){qaKick(3000);return;}
  if(!navigator.locks){qaMessage('本机已保存 · 此浏览器不支持安全的跨页面自动同步，请使用手动同步');return;}
- qaRunning=true;window.laoQuickSyncBusy=true;
+ qaRunning=true;
  try{
   const run=async()=>{const all=(await qaReadMeta())[qaQueueKey],jobs=all.filter(j=>j.uid===cloudWorkspace&&!j.blocked&&qaAllowed(j.records));if(!jobs.length){if(all.length)qaMessage('本机已保存 · '+all.length+'项待处理：'+(all.find(j=>j.blocked)?.blocked||'自动上传已暂停'));return;}
-   qaMessage('本机已保存 · 正在同步语音／默写进度…');
-   for(const job of jobs){if(!qaAllowed(job.records)||bridge.uid()!==job.uid)continue;try{await qaRunJob(job,(p,o)=>bridge.request(job.uid,p,o));}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
+   const controller=new AbortController();qaController=controller;qaCheckYield(controller);window.laoQuickSyncBusy=true;
+   let completed=0;for(const job of jobs.slice(0,3)){qaCheckYield(controller);if(!qaAllowed(job.records)||bridge.uid()!==job.uid)continue;qaMessage('本机已保存 · 自动同步 '+(completed+1)+' / '+jobs.length+' 项（录音或进度）');try{await qaRunJob(job,async(p,o)=>{qaCheckYield(controller);try{const result=await bridge.request(job.uid,p,{...o,signal:controller.signal});qaCheckYield(controller);return result;}catch(e){if(controller.signal.aborted||qaManualPending())throw qaYield();throw e;}});completed++;}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
    const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次更新已同步 ✓');if(pending.some(j=>!j.blocked&&qaAllowed(j.records)))qaKick(500);qaDelay=1500;
   };
   if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+cloudWorkspace,{ifAvailable:true},lock=>lock?run():qaKick(2000));else await run();
- }catch(e){qaMessage('本机已保存 · 网络同步未完成，将重试：'+e.message);qaDelay=Math.min(60000,qaDelay*2);qaKick(qaDelay);}
- finally{qaRunning=false;window.laoQuickSyncBusy=false;}
+ }catch(e){if(e.qaYielded){qaMessage('自动上传已让位给手动同步；本机录音与待传任务保留');qaKick(3000);}else{qaMessage('本机已保存 · 网络同步未完成，将重试：'+e.message);qaDelay=Math.min(60000,qaDelay*2);qaKick(qaDelay);}}
+ finally{qaController=null;qaRunning=false;window.laoQuickSyncBusy=false;}
 }
 async function qaBlock(token,message){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(j=>j.token===token?{...j,blocked:message}:j),qaQueueKey);await done;}
 async function qaAfterManual(){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).map(({blocked,...j})=>j),qaQueueKey);await done;qaKick();}
@@ -9966,6 +9982,7 @@ function qaMount(){
  anchor.after(box);for(const [id,key,enabled]of [['quickAudioSyncToggle','quick-audio-sync',qaEnabled],['quickPracticeSyncToggle','quick-practice-sync',qaProgressEnabled]]){const toggle=box.querySelector('#'+id);toggle.checked=enabled();toggle.disabled=!cloudWorkspace;toggle.onchange=()=>{localStorage.setItem(workspaceName(key),toggle.checked?'on':'off');if(toggle.checked){if(typeof practiceAutoFlush==='function')practiceAutoFlush();qaKick();}else qaMessage('此项自动上传已暂停，本机数据保留');};}box.querySelector('button').onclick=()=>{if(!qaAnyEnabled()){qaMessage('请先开启需要的自动同步选项');return;}if(typeof practiceAutoFlush==='function')practiceAutoFlush();qaAfterManual().catch(e=>qaMessage(e.message));};
 }
 if(typeof window!=='undefined'){
+ window.addEventListener('storage',e=>{if(e.key===qaManualKey()&&qaManualPending()){clearTimeout(qaTimer);qaController?.abort();}});
  window.addEventListener('online',()=>qaKick());window.addEventListener('pageshow',()=>qaKick());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')qaKick();});
  qaMount();qaKick(1000);
 }

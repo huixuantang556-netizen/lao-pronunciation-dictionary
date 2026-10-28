@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="5ab9bd34aa690c19">
+  <meta name="lao-app-build" content="48178ed8349632c8">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -226,29 +226,26 @@
 <style>
 #courseEditor .ce-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}#courseEditor button{font-size:13px;padding:8px 12px}#courseEditor .ce-toolbar select{width:auto;max-width:100%}#courseEditor .ce-block{border:1px solid #dbe7e1;border-radius:12px;padding:14px;margin:12px 0;background:#fbfdfb}#courseEditor summary{cursor:pointer;font-weight:600;font-size:15px}#courseEditor label{font-size:13px}#courseEditor fieldset{border:1px solid #e0e9e4;border-radius:10px;margin:14px 0;padding:12px}#courseEditor legend{font-size:12px;color:#688379}#courseEditor textarea{font-size:16px;line-height:1.6}#courseEditor input{font-size:14px}
 </style><style data-listening-design>
-/* Listening-only layout: existing visual directions and saved content remain unchanged. */
-#learningDialog:has(.cc-listening){width:min(960px,calc(100vw - 32px));max-height:92dvh}
-.cc-listening,.practice-listening,.rr-listening{border:1px solid #deebe5!important;border-radius:20px!important;background:#fff!important;box-shadow:0 5px 24px #164c3d06!important;overflow:hidden}
-.cc-listening .recall-prompt,.practice-listening #questionPrompt,.rr-listening .rp-card-prompt{font-size:14px!important;line-height:1.7;color:#71877d;margin:10px 0!important;text-align:center}
-.cc-listening .question-row,.practice-listening .question-row{min-height:0!important;margin:0!important;padding:12px 12px 20px;gap:10px;justify-content:center;align-items:center}
-.cc-listening .question-ipa,.practice-listening #questionIPA,.rr-listening .rp-card-word{font-size:26px!important;line-height:1.5!important;font-weight:650;color:#214f43;flex-basis:100%;margin:0 0 12px!important;text-align:center}
-.cc-listening [data-recall-play],.practice-listening #practicePlay,.rr-listening #rrListen{background:#087f70!important;color:#fff!important;border:1px solid #087f70!important;border-radius:14px!important;padding:14px 30px!important;min-height:58px;font-size:19px!important;font-weight:600;box-shadow:0 4px 12px #087f7017;min-width:180px;margin:0!important}
-.cc-listening [data-recall-detail],.practice-listening #practiceDetail{font-size:13px!important;min-height:40px;padding:8px 12px!important;background:#f4f8f5!important}
-.cc-listening .study-examples,.practice-listening .study-examples,.rr-listening .rp-card-examples{padding:0 20px!important;margin:0!important;border:0!important;max-height:none!important}
-.listening-context{border:1px solid #e0ece6;border-radius:14px;background:#f6faf7;padding:14px 16px;margin:0 0 18px;text-align:left}
-.listening-context h4{font-size:13px;font-weight:600;color:#678176;margin:0 0 10px;letter-spacing:.03em}
-.listening-context article{padding:0!important;margin:0 0 8px!important;border:0!important;background:transparent!important;display:block!important}
-.listening-context article:last-child{margin-bottom:0!important}.listening-context button{font-size:14px!important;min-height:44px;padding:9px 15px!important;border-radius:10px!important;background:#fff;color:#286353}
-.listening-context [lang=lo]{font-size:23px;line-height:1.8;color:#245747;margin:12px 0 4px}.listening-context p{font-size:14px;line-height:1.7;margin:6px 0;color:#658073}.listening-context [hidden]{display:none!important}
-.cc-listening .study-translation,.practice-listening .study-translation,.rr-listening .rp-card-answer{background:#f0f8f3;border-radius:12px;margin:0 20px 16px!important;padding:14px 18px!important;font-size:23px;line-height:1.8;text-align:center}
-.practice-listening .study-translation:empty{display:none!important}
-.cc-listening .practice-submit,.practice-listening .practice-submit{padding:0 20px 18px!important;margin:0!important}
-.cc-listening .recall-reveal,.practice-listening #showAnswer,.rr-listening #rrReveal{border:1px solid #bfd9ce!important;background:#edf6f0!important;color:#22634f!important;border-radius:12px!important;font-size:16px!important;min-height:50px;width:100%;padding:12px 16px!important;margin:0!important}
-.cc-listening .practice-footer,.practice-listening .practice-footer{border-top:1px solid #e5eee9;padding:14px 20px!important;background:#fbfdfb}
-.cc-listening .practice-mark-options button,.practice-listening .practice-mark-options button,.rr-listening .rr-actions button{min-height:44px;font-size:15px!important;border-radius:10px!important;padding:8px 12px!important}
-.cc-listening .practice-navigation button,.practice-listening .practice-navigation button{min-height:40px;font-size:14px!important;padding:7px 12px!important}
-.rr-listening #rrListen{display:block;margin:12px auto 20px!important}.rr-listening #rrReveal{width:calc(100% - 40px);margin:0 20px 16px!important}.rr-listening .rp-card-word{padding-top:10px}
-@media(max-width:600px){#learningDialog:has(.cc-listening){width:calc(100vw - 12px);padding:14px 10px!important}.cc-listening .study-examples,.practice-listening .study-examples,.rr-listening .rp-card-examples{padding:0 12px!important}.listening-context{padding:12px}.cc-listening .practice-footer,.practice-listening .practice-footer{padding:12px!important}.cc-listening .question-ipa,.practice-listening #questionIPA,.rr-listening .rp-card-word{font-size:23px!important}}
+/* Listening prompt only. Revealed chapter cards use the original lesson layout. */
+.study-example[hidden],.listening-context [hidden]{display:none!important}
+.cc-listening:not(.study-revealed),.practice-listening:not(.study-revealed),.rr-listening:not(.study-revealed){background:#fff!important;border:0!important;box-shadow:none!important}
+.cc-listening .recall-prompt,.practice-listening:not(.study-revealed) #questionPrompt{font-size:14px!important;color:#789087;text-align:center;margin:12px 0 0!important}
+.cc-listening .question-row,.practice-listening:not(.study-revealed) .question-row{position:relative;justify-content:center;gap:12px;padding:18px 0 24px!important;margin:0!important;min-height:0!important}
+.cc-listening .question-ipa,.practice-listening:not(.study-revealed) #questionIPA{flex-basis:100%;font-family:inherit!important;font-size:22px!important;font-weight:600;line-height:1.4!important;text-align:center;margin:0 0 8px!important;color:#244d41}
+.cc-listening [data-recall-play],.practice-listening:not(.study-revealed) #practicePlay{background:#087e6e!important;color:white!important;border:0!important;border-radius:50%!important;width:88px;height:88px;min-width:88px;font-size:15px!important;padding:0!important;box-shadow:0 0 0 10px #f0f7f4!important}
+.cc-listening .question-row .favorite-button{position:absolute;right:8px;top:8px}
+.cc-listening .study-examples{margin:0!important}
+.listening-context{max-width:660px;margin:4px auto 24px;padding:16px 0;border-top:1px solid #e3ece7;text-align:center;display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.listening-context h4{flex-basis:100%;margin:0 0 2px;font-size:13px;font-weight:500;color:#7b8e85}
+.listening-context article{padding:0;margin:0;border:0;background:none}
+.listening-context button{border:1px solid #d5e3dc;border-radius:24px;background:#f8fbf9;color:#386756;min-height:42px;padding:8px 16px;font-size:14px}
+.listening-context p:empty{display:none}.listening-context p{font-size:13px;color:#789087}
+.cc-listening .practice-submit,.practice-listening:not(.study-revealed) .practice-submit{margin:0!important;padding:0 0 22px!important;text-align:center}
+.cc-listening .recall-reveal,.practice-listening:not(.study-revealed) #showAnswer{width:auto!important;min-width:200px;min-height:44px;border-radius:9px!important;border:1px solid #cbded4!important;background:white!important;color:#285847!important;font-size:15px!important;padding:10px 24px!important;margin:0!important}
+.cc-listening .practice-footer{padding-top:16px!important;border-top:1px solid #e7eeea}
+.cc-listening .practice-mark-options button{padding:8px!important;min-height:42px;font-size:15px!important}
+.cc-listening .practice-navigation button{min-height:40px;padding:6px 14px!important;font-size:14px!important}
+@media(max-width:600px){.listening-context{gap:8px;margin-bottom:16px}.listening-context button{padding:8px 12px}.cc-listening .question-row{padding-bottom:20px!important}}
 
 </style>
 </head>
@@ -6507,8 +6504,8 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   }
   const r=queue[index],at=index,flow=studyRecallFlow(),item=r.reviewWord||{_practiceMaterialId:r.id,word:r.lao,meaning:r.zh};
   const checkpointOK=persist();if(typeof sfWarm==='function'){sfWarm(r.id);if(queue[index+1])sfWarm(queue[index+1].id);}
-  const listening=direction==='audio',examples=(direction==='lao'||listening)?(fast?fast.examples(item):studyExamples(item,snap,true)):[];
-  const exampleHtml=(listening?[]:examples).map(m=>'<article class="study-example"><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" aria-label="播放例句" title="播放例句" data-cc-example="'+h(m.id)+'">▶</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
+  const listening=direction==='audio',examples=fast?fast.examples(item):studyExamples(item,snap,true);
+  const exampleHtml=examples.map(m=>'<article class="study-example"'+(direction!=='lao'?' hidden':'')+'><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" aria-label="播放例句" title="播放例句" data-cc-example="'+h(m.id)+'">▶</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
   learningModal('检测 · '+(index+1)+' / '+queue.length,'<div class="cc-session-meta"><span>'+h(options.scopeLabel||'章节检测')+' · '+queue.length+' 项</span><small>'+h(r.group)+'</small></div><div class="cc-progress" role="progressbar" aria-label="本轮进度" aria-valuemin="0" aria-valuemax="'+queue.length+'" aria-valuenow="'+index+'"><span style="width:'+(index/queue.length*100)+'%"></span></div><div class="course-recall">'+studyRecallCardHtml({question:direction==='lao'?r.lao:r.zh,reverse:direction==='zh',examples:exampleHtml,favorite:typeof fvMarkup==='function'?fvMarkup({target:r.reviewWord?'word:'+r.reviewWord.syncId:r.id}):'',h})+'</div>');
   const card=$('[data-recall-card]'),answer=$('[data-recall-answer]'),reveal=$('[data-recall-reveal]'),status=$('[data-recall-status]');
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
@@ -6539,7 +6536,11 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   async function play(id=r.id){if((!flow.revealed&&!listening)||!current())return;try{await saPlay(id,{isCurrent:current});}catch(e){if(current())status.textContent='暂无可播放的已保存录音，或录音需要核对。可以跳过或揭晓后补录；本次不会生成音频。';}}
   async function show(withAudio=true){if(!current())return;await flow.reveal(async()=>{
    revealedAt=at;persist();
-   card.classList.add('study-revealed');context?.reveal();answer.hidden=false;answer.textContent=listening?r.lao+'\n'+r.zh:direction==='lao'?r.zh:r.lao;if(direction==='zh'||listening)answer.lang='lo';
+   card.classList.add('study-revealed');context?.element.remove();card.classList.remove('cc-listening');
+   for(const row of card.querySelectorAll('.study-example'))row.hidden=false;
+   card.querySelector('.question-ipa').textContent=r.lao;card.querySelector('.question-ipa').lang='lo';
+   card.querySelector('.recall-prompt').textContent='听发音、查看例句，再判断掌握程度';$('[data-recall-play]').textContent='▶ 播放';
+   answer.hidden=false;answer.textContent=r.zh;answer.removeAttribute('lang');
    reveal.hidden=true;$('[data-recall-play]').hidden=false;$('[data-recall-detail]').hidden=false;
    for(const b of grades()){b.disabled=false;b.setAttribute('aria-pressed',String(ratings.get(at)===b.dataset.recallGrade));}
    if(ratings.has(at))status.textContent='本题已保存：'+({red:'陌生',yellow:'模糊',green:'熟悉'})[ratings.get(at)]+'；可以重新选择，修改不会增加答题次数。';

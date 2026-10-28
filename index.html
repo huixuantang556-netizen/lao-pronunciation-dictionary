@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="7b8f45f83aba604a">
+  <meta name="lao-app-build" content="5ab9bd34aa690c19">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -225,7 +225,33 @@
 </style>
 <style>
 #courseEditor .ce-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}#courseEditor button{font-size:13px;padding:8px 12px}#courseEditor .ce-toolbar select{width:auto;max-width:100%}#courseEditor .ce-block{border:1px solid #dbe7e1;border-radius:12px;padding:14px;margin:12px 0;background:#fbfdfb}#courseEditor summary{cursor:pointer;font-weight:600;font-size:15px}#courseEditor label{font-size:13px}#courseEditor fieldset{border:1px solid #e0e9e4;border-radius:10px;margin:14px 0;padding:12px}#courseEditor legend{font-size:12px;color:#688379}#courseEditor textarea{font-size:16px;line-height:1.6}#courseEditor input{font-size:14px}
-</style></head>
+</style><style data-listening-design>
+/* Listening-only layout: existing visual directions and saved content remain unchanged. */
+#learningDialog:has(.cc-listening){width:min(960px,calc(100vw - 32px));max-height:92dvh}
+.cc-listening,.practice-listening,.rr-listening{border:1px solid #deebe5!important;border-radius:20px!important;background:#fff!important;box-shadow:0 5px 24px #164c3d06!important;overflow:hidden}
+.cc-listening .recall-prompt,.practice-listening #questionPrompt,.rr-listening .rp-card-prompt{font-size:14px!important;line-height:1.7;color:#71877d;margin:10px 0!important;text-align:center}
+.cc-listening .question-row,.practice-listening .question-row{min-height:0!important;margin:0!important;padding:12px 12px 20px;gap:10px;justify-content:center;align-items:center}
+.cc-listening .question-ipa,.practice-listening #questionIPA,.rr-listening .rp-card-word{font-size:26px!important;line-height:1.5!important;font-weight:650;color:#214f43;flex-basis:100%;margin:0 0 12px!important;text-align:center}
+.cc-listening [data-recall-play],.practice-listening #practicePlay,.rr-listening #rrListen{background:#087f70!important;color:#fff!important;border:1px solid #087f70!important;border-radius:14px!important;padding:14px 30px!important;min-height:58px;font-size:19px!important;font-weight:600;box-shadow:0 4px 12px #087f7017;min-width:180px;margin:0!important}
+.cc-listening [data-recall-detail],.practice-listening #practiceDetail{font-size:13px!important;min-height:40px;padding:8px 12px!important;background:#f4f8f5!important}
+.cc-listening .study-examples,.practice-listening .study-examples,.rr-listening .rp-card-examples{padding:0 20px!important;margin:0!important;border:0!important;max-height:none!important}
+.listening-context{border:1px solid #e0ece6;border-radius:14px;background:#f6faf7;padding:14px 16px;margin:0 0 18px;text-align:left}
+.listening-context h4{font-size:13px;font-weight:600;color:#678176;margin:0 0 10px;letter-spacing:.03em}
+.listening-context article{padding:0!important;margin:0 0 8px!important;border:0!important;background:transparent!important;display:block!important}
+.listening-context article:last-child{margin-bottom:0!important}.listening-context button{font-size:14px!important;min-height:44px;padding:9px 15px!important;border-radius:10px!important;background:#fff;color:#286353}
+.listening-context [lang=lo]{font-size:23px;line-height:1.8;color:#245747;margin:12px 0 4px}.listening-context p{font-size:14px;line-height:1.7;margin:6px 0;color:#658073}.listening-context [hidden]{display:none!important}
+.cc-listening .study-translation,.practice-listening .study-translation,.rr-listening .rp-card-answer{background:#f0f8f3;border-radius:12px;margin:0 20px 16px!important;padding:14px 18px!important;font-size:23px;line-height:1.8;text-align:center}
+.practice-listening .study-translation:empty{display:none!important}
+.cc-listening .practice-submit,.practice-listening .practice-submit{padding:0 20px 18px!important;margin:0!important}
+.cc-listening .recall-reveal,.practice-listening #showAnswer,.rr-listening #rrReveal{border:1px solid #bfd9ce!important;background:#edf6f0!important;color:#22634f!important;border-radius:12px!important;font-size:16px!important;min-height:50px;width:100%;padding:12px 16px!important;margin:0!important}
+.cc-listening .practice-footer,.practice-listening .practice-footer{border-top:1px solid #e5eee9;padding:14px 20px!important;background:#fbfdfb}
+.cc-listening .practice-mark-options button,.practice-listening .practice-mark-options button,.rr-listening .rr-actions button{min-height:44px;font-size:15px!important;border-radius:10px!important;padding:8px 12px!important}
+.cc-listening .practice-navigation button,.practice-listening .practice-navigation button{min-height:40px;font-size:14px!important;padding:7px 12px!important}
+.rr-listening #rrListen{display:block;margin:12px auto 20px!important}.rr-listening #rrReveal{width:calc(100% - 40px);margin:0 20px 16px!important}.rr-listening .rp-card-word{padding-top:10px}
+@media(max-width:600px){#learningDialog:has(.cc-listening){width:calc(100vw - 12px);padding:14px 10px!important}.cc-listening .study-examples,.practice-listening .study-examples,.rr-listening .rp-card-examples{padding:0 12px!important}.listening-context{padding:12px}.cc-listening .practice-footer,.practice-listening .practice-footer{padding:12px!important}.cc-listening .question-ipa,.practice-listening #questionIPA,.rr-listening .rp-card-word{font-size:23px!important}}
+
+</style>
+</head>
 <body>
   <main>
     <h1>老挝语私人发音词典</h1>
@@ -5736,7 +5762,7 @@ window.prepareLaoAppUpdate=async function(){handoffGuard();persistPractice();if(
 function studyRecallFlow(){let revealed=false,saving=false;return {get revealed(){return revealed;},get saving(){return saving;},async reveal(action){if(revealed||saving)return false;revealed=true;await action();return true;},async grade(action){if(!revealed||saving)return false;saving=true;try{await action();return true;}finally{saving=false;}}};}
 function studyRecallPrompt(reverse){return reverse?'请回忆答案，点击卡片揭晓':'请回忆发音和含义，点击卡片揭晓';}
 function studyRecallCardHtml({question,reverse=false,favorite='',examples='',h=learningEsc}){return '<div class="practice-card" data-recall-card><p class="recall-prompt">'+studyRecallPrompt(reverse)+'</p><div class="question-row" style="flex-wrap:wrap"><div class="question-ipa" '+(!reverse?'lang="lo"':'')+'>'+h(question)+'</div>'+favorite+'<button type="button" data-recall-play hidden>▶ 播放</button><button type="button" data-recall-detail hidden>详情 / 参考发音</button></div><div class="study-translation" data-recall-answer hidden aria-live="polite"></div><section class="study-examples" aria-label="已有例句">'+examples+'</section><div class="practice-submit"><button type="button" class="recall-reveal" data-recall-reveal>点击揭晓 · 听发音</button></div><div class="practice-footer"><div class="practice-mark-options" role="group" aria-label="掌握程度"><button type="button" data-recall-grade="red" disabled>陌生</button><button type="button" data-recall-grade="yellow" disabled>模糊</button><button type="button" data-recall-grade="green" disabled>熟悉</button></div><div class="practice-navigation"><button type="button" data-recall-previous>上一题</button><button type="button" data-recall-next>下一题</button></div></div><p class="study-audio-status" data-recall-status role="status"></p></div>';}
-let studyCardRun=0,studyCardItem=null,studyCardRevealed=false;
+let studyCardRun=0,studyCardItem=null,studyCardRevealed=false,studyListeningContext=null;
 let studyCardFlow=studyRecallFlow();
 function studyUniqueExamples(rows,snap){
  const groups=new Map(),assets=new Set((snap.learningAudio||[]).filter(a=>!a.deleted&&a.blob).map(a=>a.id));
@@ -5779,7 +5805,7 @@ restorePractice=function(){const restored=studyRestoreDirection();studyDefaultDi
 $('#practiceKind').addEventListener('change',()=>{$('#practiceMode').value=$('#practiceKind').value==='letters'?'wordToIpa':'wordToMeaning';},true);
 function studyHideAnswer(){
  studyCardFlow=studyRecallFlow();
- studyCardRevealed=false;studyCard.classList.remove('study-revealed');studyTranslation.replaceChildren();studyStatus.textContent='';studyExamplesBox.replaceChildren();
+ studyListeningContext=null;studyCard.classList.remove('practice-listening');studyCardRevealed=false;studyCard.classList.remove('study-revealed');studyTranslation.replaceChildren();studyStatus.textContent='';studyExamplesBox.replaceChildren();
  $('#practiceResult').hidden=true;$('#practicePlay').hidden=true;$('#practiceDetail').hidden=true;$('#practiceNotes').hidden=true;
  for(const b of $('#practiceMarkControls').querySelectorAll('button'))b.disabled=true;
  $('#showAnswer').hidden=false;$('#showAnswer').disabled=true;
@@ -5793,12 +5819,12 @@ async function studyRender(run){
  $('#nextQuestion').textContent='下一题';
  const listening=practiceDirection==='audioToWord',reverse=['ipaToWord','meaningToWord'].includes(practiceDirection);
  $('#questionPrompt').textContent=studyRecallPrompt(reverse);
- $('#showAnswer').textContent=listening?'揭晓老挝语和中文':'点击揭晓 · 听发音';if(listening){$('#questionPrompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓答案';$('#questionIPA').textContent='听音辨词';$('#questionIPA').removeAttribute('lang');$('#practicePlay').hidden=false;$('#practicePlay').textContent='▶ 听题目';studyExamplesBox.hidden=true;}else{studyExamplesBox.hidden=false;if(!reverse)studyLao($('#questionIPA'),item.word,$('#practiceKind').value==='letters'||item._vowelRule);}
+ $('#showAnswer').textContent=listening?'揭晓老挝语和中文':'点击揭晓 · 听发音';if(listening){studyCard.classList.add('practice-listening');$('#questionPrompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓答案';$('#questionIPA').textContent='听音辨词';$('#questionIPA').removeAttribute('lang');$('#practicePlay').hidden=false;$('#practicePlay').textContent='▶ 听单词';studyExamplesBox.hidden=true;}else{studyExamplesBox.hidden=false;if(!reverse)studyLao($('#questionIPA'),item.word,$('#practiceKind').value==='letters'||item._vowelRule);}
  $('#showAnswer').disabled=false;
  const previousRating=practiceRound?.history?.[practiceRound.cursor];
  if(previousRating?.rated)await studyCardFlow.reveal(()=>studyRevealAnswer(false));
  let snap;try{snap=await learningSnapshot();}catch(e){if(run===studyCardRun)studyStatus.textContent='例句暂时无法读取：'+e.message;return;}if(run!==studyCardRun||request!==practiceRequest||id!==practiceId)return;
- for(const m of studyExamples(item,snap)){
+ if(listening&&typeof listeningContextPanel==='function'){const current=()=>run===studyCardRun&&request===practiceRequest&&id===practiceId&&activeView==='practice';studyListeningContext=listeningContextPanel(studyExamples(item,snap),{current,play:m=>saPlay(m.id,{isCurrent:current}),detail:m=>studyCardRevealed&&current()?learningOpenDetail(m.id):null});studyExamplesBox.hidden=false;studyExamplesBox.append(studyListeningContext.element);if(studyCardRevealed)studyListeningContext.reveal();return;}for(const m of studyExamples(item,snap)){
   const row=document.createElement('article'),lo=document.createElement('p'),zh=document.createElement('p'),play=document.createElement('button'),detail=document.createElement('button'),actions=document.createElement('div');
   row.className='study-example';studyLao(lo,m.textLao);zh.className='study-example-translation';zh.textContent=m.translationZh||'暂无翻译';
   play.type='button';play.className='study-example-play';play.textContent='▶ 例句';play.setAttribute('aria-label','播放例句 '+m.textLao);
@@ -5837,7 +5863,7 @@ async function studyPlaySaved(item,run){
 async function studyRevealAnswer(withAudio=true){
  if(studyCardRevealed||!studyCardItem||$('#showAnswer').disabled||practiceRound?.completed)return;
  const run=studyCardRun,item=studyCardItem;
- studyCardRevealed=true;studyCard.classList.add('study-revealed');$('#showAnswer').hidden=true;
+ studyCardRevealed=true;studyListeningContext?.reveal();studyCard.classList.add('study-revealed');$('#showAnswer').hidden=true;
  const answer=document.createElement('p'),translation=document.createElement('p');
  if(item._vowelRule)studyLao(answer,item.ipa,true);
  else if(['ipaToWord','meaningToWord','audioToWord'].includes(practiceDirection))studyLao(answer,item.word,$('#practiceKind').value==='letters');
@@ -6481,14 +6507,14 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   }
   const r=queue[index],at=index,flow=studyRecallFlow(),item=r.reviewWord||{_practiceMaterialId:r.id,word:r.lao,meaning:r.zh};
   const checkpointOK=persist();if(typeof sfWarm==='function'){sfWarm(r.id);if(queue[index+1])sfWarm(queue[index+1].id);}
-  const listening=direction==='audio',examples=direction==='lao'?(fast?fast.examples(item):studyExamples(item,snap,true)):[];
-  const exampleHtml=examples.map(m=>'<article class="study-example"><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" aria-label="播放例句" title="播放例句" data-cc-example="'+h(m.id)+'">▶</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
+  const listening=direction==='audio',examples=(direction==='lao'||listening)?(fast?fast.examples(item):studyExamples(item,snap,true)):[];
+  const exampleHtml=(listening?[]:examples).map(m=>'<article class="study-example"><p lang="lo">'+h(m.textLao)+'</p><p class="study-example-translation">'+h(m.translationZh||'暂无翻译')+'</p><div class="study-example-actions"><button type="button" aria-label="播放例句" title="播放例句" data-cc-example="'+h(m.id)+'">▶</button><button type="button" data-cc-detail="'+h(m.id)+'">例句详情</button></div></article>').join('');
   learningModal('检测 · '+(index+1)+' / '+queue.length,'<div class="cc-session-meta"><span>'+h(options.scopeLabel||'章节检测')+' · '+queue.length+' 项</span><small>'+h(r.group)+'</small></div><div class="cc-progress" role="progressbar" aria-label="本轮进度" aria-valuemin="0" aria-valuemax="'+queue.length+'" aria-valuenow="'+index+'"><span style="width:'+(index/queue.length*100)+'%"></span></div><div class="course-recall">'+studyRecallCardHtml({question:direction==='lao'?r.lao:r.zh,reverse:direction==='zh',examples:exampleHtml,favorite:typeof fvMarkup==='function'?fvMarkup({target:r.reviewWord?'word:'+r.reviewWord.syncId:r.id}):'',h})+'</div>');
   const card=$('[data-recall-card]'),answer=$('[data-recall-answer]'),reveal=$('[data-recall-reveal]'),status=$('[data-recall-status]');
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
-  if(listening){card.querySelector('.question-ipa').textContent='听音辨词';card.querySelector('.recall-prompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓';reveal.textContent='揭晓老挝语和中文';$('[data-recall-play]').hidden=false;reveal.textContent='揭晓老挝语和中文';}
+  if(listening){card.classList.add('cc-listening');$('[data-recall-play]').textContent='▶ 听单词';card.querySelector('.question-ipa').textContent='听音辨词';card.querySelector('.recall-prompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓';reveal.textContent='揭晓老挝语和中文';$('[data-recall-play]').hidden=false;reveal.textContent='揭晓老挝语和中文';}
   let suspended=false;
-  const current=()=>!suspended&&run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);
+  const current=()=>!suspended&&run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);const context=listening&&typeof listeningContextPanel==='function'?listeningContextPanel(examples,{current,play:m=>saPlay(m.id,{isCurrent:current}),detail:(m,button)=>openDetail(m.id,button)}):null;if(context)card.querySelector('.study-examples').append(context.element);
   async function openDetail(target,button){
    if(!flow.revealed||!current())return;
    const parent=typeof letterDetailCapture==='function'?letterDetailCapture(button):null;
@@ -6513,7 +6539,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   async function play(id=r.id){if((!flow.revealed&&!listening)||!current())return;try{await saPlay(id,{isCurrent:current});}catch(e){if(current())status.textContent='暂无可播放的已保存录音，或录音需要核对。可以跳过或揭晓后补录；本次不会生成音频。';}}
   async function show(withAudio=true){if(!current())return;await flow.reveal(async()=>{
    revealedAt=at;persist();
-   card.classList.add('study-revealed');answer.hidden=false;answer.textContent=listening?r.lao+'\n'+r.zh:direction==='lao'?r.zh:r.lao;if(direction==='zh'||listening)answer.lang='lo';
+   card.classList.add('study-revealed');context?.reveal();answer.hidden=false;answer.textContent=listening?r.lao+'\n'+r.zh:direction==='lao'?r.zh:r.lao;if(direction==='zh'||listening)answer.lang='lo';
    reveal.hidden=true;$('[data-recall-play]').hidden=false;$('[data-recall-detail]').hidden=false;
    for(const b of grades()){b.disabled=false;b.setAttribute('aria-pressed',String(ratings.get(at)===b.dataset.recallGrade));}
    if(ratings.has(at))status.textContent='本题已保存：'+({red:'陌生',yellow:'模糊',green:'熟悉'})[ratings.get(at)]+'；可以重新选择，修改不会增加答题次数。';
@@ -8201,7 +8227,7 @@ function rrSession(queue,options={}){
  const status=()=>options.host?$('#rrSessionStatus'):$('#learningDialogStatus');
  const render=(title,html)=>{if(options.host)options.host.innerHTML='<h3 class="rp-round-title">'+h(title)+'</h3>'+html+'<p id="rrSessionStatus" role="status"></p>';else learningModal(title,html);};
  const draw=()=>{const generation=++drawGeneration;if(index>=queue.length){options.onStep?.(null);render('本轮已完成','<p>已保存本轮回忆结果。熟悉仍在清单中，下一次按计划出现；暂未到期的词句不需要立即再刷。</p>'+(options.host?'<button id="rrPrevious">← 上一题</button>':'')+'<button data-pending-review>继续今日任务</button><button data-rr-manage>查看清单与目标</button>');if(options.host)$('#rrPrevious').onclick=()=>{stopPracticeAudio();index=queue.length-1;draw();};return;}
- const row=queue[index],item=row.item,state=history[index],id=state.id,recognition=row.direction==='wordToMeaning';let revealed=false,saving=false,graded=state.graded;
+ const row=queue[index],item=row.item,state=history[index],id=state.id,recognition=row.direction==='wordToMeaning';let revealed=false,saving=false,graded=state.graded,listeningContext=null;
  options.onStep?.(row);
  render('每日回忆 · '+(index+1)+' / '+queue.length,'<p class="tag-hint">'+h(rrDirections[row.direction])+' · '+(row.fresh?'新学':'到期复习')+'</p><h2>'+h(recognition?item.word:item.meaning)+'</h2>'+(row.direction==='meaningToWord'?'<label>先完整写出答案（也可在纸上写）<input id="rrWritten" lang="lo" autocomplete="off" placeholder="在这里默写"></label>':'<p>先独立回忆，再查看答案。</p>')+'<button id="rrReveal">显示答案并听录音</button><div id="rrAnswer" hidden><h3 lang="lo">'+h(recognition?item.meaning:item.word)+'</h3><p id="rrWritingResult"></p><button id="rrPlay">▶ 再听一次</button><p class="tag-hint">口述仅为自评，不自动判定发音。书写请核对完整拼写。</p><div class="rr-actions"><button id="rrRed">陌生／没想起</button><button id="rrYellow">模糊／有提示</button><button id="rrGreen" class="primary">熟悉／独立想起</button></div></div><button id="rrPause" class="rr-pause">早就会了／移出此方向复习</button><p class="tag-hint">移出只影响当前方向，保留词句和历史，可从清单恢复。</p>');
  if(options.host){
@@ -8209,15 +8235,15 @@ function rrSession(queue,options={}){
   render('每日回忆 · '+(index+1)+' / '+queue.length,'<p class="rp-card-direction">'+h(rrDirections[row.direction])+' · '+(row.fresh?'新学':'到期复习')+'</p><div id="rrCard" class="rp-flashcard"><p class="rp-card-prompt">'+prompt+'</p><div class="rp-card-word" '+(recognition?'lang="lo"':'')+'>'+h(recognition?item.word:item.meaning)+'</div>'+(row.direction==='meaningToWord'?'<label>先完整写出答案（也可在纸上写）<input id="rrWritten" lang="lo" autocomplete="off" placeholder="在这里默写"></label>':'')+'<div id="rrAnswer" class="rp-card-answer" hidden><div class="rp-card-links"><button id="rrPlay">▶ 播放</button><button id="rrDetail">详情 / 参考发音</button></div><h3 '+(!recognition?'lang="lo"':'')+'>'+h(recognition?item.meaning:item.word)+'</h3>'+(recognition&&item.ipa?'<p>'+h(item.ipa)+'</p>':'')+'<p id="rrWritingResult"></p></div><div id="rrExamples" class="rp-card-examples"></div><button id="rrReveal" class="rp-card-reveal">点击揭晓 · 听发音</button><div class="rr-actions"><button id="rrRed" disabled>陌生</button><button id="rrYellow" disabled>模糊</button><button id="rrGreen" disabled>熟悉</button></div><div class="rp-card-navigation"><button id="rrPrevious">上一题</button><button id="rrNext" class="rp-card-next">下一题</button></div></div><button id="rrPause" class="rr-pause">早就会了／移出此方向复习</button><p class="tag-hint">只影响当前方向，保留词句和历史，可从清单恢复。</p>');
  }
  const current=()=>generation===drawGeneration&&index<queue.length&&queue[index]===row&&(options.host?(activeView==='practice'&&options.isCurrent?.()!==false):learningDialog.open)&&$('#rrPlay')?.isConnected;
- if(options.listening&&options.host){$('#rrCard').querySelector('.rp-card-word').textContent='听音辨词';$('#rrCard').querySelector('.rp-card-prompt').textContent='先点击播放，只凭听力判断，再揭晓答案';$('#rrExamples').hidden=true;const listen=document.createElement('button');listen.type='button';listen.id='rrListen';listen.textContent='▶ 听题目';$('#rrAnswer').before(listen);$('#rrReveal').textContent='揭晓老挝语和中文';$('#rrAnswer').querySelector('h3').textContent=item.word+' · '+(item.meaning||'');}const play=()=>{const request=++audioRequest;stopPracticeAudio();return rrPlay(item,()=>request===audioRequest&&current()).catch(e=>{if(request===audioRequest&&current())status().textContent=e.message;});};$('#rrPlay').onclick=play;if(options.listening&&options.host)$('#rrListen').onclick=play;
- const reveal=(withAudio=true)=>{if(revealed)return;revealed=true;state.revealed=true;$('#rrAnswer').hidden=false;if(options.listening&&options.host)$('#rrExamples').hidden=false;$('#rrReveal').hidden=true;for(const key of ['rrRed','rrYellow','rrGreen'])$('#'+key).disabled=graded;if(options.host)$('#rrCard').classList.add('rp-card-revealed');const input=$('#rrWritten');if(input){state.written=input.value;input.disabled=true;const value=input.value.normalize('NFC').trim();if(value){const matches=value===item.word.normalize('NFC').trim();$('#rrWritingResult').textContent=matches?'书写与保存答案一致（不代表长期掌握）':'书写与答案不同：请按实际情况选陌生或模糊';if(!matches)$('#rrGreen').disabled=true;}}if(withAudio&&(!options.host||typeof appPreference!=='function'||appPreference('revealAudio')))void play();};$('#rrReveal').onclick=()=>reveal();
+ if(options.listening&&options.host){$('#rrCard').classList.add('rr-listening');$('#rrCard').querySelector('.rp-card-word').textContent='听音辨词';$('#rrCard').querySelector('.rp-card-prompt').textContent='先点击播放，只凭听力判断，再揭晓答案';$('#rrExamples').hidden=true;const listen=document.createElement('button');listen.type='button';listen.id='rrListen';listen.textContent='▶ 听单词';$('#rrAnswer').before(listen);$('#rrReveal').textContent='揭晓老挝语和中文';$('#rrAnswer').querySelector('h3').textContent=item.word+' · '+(item.meaning||'');}const play=()=>{const request=++audioRequest;stopPracticeAudio();return rrPlay(item,()=>request===audioRequest&&current()).catch(e=>{if(request===audioRequest&&current())status().textContent=e.message;});};$('#rrPlay').onclick=play;if(options.listening&&options.host)$('#rrListen').onclick=play;
+ const reveal=(withAudio=true)=>{if(revealed)return;revealed=true;state.revealed=true;$('#rrAnswer').hidden=false;if(options.listening&&options.host){$('#rrExamples').hidden=false;listeningContext?.reveal();}$('#rrReveal').hidden=true;for(const key of ['rrRed','rrYellow','rrGreen'])$('#'+key).disabled=graded;if(options.host)$('#rrCard').classList.add('rp-card-revealed');const input=$('#rrWritten');if(input){state.written=input.value;input.disabled=true;const value=input.value.normalize('NFC').trim();if(value){const matches=value===item.word.normalize('NFC').trim();$('#rrWritingResult').textContent=matches?'书写与保存答案一致（不代表长期掌握）':'书写与答案不同：请按实际情况选陌生或模糊';if(!matches)$('#rrGreen').disabled=true;}}if(withAudio&&(!options.host||typeof appPreference!=='function'||appPreference('revealAudio')))void play();};$('#rrReveal').onclick=()=>reveal();
  if(options.host){$('#rrCard').onclick=e=>{if(!e.target.closest('button,input,label,a,details,summary'))$('#rrReveal').onclick();};
   const remember=()=>{const input=$('#rrWritten');if(input)state.written=input.value;};
   $('#rrNext').disabled=!graded;$('#rrNext').onclick=async()=>{if(!graded||saving)return;remember();saving=true;options.onSaving?.(true);try{if(options.savePosition)await options.savePosition(index+1);stopPracticeAudio();index++;draw();}catch(e){status().textContent='尚未保存断点：'+e.message;}finally{saving=false;options.onSaving?.(false);}};
   $('#rrPrevious').disabled=index===0;$('#rrPrevious').onclick=async()=>{if(index===0||saving)return;remember();saving=true;options.onSaving?.(true);try{if(options.savePosition)await options.savePosition(index-1);stopPracticeAudio();index--;draw();}catch(e){status().textContent='尚未保存断点：'+e.message;}finally{saving=false;options.onSaving?.(false);}};
   $('#rrDetail').onclick=async()=>{if(saving||!current())return;try{audioRequest++;stopPracticeAudio();await learningOpenDetail(item._practiceMaterialId||'word:'+item.syncId);}catch(e){if(current())status().textContent='详情暂时无法打开：'+e.message;}};
   const input=$('#rrWritten');if(input)input.value=state.written;if(state.revealed)reveal(false);if(graded){$('#rrPause').disabled=true;status().textContent=state.paused?'已移出此方向复习（回看不重复记录）':'已记录：'+({red:'陌生',yellow:'模糊',green:'熟悉'}[state.rating])+'（回看不重复记录）';}
-  if(recognition&&typeof studyExamples==='function')void learningSnapshot().then(snap=>{if(!current())return;const examples=studyExamples(item,snap,true);$('#rrExamples').innerHTML=examples.map((m,i)=>'<article><p lang="lo">'+h(m.textLao)+'</p><p class="rp-example-meaning">'+h(m.translationZh||'暂无翻译')+'</p><div class="rp-example-actions"><button type="button" data-rr-example-play="'+i+'" aria-label="'+h('播放例句 '+m.textLao)+'">▶ 例句</button><button type="button" data-rr-example-detail="'+i+'" data-fv-source="'+h(m.id)+'" aria-label="'+h('查看例句详情 '+m.textLao)+'">例句详情</button></div></article>').join('');
+  if(recognition&&typeof studyExamples==='function')void learningSnapshot().then(snap=>{if(!current())return;const examples=studyExamples(item,snap,true);if(options.listening&&typeof listeningContextPanel==='function'){listeningContext=listeningContextPanel(examples,{current,play:m=>rrPlay({_practiceMaterialId:m.id,word:m.textLao},current),detail:m=>revealed&&current()?learningOpenDetail(m.id):null});$('#rrExamples').hidden=false;$('#rrExamples').replaceChildren(listeningContext.element);if(revealed)listeningContext.reveal();return;}$('#rrExamples').innerHTML=examples.map((m,i)=>'<article><p lang="lo">'+h(m.textLao)+'</p><p class="rp-example-meaning">'+h(m.translationZh||'暂无翻译')+'</p><div class="rp-example-actions"><button type="button" data-rr-example-play="'+i+'" aria-label="'+h('播放例句 '+m.textLao)+'">▶ 例句</button><button type="button" data-rr-example-detail="'+i+'" data-fv-source="'+h(m.id)+'" aria-label="'+h('查看例句详情 '+m.textLao)+'">例句详情</button></div></article>').join('');
    $('#rrExamples').onclick=async e=>{const button=e.target.closest('[data-rr-example-play],[data-rr-example-detail]');if(!button)return;e.stopPropagation();if(!revealed||!current()||saving)return;const detail=button.dataset.rrExampleDetail!==undefined,key=detail?button.dataset.rrExampleDetail:button.dataset.rrExamplePlay;if(!/^\d+$/.test(key))return;const example=examples[Number(key)];if(!example)return;const request=++audioRequest;try{stopPracticeAudio();if(detail)await learningOpenDetail(example.id);else await rrPlay({_practiceMaterialId:example.id,word:example.textLao},()=>request===audioRequest&&current());}catch(error){if(request===audioRequest&&current())status().textContent=(detail?'例句详情暂时无法打开：':'例句暂时无法播放：')+error.message;}};
   }).catch(e=>{if(current())status().textContent='例句暂时无法读取：'+e.message;});
  }
@@ -10758,10 +10784,31 @@ practiceItems=function(items){const eligible=listeningPracticeItems(items),inclu
 const listeningPersist=persistPractice;persistPractice=function(){if(practiceRound){practiceRound.listeningFilterKey=listeningFilterKey;practiceRound.includeFamiliar=$('#practiceFamiliar').value!=='exclude';}return listeningPersist();};
 const listeningChoose=choosePractice;choosePractice=async function(options={}){if(options.restart){listeningCohort=null;listeningRestored=true;}return listeningChoose(options);};
 $('#practiceFamiliar').onchange=()=>{listeningCohort=null;listeningRestored=true;void choosePractice({restart:true});};
+// Resolve the current wrapper at event time; the original handlers were bound
+// before the recall renderer existed and could otherwise leave stale examples.
+for(const id of ['practiceMode','practiceScope'])$('#'+id).onchange=()=>choosePractice({restart:true});
 $('#rpFamiliar').onchange=async()=>{try{rpGuard();if(!rpCanRestart())return;await rpRender({restart:true});}catch(e){$('#rpStatus').textContent=e.message;}};
 // Restore the current free-practice filter without interpreting old sessions as exclusions.
 try{const saved=JSON.parse(localStorage.getItem(workspaceName('lao-practice-session-v1'))||'null');if(saved?.round&&typeof saved.round.includeFamiliar==='boolean')$('#practiceFamiliar').value=saved.round.includeFamiliar?'include':'exclude';}catch(_){}
 const listeningCss=document.createElement('style');listeningCss.textContent='#practiceCard:has(#questionIPA) .study-examples[hidden],#rrExamples[hidden]{display:none!important}#rrListen{font-size:20px;min-height:64px;margin:14px auto;display:block}.study-translation{white-space:pre-line}';document.head.append(listeningCss);
+</script>
+<script data-listening-context>
+/* Optional saved context audio. Never reveal sentence text, translation or detail before the answer. */
+function listeningContextPanel(examples,{current,play,detail}){
+ const element=document.createElement('section');element.className='listening-context';
+ const title=document.createElement('h4');title.textContent='语境例句';element.append(title);
+ const rows=[];let revealed=false,busy=false;
+ if(!examples.length){const empty=document.createElement('p');empty.className='tag-hint';empty.textContent='暂无已关联例句；本次不会自动生成句子或音频。';element.append(empty);}
+ for(const [i,m]of examples.slice(0,3).entries()){
+  const row=document.createElement('article'),button=document.createElement('button'),text=document.createElement('div'),lo=document.createElement('p'),zh=document.createElement('p'),open=document.createElement('button'),status=document.createElement('p');
+  button.type='button';button.textContent='▶ 听语境例句'+(i?' '+(i+1):'');button.setAttribute('aria-label','听语境例句'+(i+1));
+  text.hidden=true;lo.lang='lo';lo.textContent=m.textLao;zh.textContent=m.translationZh||'暂无翻译';open.type='button';open.textContent='例句详情';text.append(lo,zh,open);status.className='tag-hint';status.setAttribute('role','status');row.append(button,text,status);element.append(row);rows.push(text);
+  button.onclick=async e=>{e.stopPropagation();if(busy||!current())return;busy=true;button.disabled=true;status.textContent='正在读取已保存的例句录音…';try{await play(m);if(current())status.textContent='';}catch(error){if(current())status.textContent='此例句暂无可播放的已保存录音，或录音需要核对；揭晓后可打开详情补录。本次未生成音频。';}finally{busy=false;button.disabled=false;}};
+  open.onclick=async e=>{e.stopPropagation();if(!revealed||!current())return;try{await detail(m,open);}catch(error){if(current())status.textContent='例句详情暂时无法打开，请稍后重试。';}};
+ }
+ return {element,reveal(){revealed=true;for(const text of rows)text.hidden=false;}};
+}
+
 </script>
 </body>
 </html>

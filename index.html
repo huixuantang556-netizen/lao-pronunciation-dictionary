@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="7eaa4987c9ecd4a5">
+  <meta name="lao-app-build" content="33226aa7da73adb0">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -252,6 +252,10 @@
 .cc-listening .practice-mark-options button{padding:8px!important;min-height:42px;font-size:15px!important}
 .cc-listening .practice-navigation button{min-height:40px;padding:6px 14px!important;font-size:14px!important}
 @media(max-width:600px){.listening-context{gap:8px;margin-bottom:16px}.listening-context button{padding:8px 12px}.cc-listening .question-row{padding-bottom:20px!important}}
+
+/* Keep listening questions free of instructional copy. */
+.cc-listening:not(.study-revealed) .recall-prompt,.practice-listening:not(.study-revealed) #questionPrompt,.rr-listening:not(.rp-card-revealed) .rp-card-prompt{display:none!important}
+.listening-context[hidden]{display:none!important}
 
 </style>
 </head>
@@ -6666,16 +6670,17 @@ learningOpenDetail=async function(id){
  if(saTextKey(a.original)!==saTextKey(m.textLao)){const warning=document.createElement('p');warning.className='ss-stale-warning';warning.textContent='原句已变化，请更新解析；旧解析暂不用于句中点词。';host.prepend(warning);return;}
  const ranges=wslRanges(m.textLao,a),fallbacks=wslFallbacks(a,ranges),tokens=[...ranges.map(r=>r.token),...fallbacks],panel=document.createElement('section');panel.className='wsl-panel';
  panel.innerHTML='<div class="wsl-sentence" lang="lo">'+wslSentenceHtml(m.textLao,ranges)+'</div><p class="wsl-translation">'+h(m.translationZh||a.translation||'')+'</p><p class="wsl-hint">点词听读 · 查看本句词义</p>'+(fallbacks.length?'<details class="wsl-other-meanings"><summary>其他词义</summary>'+fallbacks.map((t,i)=>'<button data-wsl-token="'+(ranges.length+i)+'"><span lang="lo">'+h(t.lao)+'</span> · '+h(t.meaning)+'</button>').join('')+'</details>':'')+'<div class="wsl-card" aria-live="polite" hidden></div><p class="wsl-status" role="status"></p>';
- host.prepend(panel);let timer=null,selection=0;
+ host.prepend(panel);let timer=null,selection=0,selectedToken=-1;
  const status=panel.querySelector('.wsl-status'),card=panel.querySelector('.wsl-card');
  panel.wslCancelSelection=()=>{clearTimeout(timer);selection++;card.paRun=(card.paRun||0)+1;};
- async function select(index,play){const request=++selection,token=tokens[index];if(!token)return;
+ function collapse(){panel.wslCancelSelection();selectedToken=-1;card.hidden=true;status.textContent='';panel.querySelectorAll('[data-wsl-token]').forEach(b=>b.setAttribute('aria-pressed','false'));}
+ async function select(index,play){if(selectedToken===index&&!card.hidden){collapse();return;}const request=++selection,token=tokens[index];if(!token)return;selectedToken=index;
   panel.querySelectorAll('[data-wsl-token]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.wslToken)===index)));
   const target=token.target||'',related=target?wslRelated(snap,target,m.id,token.lao):[];
   let entry=null;try{if(target.startsWith('word:'))entry=learningFindWord(target.slice(5),detailWords||[]);}catch(_){}
   if(request!==selection||!panel.isConnected)return;
   for(const old of panel.querySelectorAll('.ns-number-card'))old.hidden=true;
-  card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);
+  card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);const close=document.createElement('button');close.type='button';close.dataset.wslCollapse='';close.textContent='收起词义';close.setAttribute('aria-label','收起当前词义卡片');close.style.cssText='float:right;font-size:13px;min-height:40px';card.prepend(close);
   if(typeof cwSplits==='function'&&typeof cwIndex==='function'&&!token.isName&&token.kind!=='name'){
    const index=cwIndex(detailWords||[],snap.learningMaterials),html=wslCompoundHtml(token,index,h);
    if(html){const parts=document.createElement('section');parts.className='cw-components wsl-compound';parts.innerHTML=html;card.append(parts);cwBindComponents(parts);}
@@ -6685,6 +6690,7 @@ learningOpenDetail=async function(id){
   status.textContent='';if(play&&target)try{await saPlay(target,{isCurrent:()=>request===selection&&panel.isConnected});}catch(e){if(request===selection)status.textContent=e.message;}
  }
  panel.onclick=e=>{const b=e.target.closest('button');if(!b)return;clearTimeout(timer);
+  if(b.dataset.wslCollapse!==undefined){collapse();return;}
   if(b.dataset.wslToken!==undefined){if(e.detail>1)return;timer=setTimeout(()=>{if(panel.isConnected)void select(Number(b.dataset.wslToken),true);},350);}
   else if(b.dataset.wslExample!==undefined){if(e.detail>1)return;timer=setTimeout(()=>{if(panel.isConnected)void saPlay(b.dataset.wslExample).catch(e=>status.textContent=e.message);},350);}
   else if(b.dataset.wslDetail!==undefined)void saOpenNested(b.dataset.wslDetail,b).catch(e=>status.textContent=e.message);
@@ -7373,7 +7379,7 @@ async function importPhoneticRepair(root){
    const values=await Promise.all([learningSnapshot(),allEntries()]);if(settled||run!==revision)return;
     [snap,entries]=values;const result=await (root.format==='lao-library-organize-v1'?loOrganizePlan:root.format==='lao-study-refresh-v1'?srRefreshPlan:paRepairPlan)(root,snap,entries,message=>{if(!settled&&run===revision)status.textContent=message;});
     if(settled||run!==revision)return;if(workspace()!==origin)throw Error('账号或本机空间已切换，请重新导入');
-    prepared=result;const n=result.counts;get('[data-repair-summary]').textContent=(n.newWords?'新增独立词卡 '+n.newWords+' 张（含标签，不含录音）；':'')+(n.grammar?'更新语法／构词 '+n.grammar+' 张；':'')+'新增发音分析 '+n.created+' 份；补全／更新发音关联 '+n.annotated+' 张；归档 '+n.archived+' 份。原词句、词义及全部录音保留。';
+    prepared=result;const n=result.counts;get('[data-repair-summary]').textContent=(n.newWords?'新增独立词卡 '+n.newWords+' 张（含标签，不含录音）；':'')+(n.grammar?'更新语法／构词 '+n.grammar+' 张；':'')+(n.translations?'修订译文／拼写 '+n.translations+' 张；':'')+'新增发音分析 '+n.created+' 份；补全／更新发音关联 '+n.annotated+' 张；归档 '+n.archived+' 份。'+(n.translations?'仅更新本包列明的译文／拼写；全部录音及学习记录保留。':'原词句、词义及全部录音保留。');
     if(root.format==='lao-library-organize-v1')get('[data-repair-summary]').textContent='整理 '+n.metadata+' 条词典标签／备注（其中 '+n.meanings+' 条释义修订）；重排 '+n.courses+' 课单词分类；更新 '+n.annotated+' 张发音关联，新增 '+n.created+' 份分析，归档 '+n.archived+' 份历史分析。对话正文与分类、录音、收藏和复习记录不变。未确认读法继续保留核对标记。';
     status.textContent='校验通过，尚未保存。勾选备份确认后，点击“确认应用”。';check.disabled=false;
    }catch(error){if(!settled&&run===revision)showError(error,'核对未通过：');}finally{checking=false;}
@@ -7383,7 +7389,7 @@ async function importPhoneticRepair(root){
    if(settled||!prepared||!check.checked||applying||checking)return;applying=true;save.disabled=true;check.disabled=true;
    try{if(workspace()!==origin)throw Error('账号或本机空间已切换，请关闭后重新导入');await saCommitDictionary(prepared.plan,snap,entries);}
    catch(error){applying=false;showError(error,'未能完成保存：');return;}
-   applied=true;status.textContent=root.format==='lao-study-refresh-v1'?'语法、构词与发音更新已保存；原词句、词义及录音保留。':'修复已保存；原录音、词义及语法未改动。';const output=document.querySelector('#backupStatus');if(output)output.textContent=status.textContent;
+   applied=true;status.textContent=root.format==='lao-study-refresh-v1'?'语法、构词与发音更新已保存；本包列出的译文与分析已更新；录音与学习记录保留。':'修复已保存；原录音、词义及语法未改动。';const output=document.querySelector('#backupStatus');if(output)output.textContent=status.textContent;
    if(root.format==='lao-library-organize-v1'){status.textContent='词典标签、备注、已列出的释义修订及教材单词分类已保存；对话、录音与复习记录保留。';if(output)output.textContent=status.textContent;}
    try{if(typeof render==='function')await render();}catch(_){if(output)output.textContent='发音修复已保存，请刷新页面查看。';}
    applying=false;finish();
@@ -7500,12 +7506,20 @@ async function srRefreshPlan(root,snap,entries,progress=()=>{}){
   snap={...snap,learningMaterials:[...snap.learningMaterials,...parents]};
  }
  const writes=new Map(),seen=new Set();
- for(const op of root.grammar){if(seen.has(op.id))throw Error('语法更新编号重复');seen.add(op.id);for(const m of await srGrammarWrites(op,snap,entries)){if(writes.has(m.id))throw Error('语法更新记录冲突');writes.set(m.id,m);}progress('已核对语法／构词 '+seen.size+' / '+root.grammar.length);await new Promise(resolve=>setTimeout(resolve,0));}
+ const translations=await srTranslationWrites(root.translations||[],snap);for(const row of translations)writes.set(row.id,row);if(translations.length)snap={...snap,learningMaterials:snap.learningMaterials.map(m=>writes.get(m.id)||m)};
+ for(const op of root.grammar){if(seen.has(op.id))throw Error('语法更新编号重复');seen.add(op.id);for(const m of await srGrammarWrites(op,snap,entries)){if(writes.has(m.id)&&!translations.some(t=>t.id===m.id))throw Error('语法更新记录冲突');writes.set(m.id,m);}progress('已核对语法／构词 '+seen.size+' / '+root.grammar.length);await new Promise(resolve=>setTimeout(resolve,0));}
  const existing=new Set(snap.learningMaterials.map(m=>m.id)),next={...snap,learningMaterials:snap.learningMaterials.map(m=>writes.get(m.id)||m).concat([...writes.values()].filter(m=>!existing.has(m.id)))};
  const phonetic=await paRepairPlan(root.phonetic,next,entries,progress);
  for(const m of phonetic.plan.materials)writes.set(m.id,m);
  for(const w of newWords){const m=writes.get('word:'+w.syncId);if(!m?.studyWordAnalysis||!m.sentenceAnalysis||!m.pronunciationAnalysis)throw Error('新增组成词缺少配套语法或发音分析');}
- return {plan:{entries:newWords,materials:[...writes.values()]},after:phonetic.after,counts:{...phonetic.counts,grammar:root.grammar.length,newWords:newWords.length}};
+ return {plan:{entries:newWords,materials:[...writes.values()]},after:phonetic.after,counts:{...phonetic.counts,grammar:root.grammar.length,newWords:newWords.length,translations:translations.length}};
+}
+
+function srTranslationBase(m){return {id:m.id,textLao:m.textLao,translationZh:m.translationZh||'',v2Data:m.v2Data||null,deleted:!!m.deleted};}
+async function srTranslationWrites(ops,snap){
+ if(!Array.isArray(ops)||ops.length>2000)throw Error('译文修订数量无效');const byId=new Map(snap.learningMaterials.map(m=>[m.id,m])),seen=new Set(),out=[];
+ for(const op of ops){const old=byId.get(op.id);if(!old||old.deleted||old.phoneticProfile||old.id.startsWith('word:')||seen.has(op.id)||await paDigest(srTranslationBase(old))!==op.baseHash||typeof op.translation!=='string'||(!op.translation.trim()&&!(op.textLao!==undefined&&op.translation===(old.translationZh||'')))||op.translation.length>12000||!Number.isFinite(op.savedAt))throw Error('译文修订与现有资料不一致，请重新导出');seen.add(op.id);if(op.textLao!==undefined&&(typeof op.textLao!=='string'||!op.textLao.trim()||op.textLao.length>12000||old.contentType==='word'||old.analysisOwner))throw Error('原文修订字段无效');const textChanged=op.textLao!==undefined&&op.textLao!==old.textLao;out.push({...old,translationZh:op.translation,...(textChanged?{textLao:op.textLao,audioNeedsReview:true}:{}),...(old.v2Data&&typeof old.v2Data==='object'?{v2Data:{...old.v2Data,...(Object.hasOwn(old.v2Data,'translationZh')?{translationZh:op.translation}:{}),...(textChanged&&Object.hasOwn(old.v2Data,'textLao')?{textLao:op.textLao}:{})}}:{}),updatedAt:op.savedAt});}
+ return out;
 }
 </script>
 <script data-learning-bundle="phonetic-analysis">
@@ -10807,7 +10821,7 @@ function listeningContextPanel(examples,{current,play,detail}){
  const element=document.createElement('section');element.className='listening-context';
  const title=document.createElement('h4');title.textContent='语境例句';element.append(title);
  const rows=[];let revealed=false,busy=false;
- if(!examples.length){const empty=document.createElement('p');empty.className='tag-hint';empty.textContent='暂无已关联例句；本次不会自动生成句子或音频。';element.append(empty);}
+ if(!examples.length)element.hidden=true;
  for(const [i,m]of examples.slice(0,3).entries()){
   const row=document.createElement('article'),button=document.createElement('button'),text=document.createElement('div'),lo=document.createElement('p'),zh=document.createElement('p'),open=document.createElement('button'),status=document.createElement('p');
   button.type='button';button.textContent='▶ 听语境例句'+(i?' '+(i+1):'');button.setAttribute('aria-label','听语境例句'+(i+1));
@@ -10817,7 +10831,6 @@ function listeningContextPanel(examples,{current,play,detail}){
  }
  return {element,reveal(){revealed=true;for(const text of rows)text.hidden=false;}};
 }
-
 </script>
 <script data-chapter-progress-sync>
 /* Chapter cursors travel through the existing private progress outbox. Import only on opening a chapter test. */
@@ -10829,11 +10842,12 @@ function ccCloudSchedule(key,value,options={}){
  if(value&&value.index>=value.queue.length)value=null;
  if(!key||typeof qaProgressEnabled!=='function'||!qaProgressEnabled())return;
  try{let deviceId=localStorage.getItem(workspaceName('chapter-cloud-device-v1'));if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(workspaceName('chapter-cloud-device-v1'),deviceId);}
+ const plain=JSON.stringify(value===null?null:{...value,cloudSavedAt:undefined}),fingerprintKey=key+':cloud-content';if(!options.savedAt&&localStorage.getItem(fingerprintKey)===plain)return;
  const savedAt=Number.isFinite(options.savedAt)?options.savedAt:Math.max(Date.now(),Number(localStorage.getItem(key+':cloud-time'))+1||0,JSON.parse(localStorage.getItem(key)||'null')?.cloudSavedAt+1||0),scope=ccCloudPortable(key),v=value===null?null:{...value,version:1,cloudSavedAt:savedAt},marker={version:1,uid:cloudWorkspace,deviceId,scope,savedAt,value:v};
  if(!ccCloudValid(marker))throw Error('章节断点格式无效');
- const pending=JSON.parse(localStorage.getItem(ccCloudPendingKey())||'{}');pending[scope]=marker;localStorage.setItem(ccCloudPendingKey(),JSON.stringify(pending));
+ const pending=JSON.parse(localStorage.getItem(ccCloudPendingKey())||'{}');pending[scope]=marker;localStorage.setItem(ccCloudPendingKey(),JSON.stringify(pending));localStorage.setItem(fingerprintKey,plain);
  if(v)localStorage.setItem(key,JSON.stringify(v));else localStorage.setItem(key+':cloud-time',String(savedAt));
- clearTimeout(ccCloudTimer);ccCloudTimer=setTimeout(()=>ccCloudFlush(),450);
+ clearTimeout(ccCloudTimer);ccCloudTimer=setTimeout(()=>ccCloudFlush(),8000);
  }catch(e){qaMessage('章节进度已存本机，断点待同步：'+e.message);}
 }
 async function ccCloudFlush(){
@@ -10845,9 +10859,9 @@ async function ccCloudFlush(){
  const row={...learningBlank(id,'knowledge','章节检测断点'),chapterCheckpoint:marker,updatedAt:marker.savedAt};learningValidateRecord('learningMaterials',row);
  if(new Blob([JSON.stringify(row)]).size>245000)throw Error('本轮断点过大，仍保留在本机');
  const db=await openDB();if(owner!==cloudWorkspace)return;const t=db.transaction(['learningMaterials','cloud_meta'],'readwrite'),done=transactionDone(t),s=t.objectStore('learningMaterials'),q=s.get(id);
- q.onsuccess=()=>{if(owner!==cloudWorkspace){t.abort();return;}s.put(row);qaStage(t.objectStore('cloud_meta'),[{table:'lao_learning_records',kind:'learningMaterials',id,row,before:q.result||null,progress:true}]);};await done;
+ q.onsuccess=()=>{if(owner!==cloudWorkspace){t.abort();return;}const content=v=>JSON.stringify(v===null?null:{...v,cloudSavedAt:undefined});if(q.result?.chapterCheckpoint&&content(q.result.chapterCheckpoint.value)===content(row.chapterCheckpoint.value))return;s.put(row);qaStage(t.objectStore('cloud_meta'),[{table:'lao_learning_records',kind:'learningMaterials',id,row,before:q.result||null,progress:true}]);};await done;
  const latest=JSON.parse(localStorage.getItem(pendingKey)||'{}');if(latest[marker.scope]?.savedAt===marker.savedAt){delete latest[marker.scope];localStorage.setItem(pendingKey,JSON.stringify(latest));}qaKick();
- }}catch(e){success=false;qaMessage('章节进度已存本机，断点待同步：'+e.message);}finally{ccCloudBusy=false;if(success&&owner===cloudWorkspace&&Object.keys(JSON.parse(localStorage.getItem(pendingKey)||'{}')).length)ccCloudTimer=setTimeout(()=>ccCloudFlush(),450);}
+ }}catch(e){success=false;qaMessage('章节进度已存本机，断点待同步：'+e.message);}finally{ccCloudBusy=false;if(success&&owner===cloudWorkspace&&Object.keys(JSON.parse(localStorage.getItem(pendingKey)||'{}')).length)ccCloudTimer=setTimeout(()=>ccCloudFlush(),8000);}
 }
 async function ccCloudSeedLegacy(){
  if(!qaProgressEnabled())return;
@@ -10881,7 +10895,7 @@ learningValidateRecord=function(kind,row){if(row?.chapterCheckpoint!==undefined&
 if(typeof window!=='undefined'){
  const prepare=()=>ccCloudSeedLegacy().then(()=>ccCloudFlush()).catch(e=>qaMessage('章节断点暂未同步：'+e.message));
  for(const event of ['online','pageshow'])window.addEventListener(event,prepare);
- document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')prepare();});
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')prepare();else void ccCloudFlush();});window.addEventListener('pagehide',()=>{void ccCloudFlush();});
  if(typeof qaMount==='function'){const old=qaMount;qaMount=function(){old();void prepare();};}
  const fullSync=runCloudSync;runCloudSync=async function(...args){await ccCloudSeedLegacy();await ccCloudFlush();return fullSync(...args);};
  void prepare();

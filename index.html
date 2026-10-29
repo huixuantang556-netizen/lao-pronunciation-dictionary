@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ddd8f9c4884f2120">
+  <meta name="lao-app-build" content="37b28105c12eff34">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6498,12 +6498,12 @@ learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><l
 let courseCheckRun=0;
 function courseCheckSession(queue,course,direction,snap,options={}){
  let index=options.resume?.index||0,revealedAt=options.resume?.revealedAt??-1;const ratings=new Map(options.resume?.ratings||[]),attempts=options.resume?.attempts||queue.map(()=>'review-event:'+crypto.randomUUID()),h=learningEsc;
- const persist=()=>typeof ccCheckpointSave!=='function'||ccCheckpointSave(options.checkpointKey,{queue:queue.map(r=>({id:r.id,lao:r.lao,zh:r.zh,group:r.group})),direction,index,ratings:[...ratings],attempts,revealedAt,scopeLabel:options.scopeLabel});
+ const persist=(publish=false)=>{const value={queue:queue.map(r=>({id:r.id,lao:r.lao,zh:r.zh,group:r.group})),direction,index,ratings:[...ratings],attempts,revealedAt,scopeLabel:options.scopeLabel};const ok=typeof ccCheckpointSave!=='function'||ccCheckpointSave(options.checkpointKey,value);if(publish&&typeof ccCloudSchedule==='function')ccCloudSchedule(options.checkpointKey,value);return ok;};
  let fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;
  function draw(){
   stopPracticeAudio();const run=++courseCheckRun;
   if(index>=queue.length){
-   if(typeof ccCheckpointSave==='function')ccCheckpointSave(options.checkpointKey,null);
+   if(typeof ccCheckpointSave==='function')ccCheckpointSave(options.checkpointKey,null);if(typeof ccCloudSchedule==='function')ccCloudSchedule(options.checkpointKey,null);
    const counts=key=>[...ratings.values()].filter(x=>x===key).length;
    learningModal('检测完成','<p>共 '+queue.length+' 项 · 熟悉 '+counts('green')+' 项 · 模糊 '+counts('yellow')+' 项 · 陌生 '+counts('red')+' 项 · 未评级／跳过 '+(queue.length-ratings.size)+' 项</p><p class="tag-hint">只有揭晓后主动选择的自评才会保存为复习记录；跳过不等于已掌握。</p><button type="button" data-cc-back>上一题</button><button data-pending-review>查看待复习词句</button>');
    $('[data-cc-back]').onclick=()=>{index=queue.length-1;draw();};return;
@@ -6541,7 +6541,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   }
   async function play(id=r.id){if((!flow.revealed&&!listening)||!current())return;try{await saPlay(id,{isCurrent:current});}catch(e){if(current())status.textContent='暂无可播放的已保存录音，或录音需要核对。可以跳过或揭晓后补录；本次不会生成音频。';}}
   async function show(withAudio=true){if(!current())return;await flow.reveal(async()=>{
-   revealedAt=at;persist();
+   revealedAt=at;persist(withAudio);
    card.classList.add('study-revealed');context?.element.remove();card.classList.remove('cc-listening');
    for(const row of card.querySelectorAll('.study-example'))row.hidden=false;
    card.querySelector('.question-ipa').textContent=r.lao;card.querySelector('.question-ipa').lang='lo';
@@ -6562,14 +6562,14 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   for(const b of card.querySelectorAll('[data-cc-detail]'))b.onclick=()=>openDetail(b.dataset.ccDetail,b);
   for(const b of grades())b.onclick=()=>flow.grade(async()=>{
    if(!current())return;
-   if(ratings.get(at)===b.dataset.recallGrade){index++;draw();return;}
+   if(ratings.get(at)===b.dataset.recallGrade){index++;persist(true);draw();return;}
    for(const n of grades())n.disabled=true;
-   try{if(fast)await fast.save(r,b.dataset.recallGrade,attempts[at]);else{await pendingReviewRecord(r,course,direction,b.dataset.recallGrade,attempts[at],{practice:true});await markPracticeEntry(r.reviewWord?.id||'material:'+r.id,b.dataset.recallGrade);}ratings.set(at,b.dataset.recallGrade);persist();if(current()){index++;draw();}}
+   try{if(fast)await fast.save(r,b.dataset.recallGrade,attempts[at]);else{await pendingReviewRecord(r,course,direction,b.dataset.recallGrade,attempts[at],{practice:true});await markPracticeEntry(r.reviewWord?.id||'material:'+r.id,b.dataset.recallGrade);}ratings.set(at,b.dataset.recallGrade);persist(true);if(current()){index++;persist(true);draw();}}
    catch(e){if(current()){status.textContent='结果尚未保存：'+e.message;for(const n of grades())n.disabled=false;}}
   });
   $('[data-recall-previous]').disabled=!index;
-  $('[data-recall-previous]').onclick=()=>{if(current()&&!flow.saving&&index){index--;draw();}};
-  $('[data-recall-next]').onclick=()=>{if(current()&&!flow.saving){index++;draw();}};
+  $('[data-recall-previous]').onclick=()=>{if(current()&&!flow.saving&&index){index--;persist(true);draw();}};
+  $('[data-recall-next]').onclick=()=>{if(current()&&!flow.saving){index++;persist(true);draw();}};
   if(!checkpointOK)status.textContent='本机无法保存检测断点，请勿关闭本轮检测。';
   if(revealedAt===at||ratings.has(at))void show(false);
  }
@@ -9902,7 +9902,7 @@ function qaMessage(message){
  }
  const text=node.querySelector?.('#quickAudioSyncMessage');if(text)text.textContent=message;else node.textContent=message;node.hidden=!message;
  // Dismissing the toast never pauses uploads or erases the detailed sync status.
- if(message)qaToastTimer=setTimeout(()=>{node.hidden=true;},/已同步\s*✓/.test(message)?2200:8000);
+ if(message)qaToastTimer=setTimeout(()=>{node.hidden=true;},/已上传云端\s*✓/.test(message)?2200:8000);
  const label=document.querySelector('#quickAudioSyncDetail');if(label)label.textContent=message;
 }
 function qaStage(store,records){
@@ -9936,7 +9936,7 @@ function qaMetadataOnly(record,value){
 }
 function qaCheckHistory(record,base,remote,desired){
  if(record.progress&&record.table==='lao_learning_records'&&record.kind==='learningMaterials'){
-  const r=record.row,h=r.practiceHandoff;if(h&&h.id===record.id&&h.deviceId&&record.id==='practice-handoff:auto:'+h.deviceId+':'+String(h.round?.resultId||'').replace(/^practice-round:/,''))return;
+  const r=record.row,h=r.practiceHandoff;if(r.chapterCheckpoint&&typeof ccCloudValid==='function'&&ccCloudValid(r.chapterCheckpoint)&&record.id.startsWith('chapter-checkpoint:'+r.chapterCheckpoint.deviceId+':'))return;if(h&&h.id===record.id&&h.deviceId&&record.id==='practice-handoff:auto:'+h.deviceId+':'+String(h.round?.resultId||'').replace(/^practice-round:/,''))return;
   if(r.reviewEvent?.id===record.id&&record.id.startsWith('review-event:')||r.roundResult?.id===record.id&&record.id.startsWith('practice-round:'))return;
  }
  if(cloudSame(remote,desired)||!record.before)return;
@@ -10002,7 +10002,7 @@ async function qaDrain(){
   const run=async()=>{const all=(await qaReadMeta())[qaQueueKey],jobs=all.filter(j=>j.uid===cloudWorkspace&&!j.blocked&&qaAllowed(j.records));if(!jobs.length){if(all.length)qaMessage('本机已保存 · '+all.length+'项待处理：'+(all.find(j=>j.blocked)?.blocked||'自动上传已暂停'));return;}
    const controller=new AbortController();qaController=controller;qaCheckYield(controller);window.laoQuickSyncBusy=true;
    let completed=0;for(const job of jobs.slice(0,3)){qaCheckYield(controller);if(!qaAllowed(job.records)||bridge.uid()!==job.uid)continue;qaMessage('本机已保存 · 自动同步 '+(completed+1)+' / '+jobs.length+' 项（录音或进度）');try{await qaRunJob(job,async(p,o)=>{qaCheckYield(controller);try{const result=await bridge.request(job.uid,p,{...o,signal:controller.signal});qaCheckYield(controller);return result;}catch(e){if(controller.signal.aborted||qaManualPending())throw qaYield();throw e;}});completed++;}catch(e){if(e.blocked){await qaBlock(job.token,e.message);qaMessage('本机已保存 · '+e.message);continue;}throw e;}}
-   const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次更新已同步 ✓');if(pending.some(j=>!j.blocked&&qaAllowed(j.records)))qaKick(500);qaDelay=1500;
+   const pending=(await qaReadMeta())[qaQueueKey];qaMessage(pending.length?'本机已保存 · '+pending.length+'项待同步，详情见账号设置':'本次更新已上传云端 ✓；其他设备需接收后才能接续');if(pending.some(j=>!j.blocked&&qaAllowed(j.records)))qaKick(500);qaDelay=1500;
   };
   if(navigator.locks)await navigator.locks.request('lao-cloud-sync-'+cloudWorkspace,{ifAvailable:true},lock=>lock?run():qaKick(2000));else await run();
  }catch(e){if(e.qaYielded){qaMessage('自动上传已让位给手动同步；本机录音与待传任务保留');qaKick(3000);}else{qaMessage('本机已保存 · 网络同步未完成，将重试：'+e.message);qaDelay=Math.min(60000,qaDelay*2);qaKick(qaDelay);}}
@@ -10584,7 +10584,7 @@ document.addEventListener('click',e=>{
 <script data-course-check-resume>
 /* Device/account-local test cursor. Reconcile edited questions without discarding the round. */
 function ccCheckpointKey(course,scope,key){return workspaceName('chapter-check-resume-v1')+':'+JSON.stringify([course.id,scope,key]);}
-function ccCheckpointSave(key,value){if(!key)return true;try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,JSON.stringify({...value,version:1}));return true;}catch(_){return false;}}
+function ccCheckpointSave(key,value){if(!key)return true;try{if(value===null)localStorage.removeItem(key);else{let old;try{old=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}localStorage.setItem(key,JSON.stringify({...value,version:1,cloudSavedAt:value.cloudSavedAt||old?.cloudSavedAt||0}));}return true;}catch(_){return false;}}
 function ccCheckpointRead(key,data,course,snap,words){
  try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.version!==1||!Array.isArray(saved.queue)||!saved.queue.length||saved.queue.length>10000||!['lao','zh','audio'].includes(saved.direction)||!Number.isInteger(saved.index)||saved.index<0||saved.index>=saved.queue.length||!Array.isArray(saved.ratings)||!Array.isArray(saved.attempts)||saved.attempts.length!==saved.queue.length)return null;
   if(saved.attempts.some(id=>typeof id!=='string'||!id.startsWith('review-event:'))||saved.ratings.some(p=>!Array.isArray(p)||!Number.isInteger(p[0])||p[0]<0||p[0]>=saved.queue.length||!['red','yellow','green'].includes(p[1])))return null;
@@ -10684,7 +10684,7 @@ ltDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(ltDec
 let qpTimer=null,qpRunning=false,qpDelay=15000;
 const qpFields=['reviews','correct','mistakes','needsExtraPractice','lastReviewed','reviewStats','learningState'];
 function qpSame(a,b){return cloudSame(a??null,b??null);}
-function qpOperation(row){return !!(row.rollingReview||row.reviewEvent||row.roundResult||row.practiceHandoff);}
+function qpOperation(row){return !!(row.rollingReview||row.reviewEvent||row.roundResult||row.practiceHandoff||row.chapterCheckpoint);}
 function qpMerge(local,remote,base,kind){
  if(kind==='learningMaterials'&&qpOperation(remote)){
   if(!local||qpSame(local,remote))return remote;
@@ -10698,7 +10698,7 @@ function qpMerge(local,remote,base,kind){
  out.updatedAt=remote.updatedAt;return out;
 }
 async function qpIndex(uid,api,table){
- const learning=table==='lao_learning_records',filter=learning?'or=(record_id.like.rolling-review:*,record_id.like.review-event:*,record_id.like.practice-round:*,record_id.like.practice-handoff:*,payload->practiceReview.not.is.null)':'or=('+qpFields.map(k=>'payload->entry->'+k+'.not.is.null').join(',')+')';
+ const learning=table==='lao_learning_records',filter=learning?'or=(record_id.like.rolling-review:*,record_id.like.review-event:*,record_id.like.practice-round:*,record_id.like.practice-handoff:*,record_id.like.chapter-checkpoint:*,payload->practiceReview.not.is.null)':'or=('+qpFields.map(k=>'payload->entry->'+k+'.not.is.null').join(',')+')';
  const result=[];for(let offset=0;offset<100000;offset+=500){const rows=await api('/rest/v1/'+table+'?select=owner_id,record_kind,record_id,revision&owner_id=eq.'+encodeURIComponent(uid)+'&record_kind=eq.'+(learning?'learningMaterials':'entry')+'&'+filter+'&order=record_id.asc&limit=500&offset='+offset);if(!Array.isArray(rows))throw Error('进度索引格式异常');for(const r of rows){if(r.owner_id!==uid||r.record_kind!==(learning?'learningMaterials':'entry')||typeof r.record_id!=='string'||!Number.isSafeInteger(r.revision)||r.revision<1)throw Error('进度索引身份异常');result.push(r);}if(rows.length<500)return result;}throw Error('进度索引过大，请手动核对同步');
 }
 async function qpFetch(uid,api,table,index,meta){
@@ -10747,7 +10747,9 @@ async function qpApply(uid,rows){
 }
 function qpStatus(message){const node=document.querySelector('#quickProgressReceiveDetail');if(node)node.textContent=message;}
 function qpKick(delay=15000){clearTimeout(qpTimer);qpTimer=setTimeout(()=>qpReceive(),delay);}
-async function qpReceive(){
+let qpReceivePromise=null;
+function qpReceive(){if(qpReceivePromise)return qpReceivePromise;qpReceivePromise=qpReceiveRun().finally(()=>{qpReceivePromise=null;});return qpReceivePromise;}
+async function qpReceiveRun(){
  if(qpRunning)return;
  const bridge=window.laoQuickAudioBridge,uid=cloudWorkspace;
  if(!qaProgressEnabled()||!uid||bridge?.uid()!==uid||navigator.onLine===false||document.visibilityState==='hidden'){qpKick();return;}
@@ -10814,6 +10816,64 @@ function listeningContextPanel(examples,{current,play,detail}){
   open.onclick=async e=>{e.stopPropagation();if(!revealed||!current())return;try{await detail(m,open);}catch(error){if(current())status.textContent='例句详情暂时无法打开，请稍后重试。';}};
  }
  return {element,reveal(){revealed=true;for(const text of rows)text.hidden=false;}};
+}
+
+</script>
+<script data-chapter-progress-sync>
+/* Chapter cursors travel through the existing private progress outbox. Import only on opening a chapter test. */
+let ccCloudTimer=null,ccCloudBusy=false;
+const ccCloudPendingKey=()=>workspaceName('chapter-cloud-pending-v1');
+const ccCloudPortable=key=>key.slice(key.indexOf('['));
+function ccCloudValid(s){return s?.version===1&&typeof s.scope==='string'&&s.scope.length<2000&&typeof s.deviceId==='string'&&/^[a-f0-9-]{36}$/i.test(s.deviceId)&&Number.isFinite(s.savedAt)&&(s.value===null||s.value?.version===1&&Array.isArray(s.value.queue)&&s.value.queue.length>0&&s.value.queue.length<=10000&&['lao','zh','audio'].includes(s.value.direction)&&Number.isInteger(s.value.index)&&s.value.index>=0&&s.value.index<s.value.queue.length&&Array.isArray(s.value.ratings)&&Array.isArray(s.value.attempts)&&s.value.attempts.length===s.value.queue.length);}
+function ccCloudSchedule(key,value){
+ if(value&&value.index>=value.queue.length)value=null;
+ if(!key||typeof qaProgressEnabled!=='function'||!qaProgressEnabled())return;
+ try{let deviceId=localStorage.getItem(workspaceName('chapter-cloud-device-v1'));if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(workspaceName('chapter-cloud-device-v1'),deviceId);}
+ const savedAt=Math.max(Date.now(),Number(localStorage.getItem(key+':cloud-time'))+1||0,JSON.parse(localStorage.getItem(key)||'null')?.cloudSavedAt+1||0),scope=ccCloudPortable(key),v=value===null?null:{...value,version:1,cloudSavedAt:savedAt},marker={version:1,uid:cloudWorkspace,deviceId,scope,savedAt,value:v};
+ if(!ccCloudValid(marker))throw Error('章节断点格式无效');
+ const pending=JSON.parse(localStorage.getItem(ccCloudPendingKey())||'{}');pending[scope]=marker;localStorage.setItem(ccCloudPendingKey(),JSON.stringify(pending));
+ if(v)localStorage.setItem(key,JSON.stringify(v));else localStorage.setItem(key+':cloud-time',String(savedAt));
+ clearTimeout(ccCloudTimer);ccCloudTimer=setTimeout(()=>ccCloudFlush(),450);
+ }catch(e){qaMessage('章节进度已存本机，断点待同步：'+e.message);}
+}
+async function ccCloudFlush(){
+ if(ccCloudBusy||!qaProgressEnabled())return;ccCloudBusy=true;
+ const owner=cloudWorkspace,pendingKey=ccCloudPendingKey();let success=true;
+ try{const pending=JSON.parse(localStorage.getItem(pendingKey)||'{}');for(const marker of Object.values(pending)){
+ if(owner!==cloudWorkspace||marker.uid!==owner||!qaProgressEnabled())return;if(!ccCloudValid(marker))throw Error('章节断点格式无效');
+ const hash=await cloudHash(new Blob([marker.scope])),id='chapter-checkpoint:'+marker.deviceId+':'+hash;
+ const row={...learningBlank(id,'knowledge','章节检测断点'),chapterCheckpoint:marker,updatedAt:marker.savedAt};learningValidateRecord('learningMaterials',row);
+ if(new Blob([JSON.stringify(row)]).size>245000)throw Error('本轮断点过大，仍保留在本机');
+ const db=await openDB();if(owner!==cloudWorkspace)return;const t=db.transaction(['learningMaterials','cloud_meta'],'readwrite'),done=transactionDone(t),s=t.objectStore('learningMaterials'),q=s.get(id);
+ q.onsuccess=()=>{if(owner!==cloudWorkspace){t.abort();return;}s.put(row);qaStage(t.objectStore('cloud_meta'),[{table:'lao_learning_records',kind:'learningMaterials',id,row,before:q.result||null,progress:true}]);};await done;
+ const latest=JSON.parse(localStorage.getItem(pendingKey)||'{}');if(latest[marker.scope]?.savedAt===marker.savedAt){delete latest[marker.scope];localStorage.setItem(pendingKey,JSON.stringify(latest));}qaKick();
+ }}catch(e){success=false;qaMessage('章节进度已存本机，断点待同步：'+e.message);}finally{ccCloudBusy=false;if(success&&owner===cloudWorkspace&&Object.keys(JSON.parse(localStorage.getItem(pendingKey)||'{}')).length)ccCloudTimer=setTimeout(()=>ccCloudFlush(),450);}
+}
+const ccCloudOriginalOpen=courseCheckOpen;
+courseCheckOpen=async function(scope='course',key='',skipResume=false){
+ const owner=workspaceName('chapter-check'),course={...learningLesson},localKey=ccCheckpointKey(course,scope,key);
+ if(!skipResume&&typeof qaProgressEnabled==='function'&&qaProgressEnabled()){
+  await ccCloudFlush();if(typeof qpReceive==='function')await qpReceive();
+  if(owner!==workspaceName('chapter-check'))throw Error('账号已切换，取消接续');
+  const rows=await learningRows('learningMaterials'),remote=rows.filter(r=>!r.deleted&&ccCloudValid(r.chapterCheckpoint)&&r.chapterCheckpoint.uid===cloudWorkspace&&r.chapterCheckpoint.scope===ccCloudPortable(localKey)).map(r=>r.chapterCheckpoint).sort((a,b)=>b.savedAt-a.savedAt)[0];
+  let local;try{local=JSON.parse(localStorage.getItem(localKey)||'null');}catch(_){}
+  const localAt=Math.max(local?.cloudSavedAt||0,Number(localStorage.getItem(localKey+':cloud-time'))||0);
+  if(remote&&remote.savedAt>localAt){
+   if(remote.value){const model=typeof ccReadCourse==='function'?await ccReadCourse():{snap:await learningSnapshot(),words:await allEntries()},data=lessonV2Export(model.snap,course),ids=new Set(courseCheckGroups(data,course,model.snap,model.words,'course','','all').flatMap(g=>g.items.map(r=>r.id)));if(remote.value.queue.some(r=>!ids.has(r.id)))throw Error('已收到其他设备的章节断点，但本机课程资料不同。请先在账号设置完成一次完整同步，再继续；原进度已保留。');}
+   if(owner!==workspaceName('chapter-check'))throw Error('账号已切换，取消接续');
+   if(local)localStorage.setItem(localKey+':before-cloud',JSON.stringify(local));
+   ccCheckpointSave(localKey,remote.value);localStorage.setItem(localKey+':cloud-time',String(remote.savedAt));
+  }
+ }
+ return ccCloudOriginalOpen(scope,key,skipResume);
+};
+const ccCloudValidate=learningValidateRecord;
+learningValidateRecord=function(kind,row){if(row?.chapterCheckpoint!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||!row.id.startsWith('chapter-checkpoint:'+row.chapterCheckpoint.deviceId+':')||!ccCloudValid(row.chapterCheckpoint)))throw Error('章节检测断点格式无效');return ccCloudValidate(kind,row);};
+if(typeof window!=='undefined'){
+ for(const event of ['online','pageshow'])window.addEventListener(event,()=>ccCloudFlush());
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ccCloudFlush();});
+ if(typeof qaMount==='function'){const old=qaMount;qaMount=function(){old();void ccCloudFlush();};}
+ void ccCloudFlush();
 }
 
 </script>

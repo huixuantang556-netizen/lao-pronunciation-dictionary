@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="37b28105c12eff34">
+  <meta name="lao-app-build" content="7eaa4987c9ecd4a5">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -10825,11 +10825,11 @@ let ccCloudTimer=null,ccCloudBusy=false;
 const ccCloudPendingKey=()=>workspaceName('chapter-cloud-pending-v1');
 const ccCloudPortable=key=>key.slice(key.indexOf('['));
 function ccCloudValid(s){return s?.version===1&&typeof s.scope==='string'&&s.scope.length<2000&&typeof s.deviceId==='string'&&/^[a-f0-9-]{36}$/i.test(s.deviceId)&&Number.isFinite(s.savedAt)&&(s.value===null||s.value?.version===1&&Array.isArray(s.value.queue)&&s.value.queue.length>0&&s.value.queue.length<=10000&&['lao','zh','audio'].includes(s.value.direction)&&Number.isInteger(s.value.index)&&s.value.index>=0&&s.value.index<s.value.queue.length&&Array.isArray(s.value.ratings)&&Array.isArray(s.value.attempts)&&s.value.attempts.length===s.value.queue.length);}
-function ccCloudSchedule(key,value){
+function ccCloudSchedule(key,value,options={}){
  if(value&&value.index>=value.queue.length)value=null;
  if(!key||typeof qaProgressEnabled!=='function'||!qaProgressEnabled())return;
  try{let deviceId=localStorage.getItem(workspaceName('chapter-cloud-device-v1'));if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(workspaceName('chapter-cloud-device-v1'),deviceId);}
- const savedAt=Math.max(Date.now(),Number(localStorage.getItem(key+':cloud-time'))+1||0,JSON.parse(localStorage.getItem(key)||'null')?.cloudSavedAt+1||0),scope=ccCloudPortable(key),v=value===null?null:{...value,version:1,cloudSavedAt:savedAt},marker={version:1,uid:cloudWorkspace,deviceId,scope,savedAt,value:v};
+ const savedAt=Number.isFinite(options.savedAt)?options.savedAt:Math.max(Date.now(),Number(localStorage.getItem(key+':cloud-time'))+1||0,JSON.parse(localStorage.getItem(key)||'null')?.cloudSavedAt+1||0),scope=ccCloudPortable(key),v=value===null?null:{...value,version:1,cloudSavedAt:savedAt},marker={version:1,uid:cloudWorkspace,deviceId,scope,savedAt,value:v};
  if(!ccCloudValid(marker))throw Error('章节断点格式无效');
  const pending=JSON.parse(localStorage.getItem(ccCloudPendingKey())||'{}');pending[scope]=marker;localStorage.setItem(ccCloudPendingKey(),JSON.stringify(pending));
  if(v)localStorage.setItem(key,JSON.stringify(v));else localStorage.setItem(key+':cloud-time',String(savedAt));
@@ -10849,11 +10849,20 @@ async function ccCloudFlush(){
  const latest=JSON.parse(localStorage.getItem(pendingKey)||'{}');if(latest[marker.scope]?.savedAt===marker.savedAt){delete latest[marker.scope];localStorage.setItem(pendingKey,JSON.stringify(latest));}qaKick();
  }}catch(e){success=false;qaMessage('章节进度已存本机，断点待同步：'+e.message);}finally{ccCloudBusy=false;if(success&&owner===cloudWorkspace&&Object.keys(JSON.parse(localStorage.getItem(pendingKey)||'{}')).length)ccCloudTimer=setTimeout(()=>ccCloudFlush(),450);}
 }
+async function ccCloudSeedLegacy(){
+ if(!qaProgressEnabled())return;
+ const owner=cloudWorkspace,prefix=workspaceName('chapter-check-resume-v1')+':',candidates=[];
+ for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key?.startsWith(prefix)||!key.endsWith(']'))continue;try{const value=JSON.parse(localStorage.getItem(key));if(value?.version===1&&!value.cloudSavedAt&&Array.isArray(value.attempts)&&Array.isArray(value.ratings)&&value.queue?.length&&value.index<value.queue.length)candidates.push({key,value});}catch(_){}}
+ if(!candidates.length)return;
+ const rows=await learningRows('learningMaterials');if(owner!==cloudWorkspace)return;
+ const times=new Map();for(const row of rows){if(row.deleted)continue;const op=row.rollingReview||row.reviewEvent;if(!op||!Number.isFinite(op.at))continue;times.set(row.id,op.at);if(op.id)times.set(op.id,op.at);}
+ for(const {key,value}of candidates){const at=Math.max(0,...value.ratings.map(([i])=>Math.max(times.get(value.attempts[i])||0,times.get('rolling-review:'+value.attempts[i])||0)));if(at)ccCloudSchedule(key,value,{savedAt:at});}
+}
 const ccCloudOriginalOpen=courseCheckOpen;
 courseCheckOpen=async function(scope='course',key='',skipResume=false){
  const owner=workspaceName('chapter-check'),course={...learningLesson},localKey=ccCheckpointKey(course,scope,key);
  if(!skipResume&&typeof qaProgressEnabled==='function'&&qaProgressEnabled()){
-  await ccCloudFlush();if(typeof qpReceive==='function')await qpReceive();
+  await ccCloudSeedLegacy();await ccCloudFlush();if(typeof qpReceive==='function')await qpReceive();
   if(owner!==workspaceName('chapter-check'))throw Error('账号已切换，取消接续');
   const rows=await learningRows('learningMaterials'),remote=rows.filter(r=>!r.deleted&&ccCloudValid(r.chapterCheckpoint)&&r.chapterCheckpoint.uid===cloudWorkspace&&r.chapterCheckpoint.scope===ccCloudPortable(localKey)).map(r=>r.chapterCheckpoint).sort((a,b)=>b.savedAt-a.savedAt)[0];
   let local;try{local=JSON.parse(localStorage.getItem(localKey)||'null');}catch(_){}
@@ -10870,12 +10879,27 @@ courseCheckOpen=async function(scope='course',key='',skipResume=false){
 const ccCloudValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row?.chapterCheckpoint!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||!row.id.startsWith('chapter-checkpoint:'+row.chapterCheckpoint.deviceId+':')||!ccCloudValid(row.chapterCheckpoint)))throw Error('章节检测断点格式无效');return ccCloudValidate(kind,row);};
 if(typeof window!=='undefined'){
- for(const event of ['online','pageshow'])window.addEventListener(event,()=>ccCloudFlush());
- document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ccCloudFlush();});
- if(typeof qaMount==='function'){const old=qaMount;qaMount=function(){old();void ccCloudFlush();};}
- void ccCloudFlush();
+ const prepare=()=>ccCloudSeedLegacy().then(()=>ccCloudFlush()).catch(e=>qaMessage('章节断点暂未同步：'+e.message));
+ for(const event of ['online','pageshow'])window.addEventListener(event,prepare);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')prepare();});
+ if(typeof qaMount==='function'){const old=qaMount;qaMount=function(){old();void prepare();};}
+ const fullSync=runCloudSync;runCloudSync=async function(...args){await ccCloudSeedLegacy();await ccCloudFlush();return fullSync(...args);};
+ void prepare();
 }
-
+async function ccCloudDiagnostics(){
+ const host=document.querySelector('#chapterProgressDiagnostics');if(!host)return;
+ host.textContent='正在核对本机章节断点、待传队列和已接收版本…';
+ try{const owner=cloudWorkspace,rows=await learningRows('learningMaterials'),meta=await qaReadMeta();if(owner!==cloudWorkspace)return;
+ const prefix=workspaceName('chapter-check-resume-v1')+':',lines=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key?.startsWith(prefix)||!key.endsWith(']'))continue;try{const v=JSON.parse(localStorage.getItem(key));if(v?.queue?.length)lines.push('本机：第 '+(v.index+1)+' / '+v.queue.length+' 项 · '+(v.cloudSavedAt?new Date(v.cloudSavedAt).toLocaleString('zh-CN'):'旧断点，尚未找到可核实的作答时间'));}catch(_){}}
+ const remote=rows.filter(r=>!r.deleted&&ccCloudValid(r.chapterCheckpoint)).sort((a,b)=>b.chapterCheckpoint.savedAt-a.chapterCheckpoint.savedAt).slice(0,6);
+ for(const row of remote){const v=row.chapterCheckpoint.value,k='learningMaterials:'+row.id,confirmed=meta.learningServerRevisions?.[k];lines.push((confirmed?'云端版本已存本机':'本机待确认上传')+'：'+(v?'第 '+(v.index+1)+' / '+v.queue.length+' 项':'本轮已结束')+' · '+new Date(row.chapterCheckpoint.savedAt).toLocaleString('zh-CN'));}
+ const pending=(meta[qaQueueKey]||[]).filter(j=>j.uid===owner&&j.records.some(r=>r.id.startsWith('chapter-checkpoint:')));lines.push('章节断点待传 '+pending.length+' 项'+(pending.some(j=>j.blocked)?'（有阻塞，请查看同步提示）':''));host.textContent=lines.join('\n')||'没有章节检测断点';
+ }catch(e){host.textContent='断点检查未完成：'+e.message;}
+}
+if(typeof document!=='undefined'){
+ const mount=()=>{const box=document.querySelector('#quickAudioSyncSettings');if(!box||document.querySelector('#chapterProgressDiagnostics'))return;const button=document.createElement('button');button.type='button';button.textContent='检查章节接续状态';button.onclick=ccCloudDiagnostics;const info=document.createElement('pre');info.id='chapterProgressDiagnostics';info.style.cssText='white-space:pre-wrap;font:inherit;font-size:12px;line-height:1.7';info.setAttribute('role','status');box.append(button,info);};
+ const oldMount=qaMount;qaMount=function(){oldMount();mount();};mount();
+}
 </script>
 </body>
 </html>

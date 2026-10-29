@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="48178ed8349632c8">
+  <meta name="lao-app-build" content="ddd8f9c4884f2120">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -227,6 +227,12 @@
 #courseEditor .ce-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}#courseEditor button{font-size:13px;padding:8px 12px}#courseEditor .ce-toolbar select{width:auto;max-width:100%}#courseEditor .ce-block{border:1px solid #dbe7e1;border-radius:12px;padding:14px;margin:12px 0;background:#fbfdfb}#courseEditor summary{cursor:pointer;font-weight:600;font-size:15px}#courseEditor label{font-size:13px}#courseEditor fieldset{border:1px solid #e0e9e4;border-radius:10px;margin:14px 0;padding:12px}#courseEditor legend{font-size:12px;color:#688379}#courseEditor textarea{font-size:16px;line-height:1.6}#courseEditor input{font-size:14px}
 </style><style data-listening-design>
 /* Listening prompt only. Revealed chapter cards use the original lesson layout. */
+.practice-card:not(.study-revealed) .fv-button,
+.practice-card:not(.study-revealed) [data-fv-toggle],
+.rp-flashcard:not(.rp-card-revealed) .fv-button,
+.rp-flashcard:not(.rp-card-revealed) [data-fv-toggle]{display:none!important}
+.cc-listening:not(.study-revealed) .question-row,
+.practice-listening:not(.study-revealed) .question-row{justify-content:center!important}
 .study-example[hidden],.listening-context [hidden]{display:none!important}
 .cc-listening:not(.study-revealed),.practice-listening:not(.study-revealed),.rr-listening:not(.study-revealed){background:#fff!important;border:0!important;box-shadow:none!important}
 .cc-listening .recall-prompt,.practice-listening:not(.study-revealed) #questionPrompt{font-size:14px!important;color:#789087;text-align:center;margin:12px 0 0!important}

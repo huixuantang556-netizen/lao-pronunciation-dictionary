@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="1f432dd82e0a9b04">
+  <meta name="lao-app-build" content="54baba20afdd328f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8549,7 +8549,7 @@ let rpMode='daily',rpSaving=false,rpLoading=null,rpCurrent=null,rpSessionKey='',
 const rpPanel=$('#practicePanel'),rpLegacy=document.createElement('div'),rpDaily=document.createElement('section'),rpTabs=document.createElement('div');
 rpLegacy.id='rpLegacy';rpLegacy.hidden=true;rpLegacy.append(...rpPanel.childNodes);
 const rpFreeNote=document.createElement('p');rpFreeNote.className='rp-hint';rpFreeNote.textContent='自由练习保留原来的独立记录；每日清单与学习中心共用目标，请切回“每日清单”完成今日任务。';rpLegacy.prepend(rpFreeNote);
-rpDaily.id='rpDaily';rpDaily.innerHTML='<details class="rp-settings"><summary>学习设置与说明</summary><button type="button" data-rr-manage>目标词库与新词上限</button><p id="rpStats" role="status"></p><p class="rp-hint">到期旧词优先；陌生与模糊词可在本轮稍后穿插巩固。</p><p class="rp-hint">默认先看老挝语，揭晓后听录音；其他方向独立记录。长期目标、新词设置、学习历史和断点通过“云端同步”传到其他设备；“同步昵称与头像”不包含学习进度。</p><div class="rp-tools"><label>练习方向<select id="rpDirection"><option value="wordToMeaning">看老挝语回忆中文（默认）</option><option value="meaningToSpeech">看中文说老挝语</option><option value="meaningToWord">看中文写老挝语</option><option value="audio">听音辨词（与认词共用复习进度）</option><option value="all">全部已加入方向</option></select></label><button id="rpRefresh">检查今日任务</button></div></details><div id="rpSession" class="rp-session"></div><p id="rpStatus" role="status"></p>';
+rpDaily.id='rpDaily';rpDaily.innerHTML='<details class="rp-settings"><summary>学习设置与说明</summary><button type="button" data-rr-manage>目标词库与新词上限</button><p id="rpStats" role="status"></p><p class="rp-hint">到期旧词优先；陌生与模糊词可在本轮稍后穿插巩固。</p><p class="rp-hint">默认先看老挝语，揭晓后听录音；其他方向独立记录。长期目标、新词设置、学习历史和断点通过“云端同步”传到其他设备；“同步昵称与头像”不包含学习进度。</p><div class="rp-tools"><label>练习方向<select id="rpDirection"><option value="wordToMeaning">看老挝语回忆中文</option><option value="meaningToSpeech">看中文说老挝语</option><option value="meaningToWord">看中文写老挝语</option><option value="audio">听音辨词（与认词共用复习进度）</option><option value="all">全部已加入方向</option></select></label><button id="rpRefresh">检查今日任务</button></div></details><div id="rpSession" class="rp-session"></div><p id="rpStatus" role="status"></p>';
 rpTabs.className='rp-tabs';rpTabs.innerHTML='<button type="button" data-rp-mode="daily" aria-pressed="true">每日清单</button><button type="button" data-rp-mode="free" aria-pressed="false">自由练习</button>';rpPanel.append(rpTabs,rpDaily,rpLegacy);
 $('#rpDirection').value=rpDirection;
 function rpGuard(){scGuard();if(rpSaving||typeof practiceChecking!=='undefined'&&practiceChecking)throw Error('请等待本次结果保存完成');}

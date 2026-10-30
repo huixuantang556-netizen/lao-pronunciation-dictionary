@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="58af1e148c255c51">
+  <meta name="lao-app-build" content="9aa8d11067fcabf7">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -330,6 +330,49 @@
 
 /* Combined daily budget: distinct words, one stable denominator. */
 #rpDaily .rp-daily-progress{clear:both;margin:0 0 18px;color:#446b61}#rpDaily .rp-daily-progress>div{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:14px}#rpDaily .rp-daily-progress strong{font-size:20px;color:#244b41;font-variant-numeric:tabular-nums}#rpDaily .rp-daily-progress progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;margin-top:12px;background:#edf3f0;accent-color:#42977f}#rpDaily .rp-daily-progress progress::-webkit-progress-bar{background:#edf3f0}#rpDaily .rp-daily-progress progress::-webkit-progress-value{background:#42977f;border-radius:8px}#rpDaily .rp-daily-progress progress::-moz-progress-bar{background:#42977f}#rpDaily .rp-daily-complete .rr-actions{display:flex;flex-wrap:wrap;gap:8px}#rpDaily .rp-daily-complete input{width:110px}#rpDaily .rr-session-results{margin:12px 0;color:#617b72}#rpDaily .rr-session-results summary{cursor:pointer;font-size:13px}
+
+/* Phone-only reading viewport and a permanently visible grading dock. */
+@media(max-width:760px){
+ #practicePanel #rpDaily #rpSession.mp-shell,#practicePanel #rpLegacy #practiceCard.mp-shell{position:fixed;z-index:40;inset:0 0 var(--mp-nav-height,74px);width:100%;max-width:none;height:auto;max-height:none;margin:0;padding:calc(6px + env(safe-area-inset-top)) 12px 0;border:0;border-radius:0;background:#fff;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+ #practicePanel .mp-study-bar{display:flex;align-items:center;justify-content:space-between;flex:none;gap:8px;height:40px;border-bottom:1px solid #edf2ef;margin:0 0 10px}
+ #practicePanel .mp-study-bar button{font-size:13px!important;min-height:36px!important;padding:6px 8px!important;margin:0!important;background:transparent;border:0;color:#376f60}
+ #practicePanel .mp-study-bar span{font-size:13px;color:#6c8379}
+ #rpDaily #rpSession.mp-shell .rp-daily-progress{flex:none;margin:0 2px 8px}#rpDaily #rpSession.mp-shell .rp-daily-progress>div{font-size:12px}#rpDaily #rpSession.mp-shell .rp-daily-progress strong{font-size:17px}#rpDaily #rpSession.mp-shell progress{height:4px;margin-top:6px}
+ #rpDaily #rpSession.mp-shell>.rp-card-direction{flex:none;font-size:11px!important;margin:0 2px 4px;float:none}
+ #rpDaily #rpSession.mp-shell>#rrCard.mp-card{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;margin:0;padding:0;border:0}
+ #practicePanel .mp-reading{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding:0 2px 12px;scroll-padding:10px}
+ #practicePanel .mp-rating-dock{flex:none;background:#fff;border-top:1px solid #e4ece7;padding:8px 0 4px;margin:0;box-shadow:0 -6px 12px #183f3505}
+ #rpDaily #rpSession.mp-shell .mp-rating-dock .rr-actions,#practicePanel #practiceCard.mp-shell .mp-rating-dock .practice-mark-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0;width:100%}
+ #rpDaily #rpSession.mp-shell .mp-rating-dock .rr-actions button,#practicePanel #rpLegacy #practiceCard.mp-shell .mp-rating-dock .practice-mark-options button{min-height:44px!important;height:44px;padding:8px 4px!important;font-size:14px!important;line-height:1.4;border-radius:9px;margin:0}
+ #rpDaily #rpSession.mp-shell .rp-card-navigation,#practicePanel #practiceCard.mp-shell .practice-navigation{display:flex;justify-content:space-between;margin:4px 0 0;padding:0;width:100%;gap:8px}
+ #rpDaily #rpSession.mp-shell .rp-card-navigation button,#practicePanel #practiceCard.mp-shell .practice-navigation button{min-height:34px!important;padding:5px 12px!important;font-size:12px!important;margin:0}
+ #rpDaily #rpSession.mp-shell .mp-rating-dock #rrReveal,#practicePanel #rpLegacy #practiceCard.mp-shell #showAnswer{min-height:42px!important;width:100%;font-size:14px!important;padding:8px 12px;margin:0 0 7px;border-radius:9px}
+ #rpDaily #rpSession.mp-shell .rp-card-word,#practicePanel #rpLegacy #practiceCard.mp-shell #questionIPA{font-size:30px!important;line-height:1.6;min-height:0;margin:12px 0 14px}
+ #rpDaily #rpSession.mp-shell .rp-card-prompt,#practicePanel #rpLegacy #practiceCard.mp-shell #questionPrompt{font-size:12px!important;line-height:1.5;margin:6px 0}
+ #rpDaily #rpSession.mp-shell .rp-card-links{gap:6px;margin:4px 0}#rpDaily #rpSession.mp-shell .rp-card-links button,#practicePanel #rpLegacy #practiceCard.mp-shell .question-row button{font-size:12px!important;min-height:36px!important;padding:6px 10px!important}
+ #rpDaily #rpSession.mp-shell .rp-card-answer h3,#practicePanel #rpLegacy #practiceCard.mp-shell .study-translation{font-size:17px!important;line-height:1.65;margin:8px 0}
+ #rpDaily #rpSession.mp-shell .rp-card-answer{padding-bottom:6px}
+ #rpDaily #rpSession.mp-shell .mp-reading [lang=lo],#practicePanel #rpLegacy #practiceCard.mp-shell .study-examples [lang=lo]{font-size:20px!important;line-height:1.7}
+ #rpDaily #rpSession.mp-shell .mp-reading .rp-card-word{font-size:30px!important}
+ #rpDaily #rpSession.mp-shell .rp-card-examples article,#practicePanel #rpLegacy #practiceCard.mp-shell .study-examples article{padding:10px 0;margin:0}
+ #rpDaily #rpSession.mp-shell .rp-example-meaning,#practicePanel #rpLegacy #practiceCard.mp-shell .study-examples p:not([lang=lo]){font-size:14px!important;line-height:1.6;margin:4px 0}
+ #rpDaily #rpSession.mp-shell .rp-example-actions button,#practicePanel #practiceCard.mp-shell .study-examples button{font-size:12px!important;min-height:34px!important;padding:5px 9px!important}
+ #rpDaily #rpSession.mp-shell #rrListen{width:78px;height:78px;min-height:78px!important;font-size:13px!important;padding:0!important;margin:16px auto 24px!important}
+ #rpDaily #rpSession.mp-shell #rrSessionStatus:empty{display:none}#rpDaily #rpSession.mp-shell #rrSessionStatus{font-size:11px;margin:2px 0;flex:none}
+ #practicePanel #practiceCard.mp-shell .practice-footer{display:flex;flex-direction:column;gap:0;margin:0;padding:0;border:0}
+ #practicePanel #practiceCard.mp-shell #practiceMarkControls{width:100%}#practicePanel #practiceCard.mp-shell .practice-mark-label{display:none}
+ #practicePanel #practiceCard.mp-shell .practice-submit{padding:0;margin:0}#practicePanel #practiceCard.mp-shell .practice-links{width:100%;margin:0}
+ #learningDialog[open]:has(.course-recall .mp-card){height:100dvh;max-height:100dvh;margin:0;width:100%;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;border-radius:0;padding:12px}
+ #learningDialog .course-recall:has(.mp-card){display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+ #learningDialog .course-recall .mp-card{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;margin:0;padding:0;border:0}
+ #learningDialog .mp-reading{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 2px 12px}
+ #learningDialog .mp-rating-dock{flex:none;background:#fff;border-top:1px solid #e4ece7;padding:8px 0 max(6px,env(safe-area-inset-bottom))}
+ #learningDialog .mp-rating-dock .practice-footer{display:block;margin:0;padding:0}#learningDialog .mp-rating-dock .practice-mark-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#learningDialog .mp-rating-dock button{font-size:14px!important;min-height:44px!important;padding:8px!important}
+ #learningDialog .mp-rating-dock .practice-navigation{display:flex;justify-content:space-between;margin-top:4px}#learningDialog .mp-rating-dock .practice-navigation button{font-size:12px!important;min-height:34px!important;padding:5px 12px!important}
+ #learningDialog .mp-reading .question-ipa{font-size:30px!important;margin:12px 0;min-height:0;line-height:1.6}#learningDialog .mp-reading .study-translation{font-size:17px!important}#learningDialog .mp-reading .study-examples [lang=lo]{font-size:20px!important;line-height:1.7}#learningDialog .mp-reading .study-examples p{font-size:14px;line-height:1.6;margin:4px 0}#learningDialog .mp-reading .study-examples button{font-size:12px!important;min-height:34px!important;padding:5px 9px!important}
+}
+
+@media(max-width:760px){#practicePanel #rpDaily #rpSession.mp-shell,#practicePanel #rpLegacy #practiceCard.mp-shell{bottom:auto;height:calc(var(--mp-viewport-height,100dvh) - var(--mp-nav-height,74px))}#rpDaily #rpSession.mp-shell #rrSessionStatus{max-height:42px;overflow:auto}#practicePanel .mp-rating-dock [hidden],#learningDialog .mp-rating-dock [hidden]{display:none!important}}
 
 </style>
 </head>
@@ -7899,7 +7942,7 @@ function ssCompose(detail,resolved,id){
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssGroup('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
  const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText)quick.append(editText);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -10954,6 +10997,51 @@ const listeningCss=document.createElement('style');listeningCss.textContent='#pr
 // Defaults apply only to new rounds; unfinished free practice keeps its saved filters.
 const lpStudyDefaultDirection=studyDefaultDirection;studyDefaultDirection=function(){if(practiceRound?.history?.length&&!practiceRound.completed)return;const pairs=[['practiceKind','freePracticeKind'],['practiceMode','freePracticeDirection'],['practiceScope','freePracticeScope'],['practiceLibrary','freePracticeLibrary']];for(const [id,key]of pairs){const select=$('#'+id),value=appPreference(key);if(select&&[...select.options].some(o=>o.value===value))select.value=value;}if(typeof practiceSourceFilters!=='undefined')practiceSourceFilters.library=$('#practiceLibrary').value;recallSyncModes();};
 const lpFreeHost=$('#rpLegacy'),lpFreeSettings=lpFreeHost?.querySelector('.study-settings'),lpFreeBody=lpFreeSettings?.querySelector('.study-settings-body');if(lpFreeSettings&&lpFreeBody){lpFreeSettings.querySelector('summary').textContent='学习设置与说明';for(const node of [lpFreeHost.querySelector('.rp-hint'),lpFreeHost.querySelector('.review-toolbar'),$('#reviewHint'),$('#practiceMarkStatus'),$('#practiceProgress')])if(node)lpFreeBody.append(node);const layout=lpFreeHost.querySelector('.practice-layout');if(layout)layout.before(lpFreeSettings);else lpFreeHost.prepend(lpFreeSettings);}
+
+/* Mobile recall: keep original controls/handlers; only the reading area scrolls. */
+(function mobileRecallLayout(){
+ if(typeof MutationObserver==='undefined'||typeof matchMedia!=='function')return;
+ const media=matchMedia('(max-width:760px)'),states=new Map();let frame=0;
+ function wrap(card,kind){
+  if(states.has(card))return;
+  const footer=card.querySelector(kind==='daily'?'.rr-actions':'.practice-footer');if(!footer)return;
+  const shell=kind==='daily'?card.closest('#rpSession'):card,scroll=document.createElement('div'),dock=document.createElement('div'),bar=document.createElement('div'),markers=[];
+  scroll.className='mp-reading';dock.className='mp-rating-dock';bar.className='mp-study-bar';
+  if(kind!=='chapter'){
+   const back=document.createElement('button');back.type='button';back.textContent='‹ 返回';back.onclick=()=>{if(typeof rpGuard==='function')rpGuard();void scOpenLearningHome();};
+   const title=document.createElement('span');title.textContent=kind==='daily'?'每日清单':'自由练习';
+   const settings=document.createElement('button');settings.type='button';settings.textContent='设置';settings.onclick=()=>{if(kind==='daily'){if(typeof rpGuard==='function')rpGuard();void rrManage();}else document.querySelector('#personalButton')?.click();};bar.append(back,title,settings);
+  }
+  const move=(node,to)=>{const marker=document.createComment('mobile recall position');node.before(marker);markers.push([marker,node]);to.append(node);};
+  const submit=card.querySelector(kind==='daily'?'#rrReveal':'.practice-submit'),navigation=kind==='daily'?card.querySelector('.rp-card-navigation'):null;
+  for(const node of [...card.childNodes])if(node!==footer&&node!==submit&&node!==navigation)move(node,scroll);
+  if(submit)move(submit,dock);move(footer,dock);if(navigation)move(navigation,dock);
+  card.append(scroll,dock);if(kind!=='chapter')shell.prepend(bar);
+  // Extra actions remain reachable inside the central scroll area.
+  if(kind==='daily')for(const node of [...shell.children])if(node.classList.contains('rr-session-more'))move(node,scroll);
+  card.classList.add('mp-card');shell.classList.add('mp-shell');
+  states.set(card,{shell,scroll,dock,bar,markers,kind});
+ }
+ function restore(card,state){
+  for(const [marker,node]of state.markers){if(marker.parentNode){marker.before(node);marker.remove();}}
+  // Keep nodes inserted later by favorites, audio and example renderers.
+  for(const part of [state.scroll,state.dock]){for(const node of [...part.childNodes])card.append(node);part.remove();}
+  state.bar.remove();card.classList.remove('mp-card');state.shell.classList.remove('mp-shell');states.delete(card);
+ }
+ function update(){frame=0;
+  if(!media.matches){for(const [card,state]of states)restore(card,state);return;}
+  for(const [card,state]of states)if(!card.isConnected){state.shell.classList.remove('mp-shell');states.delete(card);}
+  const daily=document.querySelector('#rpDaily #rrCard');if(daily)wrap(daily,'daily');
+  const free=document.querySelector('#rpLegacy #practiceCard');if(free)wrap(free,'free');
+  const chapter=document.querySelector('#learningDialog .course-recall [data-recall-card]');if(chapter)wrap(chapter,'chapter');
+  const nav=document.querySelector('#viewNav'),height=nav?Math.max(0,innerHeight-nav.getBoundingClientRect().top):0;
+  document.documentElement.style.setProperty('--mp-nav-height',Math.min(110,height)+'px');
+  document.documentElement.style.setProperty('--mp-viewport-height',(window.visualViewport?.height||innerHeight)+'px');
+ }
+ const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
+ new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
+ addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);media.addEventListener?.('change',schedule);schedule();
+})();
 </script>
 <script data-listening-context>
 /* Optional saved context audio. Never reveal sentence text, translation or detail before the answer. */
@@ -11105,6 +11193,55 @@ function rrAdaptivePlan(queue,history,index,rating,enabled=true){
 function ccRecoveryMemberships(selected,snap,at=Date.now()){const ops=[],members=new Map(),scheduled=new Set(),seen=new Set();for(const op of rrOperations(snap)){if(op.type==='membership')for(const target of op.targets)members.set(target+'|'+op.direction,op);if(op.type==='attempt'&&op.schedule===ccSpacingVersion)scheduled.add(op.target+'|'+op.direction);}let paused=0;for(const {op}of selected){const key=op.target+'|'+op.direction;if(seen.has(key))continue;seen.add(key);const member=members.get(key);if(member?.status==='paused'){paused++;continue;}if(member&&(member.chapterEnrollment||scheduled.has(key)))continue;ops.push({version:1,type:'membership',at:at+ops.length,direction:op.direction,status:'active',targets:[op.target],chapterEnrollment:true});}return {ops,paused};}
 
 const ccResultPreviousValidate=learningValidateRecord;learningValidateRecord=function(kind,row){if(row?.chapterResult!==undefined&&(kind!=='learningMaterials'||!row.id.startsWith('chapter-result:')||row.contentType!=='knowledge'||!ccResultValid(row.chapterResult)))throw Error('章节结果格式无效');return ccResultPreviousValidate(kind,row);};
+</script>
+<script data-minor-text-edit>
+/* Text-only maintenance. Audio assets and personal review records are never replaced. */
+function mtTextKey(value){return String(value||'').normalize('NFC').replace(/\s+/gu,'').replace(/(?<![0-9０-９])[,.，。;；:：、](?![0-9０-９])/gu,'');}
+function mtEquivalent(a,b){return !!mtTextKey(a)&&mtTextKey(a)===mtTextKey(b);}
+function mtParts(parts,text){
+ if(!parts.length||!mtEquivalent(parts.join(''),text))return null;
+ const result=[];let at=0,used=0;
+ for(let i=0;i<parts.length;i++){used+=mtTextKey(parts[i]).length;if(i===parts.length-1){result.push(text.slice(at));break;}let end=at;while(end<text.length&&mtTextKey(text.slice(0,end)).length<used)end++;while(end<text.length&&mtTextKey(text[end])==='')end++;result.push(text.slice(at,end));at=end;}
+ return result;
+}
+function mtGrammar(a,text){if(!a||!mtEquivalent(a.original,text))return null;const parts=mtParts(a.segments.map(s=>s.lao),text);if(!parts)return null;return {...a,original:text,segments:a.segments.map((s,i)=>({...s,lao:parts[i]}))};}
+function mtAudio(m){let changed=false;const refs=(m.audioSources||[]).map(a=>{const old=a.recordedText||a.text;if(old&&old!==m.textLao&&mtEquivalent(old,m.textLao)){changed=true;return {...a,recordedText:m.textLao,needsReview:false};}return a;});return changed?{...m,audioSources:refs,audioNeedsReview:refs.some(a=>a.needsReview)}:m;}
+function mtUnits(a,text){if(!a||!mtEquivalent(a.original,text))return null;const units=[];let at=0;for(const unit of a.units){if(unit.kind==='separator')continue;const offset=text.indexOf(unit.text,at);if(offset<at||mtTextKey(text.slice(at,offset)))return null;if(offset>at)units.push({kind:'separator',text:text.slice(at,offset)});units.push({...unit});at=offset+unit.text.length;}if(mtTextKey(text.slice(at)))return null;if(at<text.length)units.push({kind:'separator',text:text.slice(at)});return {...a,original:text,units};}
+async function mtRepairPlan(original,snap){
+ let m=mtAudio(original);const writes=[],a=mtGrammar(m.sentenceAnalysis,m.textLao);if(a)m={...m,sentenceAnalysis:a};
+ const study=m.v2Data?.studyAnalysis;if(study){const grammar=mtGrammar(study.grammar,m.textLao),pronunciation=mtUnits(study.pronunciation,m.textLao);if(grammar||pronunciation)m={...m,v2Data:{...m.v2Data,studyAnalysis:{...study,...(grammar?{grammar}:{}),...(pronunciation?{pronunciation}:{})}}};}
+ const saved=m.pronunciationAnalysis;
+ if(saved&&a&&mtEquivalent(saved.original,m.textLao)&&saved.segments.length===a.segments.length){
+  const segments=[];let valid=true;
+  for(const [i,s]of saved.segments.entries()){const p=snap.learningMaterials.find(x=>x.id===s.profileId&&!x.deleted&&x.phoneticProfile),analysis=mtUnits(p?.phoneticAnalysis,a.segments[i].lao);if(!p||!analysis){valid=false;break;}let profileId=p.id;if(analysis.original!==p.textLao){profileId='phonetic-profile:'+await cloudHash(new Blob([cloudStable({ruleDigest:p.ruleDigest,analysis})]));writes.push({...p,id:profileId,textLao:analysis.original,phoneticAnalysis:analysis,updatedAt:Date.now()});}segments.push({...s,original:a.segments[i].lao,profileId});}
+  if(valid){const target={m,w:null,text:m.textLao};m={...m,pronunciationAnalysis:{...saved,original:m.textLao,basisKey:cloudStable(paBasis(target)),segments}};}
+ }
+ if(cloudStable(m)!==cloudStable(original))writes.push({...m,updatedAt:Date.now()});return writes;
+}
+const mtOriginalWrite=learningWrite;
+learningWrite=async function(rows,expected,options){
+ const candidates=rows.learningMaterials?.filter(m=>!m.deleted&&['sentence','dialogue','word','reading_drill'].includes(m.contentType)&&m.textLao);if(!expected||!candidates?.length)return mtOriginalWrite(rows,expected,options);
+ const byId=new Map(rows.learningMaterials.map(m=>[m.id,m]));for(const m of candidates){const old=expected.learningMaterials?.find(x=>x.id===m.id);if(!old||old.textLao===m.textLao||!mtEquivalent(old.textLao,m.textLao))continue;for(const repaired of await mtRepairPlan(m,{...expected,learningMaterials:[...expected.learningMaterials.filter(x=>x.id!==m.id),m]}))byId.set(repaired.id,repaired);}
+ return mtOriginalWrite({...rows,learningMaterials:[...byId.values()]},expected,options);
+};
+async function mtApply(id){const snap=await learningSnapshot(),m=snap.learningMaterials.find(x=>x.id===id&&!x.deleted);if(!m)throw Error('这句已修改或删除，请重新打开');const rows=await mtRepairPlan(m,snap);if(rows.length)await learningWrite({learningMaterials:rows},snap,{quickAudio:true});return rows.length;}
+function mtAddTools(id,resolved){
+ const detail=learningDialog.querySelector('.learn-detail');if(!detail||detail.querySelector('.mt-tools')||resolved.w||resolved.m.analysisOwner)return;
+ const group=document.createElement('section');group.className='mt-tools';group.innerHTML='<h3>只更新这一句</h3><button type="button" data-mt="audio">试听／确认已有录音</button><button type="button" data-mt="keep">仅标点调整：沿用原分析</button><button type="button" data-mt="grammar">编辑本句翻译与语法</button><button type="button" data-mt="phonetics">核对本句发音分析</button><p class="tag-hint">标点、空格调整可沿用原分析；字母或声调符号改变需核对本句。录音始终保留，可先试听再决定是否沿用。</p><p data-mt-status role="status"></p>';
+ (detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
+}
+const mtOriginalDetail=learningOpenDetail;
+learningOpenDetail=async function(id){
+ // This user-confirmed punctuation correction is repaired in place on first reopening.
+ if(id==='v2:lao-training-dialogue-2:chapter-27:lesson-27:item:s004'){const probe=typeof sfRead==='function'?await sfRead(id):await learningResolve(id);if(probe.m&&(probe.m.sentenceAnalysis?.original!==probe.m.textLao||probe.m.audioSources?.some(a=>a.needsReview&&mtEquivalent(a.recordedText,probe.m.textLao))))await mtApply(id);}
+ await mtOriginalDetail(id);if(learningDetail!==id)return;const resolved=await learningResolve(id);mtAddTools(id,resolved);
+};
+async function mtEditGrammar(id){
+ const snap=await learningSnapshot(),m=snap.learningMaterials.find(x=>x.id===id&&!x.deleted);if(!m)throw Error('句子不存在');const h=learningEsc,a=mtGrammar(m.sentenceAnalysis,m.textLao)||m.sentenceAnalysis||saTemplate(m.textLao),segments=a.segments.map(s=>({...s}));if(segments.length===1)segments[0].lao=m.textLao;
+ learningDraft={kind:'minor-grammar',dirty:false};learningModal('编辑本句翻译与语法','<p lang="lo">'+h(m.textLao)+'</p><form id="mtGrammarForm"><label>整句中文翻译<textarea id="mtTranslation" rows="2">'+h(m.translationZh||a.translation||'')+'</textarea></label>'+segments.map((s,i)=>'<fieldset><legend>第 '+(i+1)+' 段</legend><label>老挝语原文<textarea data-mt-lao="'+i+'" rows="2">'+h(s.lao)+'</textarea></label><label>本段翻译<textarea data-mt-zh="'+i+'" rows="2">'+h(s.chinese||'')+'</textarea></label><label>语法说明<textarea data-mt-grammar="'+i+'" rows="4">'+h((s.grammar||[]).map(g=>[g.pattern,g.explanation].filter(Boolean).join('\n')).join('\n\n'))+'</textarea></label></fieldset>').join('')+'<p>保存会核对分段是否覆盖当前整句。已有词义与关联保留；改掉的词不会继续使用旧关联。</p><button type="submit">保存这一句</button><button type="button" id="mtCancel">取消</button></form><p id="mtStatus" role="status"></p>');
+ $('#mtGrammarForm').oninput=()=>{learningDraft={kind:'minor-grammar',dirty:true};};$('#mtCancel').onclick=()=>{learningDraft=null;return learningOpenDetail(id);};$('#mtGrammarForm').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{const fresh=await learningSnapshot(),current=fresh.learningMaterials.find(x=>x.id===id);if(!cloudSame(current,m))throw Error('这句刚刚已变化，请重新打开');const translation=$('#mtTranslation').value,data={...a,original:m.textLao,translation,segments:segments.map((s,i)=>{const lao=learningDialog.querySelector('[data-mt-lao="'+i+'"]').value;return {...s,lao,chinese:learningDialog.querySelector('[data-mt-zh="'+i+'"]').value,words:(s.words||[]).filter(w=>saTextKey(lao).includes(saTextKey(w.lao))),grammar:[{pattern:'本段用法',explanation:learningDialog.querySelector('[data-mt-grammar="'+i+'"]').value}]};})},valid=saValidate(data,m.textLao);valid.segments=valid.segments.map((s,i)=>({...s,...(segments[i].lao===s.lao&&segments[i].target?{target:segments[i].target}:{}),words:s.words.map(w=>{const old=segments[i].words?.find(x=>x.lao===w.lao&&x.meaning===w.meaning);return {...w,...(old?.target?{target:old.target}:{})};})}));const next={...m,translationZh:translation,sentenceAnalysis:valid,...(m.v2Data?{v2Data:{...m.v2Data,translationZh:translation,studyAnalysis:{...m.v2Data.studyAnalysis,grammar:valid}}}:{}),updatedAt:Date.now()};await learningWrite({learningMaterials:[next]},fresh);learningDraft=null;learningBusy=false;await learningOpenDetail(id);}catch(error){$('#mtStatus').textContent=error.message;}finally{learningBusy=false;}};
+}
+
 </script>
 </body>
 </html>

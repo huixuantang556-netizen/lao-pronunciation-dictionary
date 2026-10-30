@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="85c50aa670b3a360">
+  <meta name="lao-app-build" content="1f432dd82e0a9b04">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8545,7 +8545,7 @@ function rpMergeDynamic(resumed,model,direction){return rpReplanRemaining(resume
 function rpPlan(model,direction='all'){return rrDynamicPlan(model,direction);}
 let rpDueWake=null;
 function rpScheduleWake(model,direction){clearTimeout(rpDueWake);if(model.goals.paused)return;const now=Date.now(),times=(model.rows||[]).filter(r=>r.status==='active'&&(direction==='all'||r.direction===direction)&&r.state?.nextReviewAt>now).map(r=>r.state.nextReviewAt);if(!times.length)return;rpDueWake=setTimeout(()=>{if(activeView==='practice'&&rpMode==='daily'&&!rpCurrent&&!rpSaving&&!document.hidden)void rpRender({restart:true}).catch(e=>{$('#rpStatus').textContent=e.message;});},Math.max(1000,Math.min(60000,Math.min(...times)-now+50)));rpDueWake?.unref?.();}
-let rpMode='daily',rpSaving=false,rpLoading=null,rpCurrent=null,rpSessionKey='',rpDirection=(typeof appPreference==='function'?appPreference('dailyPracticeDirection'):null)||'wordToMeaning',rpGeneration=0;
+let rpMode='daily',rpSaving=false,rpLoading=null,rpCurrent=null,rpSessionKey='',rpDirection='wordToMeaning',rpGeneration=0;
 const rpPanel=$('#practicePanel'),rpLegacy=document.createElement('div'),rpDaily=document.createElement('section'),rpTabs=document.createElement('div');
 rpLegacy.id='rpLegacy';rpLegacy.hidden=true;rpLegacy.append(...rpPanel.childNodes);
 const rpFreeNote=document.createElement('p');rpFreeNote.className='rp-hint';rpFreeNote.textContent='自由练习保留原来的独立记录；每日清单与学习中心共用目标，请切回“每日清单”完成今日任务。';rpLegacy.prepend(rpFreeNote);
@@ -8557,9 +8557,11 @@ function rpToggle(){rpDaily.hidden=rpMode!=='daily';rpLegacy.hidden=rpMode!=='fr
 function rpStats(model){$('#rpStats').innerHTML=rrTodayStats(model)+'<span> · 待新学 '+model.fresh.length+' · 已到期 '+model.due.length+'</span>';}
 async function rpRefreshStats(){const {model}=await rrRead();if(activeView==='practice'&&rpMode==='daily')rpStats(model);}
 function rpCanRestart(){const answer=$('#rpSession').querySelector('#rrWritten');return !answer?.value||confirm('本题尚未评级，切换后需要重新回忆。继续吗？');}
+let rpAppliedDefault='';
+function rpApplyDefaultDirection(){if(typeof appPreference!=='function')return;const saved=appPreference('dailyPracticeDirection');if(!['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'].includes(saved))return;const key=workspaceName('daily-learning')+'|'+saved;if(key===rpAppliedDefault)return;const answer=$('#rpSession')?.querySelector('#rrWritten');if(answer?.value)return;rpAppliedDefault=key;rpDirection=saved;$('#rpDirection').value=saved;}
 async function rpRender(options={}){
  if(rpLoading)return rpLoading;
- rpLoading=(async()=>{const {snap,model}=await rrRead();if(activeView!=='practice'||rpMode!=='daily')return;rpToggle();rpStats(model);
+ rpLoading=(async()=>{const {snap,model}=await rrRead();if(activeView!=='practice'||rpMode!=='daily')return;rpApplyDefaultDirection();rpToggle();rpStats(model);
   const filterKey=$('#rpFamiliar')?.value||'include';const key=filterKey+'|'+workspaceName('daily-learning')+'|'+reviewDay(Date.now())+'|'+rpDirection+'|'+model.goals.newGoal+'|dynamic|'+model.goals.unlimitedNew+'|'+model.goals.paused;
   const valid=rpCurrent&&model.rows.some(row=>row.status==='active'&&row.direction===rpCurrent.direction&&reviewKeys(row.item).some(k=>reviewKeys(rpCurrent.item).includes(k))&&rrSignature(row.item)===rrSignature(rpCurrent.item));
   if(!options.restart&&rpSessionKey===key&&valid)return;clearTimeout(rpDueWake);
@@ -8585,6 +8587,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeVie
 const rpPrepareUpdate=window.prepareLaoAppUpdate;
 window.prepareLaoAppUpdate=async function(){rpGuard();if(!rpCanRestart())throw Error('已取消更新，保留当前默写内容');if(rpPrepareUpdate)await rpPrepareUpdate();};
 rpToggle();if(activeView==='practice')void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});
+
+if(typeof profileDialog!=='undefined')profileDialog.addEventListener('close',()=>{if(activeView==='practice'&&rpMode==='daily'&&!rpSaving)void rpRender().catch(e=>{$('#rpStatus').textContent=e.message;});});
 </script>
 <style data-learning-bundle="review-practice-link">
 #practicePanel .rp-tabs{display:flex;gap:6px;padding:4px;background:#edf3ed;border-radius:12px;width:fit-content;max-width:100%;margin-bottom:16px}#practicePanel .rp-tabs button{border:0;background:transparent;color:#65796c;font-size:14px;font-weight:500;min-height:44px;padding:9px 16px;box-shadow:none;border-radius:9px}#practicePanel .rp-tabs [aria-pressed=true]{background:#fff;color:#087f70;box-shadow:0 1px 5px #183e3610}

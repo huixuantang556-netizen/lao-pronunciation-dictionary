@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="32d1c930ec954e5b">
+  <meta name="lao-app-build" content="1ebec4bdc6f7b6dd">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5908,7 +5908,23 @@ function studyUniqueExamples(rows,snap){
  return groups.map(group=>{const primary=group.find(playable)||group[0],translations=[...new Set(group.map(m=>String(m.translationZh||'').trim()).filter(Boolean))];return {...primary,translationZh:translations.filter(t=>!translations.some(other=>other!==t&&other.includes(t))).join('／'),exampleSourceIds:group.map(m=>m.id)};});
 }
 const studyBoundaryMemo=new Map();let studySegmenter;
+// Expand only the written alternatives on a card; never split ordinary Lao compounds.
+function studyWordForms(word){
+ const raw=String(word||'').normalize('NFC'),digits=['ສູນ','ໜຶ່ງ','ສອງ','ສາມ','ສີ່','ຫ້າ','ຫົກ','ເຈັດ','ແປດ','ເກົ້າ'];
+ let forms=[raw];if(raw==='ແດ່ ແນ່')forms.push('ແດ່','ແນ່');
+ if(/[\/／,，]/.test(raw)&&!raw.includes('...')&&raw.length<100)forms.push(...raw.split(/[\/／,，]/).map(x=>x.trim()));
+ if(/[（(]/.test(raw)&&raw.length<100){forms.push(raw.replace(/\s*[（(][^）)]*[）)]/g,'').trim());}
+ const month=raw.match(/^ເດືອນ\s*\d+\s*[（(]?([ກ-ໝ]+)[）)]?$/u);if(month)forms.push('ເດືອນ'+month[1]);
+ forms=forms.flatMap(x=>[x,...(/\d/.test(x)&&!month&&!/\d{2}/.test(x)?[x.replace(/\d/g,n=>digits[Number(n)])]:[])]);
+ return [...new Set(forms.map(x=>x.trim()).filter(x=>x&&!/[.]{2}|…/.test(x)))];
+}
 function studyWordOccurs(word,text,analysis){
+ const raw=String(word||'');
+ if(raw.includes('...')){const parts=raw.split('...').filter(Boolean);let rest=String(text||'');return parts.length>0&&parts.every(part=>{let at=rest.indexOf(part);if(at<0)return false;rest=rest.slice(at+part.length);return true;});}
+ if(/\d/.test(raw)&&!/ເດືອນ/.test(raw)&&!/[0-9]{2}/.test(raw)){const digits=['ສູນ','ໜຶ່ງ','ສອງ','ສາມ','ສີ່','ຫ້າ','ຫົກ','ເຈັດ','ແປດ','ເກົ້າ'],key=x=>studyExampleKey(x).replace(/\d/g,n=>digits[Number(n)]);if(key(text).includes(key(raw)))return true;}
+ const forms=studyWordForms(word);if(forms.length!==1||forms[0]!==String(word||'').trim()){return forms.some(form=>studyWordOccursLiteral(form,text,analysis));}return studyWordOccursLiteral(forms[0],text,analysis);
+}
+function studyWordOccursLiteral(word,text,analysis){
  const norm=value=>String(value||'').normalize('NFC').replaceAll('ໜ','ຫນ').replaceAll('ໝ','ຫມ'),needle=norm(word).trim(),body=norm(text);if(!needle)return false;
  if(analysis&&norm(analysis.original)===body){const tokens=(analysis.segments||[]).flatMap(s=>s.words||[]);if(tokens.some(t=>!t.isName&&t.kind!=='name'&&norm(t.lao)===needle&&body.includes(needle)))return true;}
  if(typeof Intl.Segmenter!=='function')return body.split(/[\s.,!?;，。！？；]+/u).includes(needle);
@@ -5921,7 +5937,7 @@ function studyExamples(item,snap,forceWords=false){
  const rows=(snap.learningMaterials||[]).filter(m=>!m.deleted&&['sentence','dialogue'].includes(m.contentType)&&m.textLao&&m.textLao!==item.word&&(!hidden.has(m.id)||active.has(m.id)));
  const linked=m=>(m.linkedWordSyncIds||[]).some(k=>keys.has(k));
  const match=m=>letter?letterExampleMatch(item.word,m.textLao):studyWordOccurs(item.word,m.textLao,m.sentenceAnalysis);
- const courseIds=new Set((item._practiceCourses||[]).map(c=>c.id)),sameChapter=new Set((snap.learningPlacements||[]).filter(p=>!p.deleted&&courseIds.has(p.lessonId)).map(p=>p.materialId));return studyUniqueExamples(rows.filter(m=>match(m)||!letter&&linked(m)&&studyExampleKey(m.textLao).includes(studyExampleKey(item.word))).sort((a,b)=>Number(sameChapter.has(b.id))-Number(sameChapter.has(a.id))||Number(linked(b))-Number(linked(a))),snap).slice(0,3);
+ const courseIds=new Set((item._practiceCourses||[]).map(c=>c.id)),sameChapter=new Set((snap.learningPlacements||[]).filter(p=>!p.deleted&&courseIds.has(p.lessonId)).map(p=>p.materialId));return studyUniqueExamples(rows.filter(m=>match(m)||!letter&&linked(m)&&studyWordForms(item.word).some(form=>studyExampleKey(m.textLao).includes(studyExampleKey(form)))).sort((a,b)=>Number(sameChapter.has(b.id))-Number(sameChapter.has(a.id))||Number(linked(b))-Number(linked(a))),snap).slice(0,3);
 }
 function studyLao(node,text,placeholder=false){node.removeAttribute('aria-label');node.textContent=text||'';node.lang='lo';if(placeholder&&/[xX◌]/.test(text||''))node.innerHTML=codaVowelDisplay(String(text).replace(/[xX]/g,'◌'));}
 const studyPanel=$('#practicePanel'),studyCard=$('#practiceCard');
@@ -8493,7 +8509,7 @@ function rrFastContext(initialSnap,initialWords){
   }catch(e){failure=e;tx.abort();}};
   if(item){prior.onsuccess=sourceRow.onsuccess=ready;}else{left=1;ready();}try{await done;}catch(e){throw failure||e;}apply(out);if(source==='pause')activeMembers=new Set(rrModel(snap,words,Date.now(),catalog).rows.filter(r=>r.status==='active').flatMap(r=>reviewKeys(r.item).map(k=>k+'|'+r.direction)));if(typeof qaKick==='function')qaKick();
  }
- return {save:commit,pause:(item,direction,cursor)=>commit(null,direction,null,null,'pause',cursor,{target:reviewTarget(item)}),savePosition:cursor=>commit(null,null,null,null,null,cursor),async read(){await ensure();return {snap,words,model:rrModel(snap,words,Date.now(),catalog)};},examples(item){const key=reviewTarget(item)+'|'+rrSignature(item);if(!examples.has(key)){const keys=syncKeys(item),text=typeof letterExampleCanonical==='function'?letterExampleCanonical(item.word):item.word,materials=snap.learningMaterials.filter(m=>!m.deleted&&['sentence','dialogue'].includes(m.contentType)&&((m.linkedWordSyncIds||[]).some(k=>keys.includes(k))||(typeof letterExampleCanonical==='function'?letterExampleCanonical(m.textLao):m.textLao||'').includes(text)));examples.set(key,studyExamples(item,{...snap,learningMaterials:materials},true));}return examples.get(key);}};
+ return {save:commit,pause:(item,direction,cursor)=>commit(null,direction,null,null,'pause',cursor,{target:reviewTarget(item)}),savePosition:cursor=>commit(null,null,null,null,null,cursor),async read(){await ensure();return {snap,words,model:rrModel(snap,words,Date.now(),catalog)};},examples(item){const key=reviewTarget(item)+'|'+rrSignature(item);if(!examples.has(key)){const keys=syncKeys(item),forms=typeof studyWordForms==='function'?studyWordForms(item.word):[item.word],texts=forms.map(x=>typeof letterExampleCanonical==='function'?letterExampleCanonical(x):x),materials=snap.learningMaterials.filter(m=>!m.deleted&&['sentence','dialogue'].includes(m.contentType)&&((m.linkedWordSyncIds||[]).some(k=>keys.includes(k))||(/[0-9]|\.\.\./.test(item.word)&&studyWordOccurs(item.word,m.textLao,m.sentenceAnalysis))||texts.some(text=>(typeof letterExampleCanonical==='function'?letterExampleCanonical(m.textLao):m.textLao||'').includes(text))));examples.set(key,studyExamples(item,{...snap,learningMaterials:materials},true));}return examples.get(key);}};
 }
 </script>
 <style data-learning-bundle="rolling-review">

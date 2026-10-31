@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="51d9b5f4ab863e0d">
+  <meta name="lao-app-build" content="351863e0dafbd989">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -801,7 +801,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function hasAudio(item) { return Boolean(audioBlobFor(item)); }
     async function audioPayload(blob) { if(!blob)return {audio:null,audioData:null,audioDataUrl:null,audioType:'',audioBytes:0}; return {audio:null,audioData:null,audioDataUrl:await blobToDataURL(blob),audioType:blob.type||'audio/webm',audioBytes:blob.size}; }
     async function requestPersistentStorage() { try { if(navigator.storage?.persist&&!(await navigator.storage.persisted()))await navigator.storage.persist(); }catch(_){} }
-    async function migrateLegacyAudio() { const items=await allEntries(); for(const item of items){const blob=audioBlobFor(item);if(blob&&!item.audioDataUrl){const payload=await audioPayload(blob);await putEntry({...item,...payload});}} }
+    async function migrateLegacyAudio() { const items=await allEntries(); for(const item of items){const blob=audioBlobFor(item);if(blob&&!item.audioDataUrl&&item.audioStorage!=='blob-v1'){const payload=await audioPayload(blob);await putEntry({...item,...payload});}} }
     function newSyncId() { return globalThis.crypto?.randomUUID?.()||`entry-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
     async function migrateSyncIds() { const items=await allEntries(); for(const item of items) if(!item.syncId) await putEntry({...item,syncId:newSyncId()}); }
     async function seed() { if (cloudWorkspace||(await allEntries()).length) return; for (const item of [{word:'ສະບາຍດີ',ipa:'sa.bāːj.diː',meaning:'你好',category:'问候'},{word:'ຂອບໃຈ',ipa:'kʰɔ̀ːp.caj',meaning:'谢谢',category:'日常用语'},{word:'ນ້ຳ',ipa:'nâm',meaning:'水',category:'生活'}]) await addEntry({...item,syncId:newSyncId(),audio:null,audioData:null,audioDataUrl:null,updatedAt:Date.now()}); }
@@ -1366,7 +1366,7 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
  }
 }
 
-/* Verified immutable audio, bounded parallel downloads and optional resumable staging.
+/* Verified immutable audio, on-demand sequential downloads and optional resumable staging.
    Staging is private to the current workspace; it never changes word/audio references. */
 const cloudAudioSessions=new WeakMap();
 function cloudAudioStage(uid){
@@ -1393,27 +1393,57 @@ function cloudAudioStage(uid){
 function cloudAudioSession(uid,api,assets){
  let session=cloudAudioSessions.get(api);
  if(session){if(session.uid!==uid)throw Error('音频同步账号不一致。');for(const [path,blob] of assets)session.local.set(path,blob);return session;}
- const local=new Map(assets),descriptors=new Map(),pending=new Map(),used=new Set(),stage=cloudAudioStage(uid),stats={network:0,resumed:0,cacheLimited:false};
+ const local=new Map(assets),recent=new Map(),memoryLimit=8388608;let recentBytes=0,tail=Promise.resolve(),report=()=>{};
+ const descriptors=new Map(),pending=new Map(),used=new Set(),stage=cloudAudioStage(uid),stats={network:0,resumed:0,cacheLimited:false};
+ const remember=(path,blob)=>{recentBytes-=recent.get(path)?.size||0;recent.delete(path);if(blob.size<=memoryLimit){recent.set(path,blob);recentBytes+=blob.size;}while(recentBytes>memoryLimit){const [key,value]=recent.entries().next().value;recentBytes-=value.size;recent.delete(key);}};
  const validate=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw Error('云端音频索引无效，已停止。');const old=descriptors.get(a.path);if(old&&(old.size!==a.size||old.mime!==a.mime||old.sha!==a.sha))throw Error('同一音频的索引信息不一致，已停止。');descriptors.set(a.path,a);};
  const load=async a=>{
   validate(a);if(local.has(a.path)){const blob=local.get(a.path);if(blob.size!==a.size)throw Error('本机音频大小与云端索引不一致。');return blob;}
-  if(!pending.has(a.path))pending.set(a.path,(async()=>{
+  if(recent.has(a.path)){const blob=recent.get(a.path);remember(a.path,blob);return blob;}
+  if(!pending.has(a.path)){const task=tail.then(async()=>{
+   // Yield between files so mobile input and status updates can paint.
+   if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
    const cached=await stage.get(a.path);let blob;
    if(cached&&cached.blob instanceof Blob&&cached.sha===a.sha&&cached.mime===a.mime&&cached.size===a.size&&cached.blob.size===a.size&&await cloudHash(cached.blob)===a.sha){blob=cached.blob;stats.resumed++;}
    else{const downloaded=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(!(downloaded instanceof Blob)||downloaded.size!==a.size||await cloudHash(downloaded)!==a.sha)throw Error('下载的音频校验失败，未覆盖本机资料。');blob=new Blob([downloaded],{type:a.mime});stats.network++;if(!await stage.put(a,blob))stats.cacheLimited=true;}
-   used.add(a.path);local.set(a.path,blob);return blob;
-  })());
-  try{return await pending.get(a.path);}catch(error){pending.delete(a.path);throw error;}
+   used.add(a.path);remember(a.path,blob);report(a.path);return blob;
+  });pending.set(a.path,task);tail=task.catch(()=>{});}
+  const task=pending.get(a.path);try{return await task;}finally{if(pending.get(a.path)===task)pending.delete(a.path);}
  };
  session={uid,local,stats,load,
-  async prefetch(list,status,label){const unique=new Map();for(const a of list){validate(a);if(!local.has(a.path))unique.set(a.path,a);}
-   const rows=[...unique.values()];let done=0;const report=()=>status(label+' · 4 路并行'+(stats.resumed?' · 已复用断点录音 '+stats.resumed+' 条':'')+(stats.cacheLimited?' · 临时缓存空间不足或不可用，请保持页面打开':''),{done,total:rows.length});report();
-   await cloudSyncPool(rows,4,async a=>{await load(a);done++;report();});
+  async prefetch(list,status,label){
+   // Validate the whole index first, but do not fetch the entire library into RAM.
+   const waiting=new Set();for(const a of list){validate(a);if(!local.has(a.path))waiting.add(a.path);}
+   const total=waiting.size;let done=0;
+   const show=()=>status(label+' · 逐条校验'+(stats.resumed?' · 已复用断点录音 '+stats.resumed+' 条':'')+(stats.cacheLimited?' · 部分录音未写入临时断点缓存，不代表手机存储空间不足':''),{done,total});
+   report=path=>{if(waiting.delete(path)){done++;show();}};show();
   },
-  async release(){await stage.clear(used);used.clear();}
+  get retainedBytes(){return recentBytes;},
+  async release(){await tail;await stage.clear(used);used.clear();recent.clear();recentBytes=0;pending.clear();local.clear();descriptors.clear();report=()=>{};cloudAudioSessions.delete(api);}
+
  };
  cloudAudioSessions.set(api,session);return session;
 }
+
+// Read one cache entry; never clone the entire audio cache again during commit.
+async function cloudReadDefaultBlob(key){const box={};await withDefaultAudioStore('readonly',store=>{const r=store.get(key);r.onsuccess=()=>box.blob=r.result;});return box.blob||null;}
+async function cloudSaveDefaultAudio(rows,expected,load,status){
+ let done=0;
+ for(const row of rows){
+  status('正在逐条保存本机默认录音',{done,total:rows.length});
+  const current=await cloudReadDefaultBlob(row.key),sha=current?await cloudHash(current):null;
+  if(sha!==row.audio.sha){
+   if(sha!==(expected.get(row.key)||null))throw Error('另一个页面更新了默认音频，已保留该页面的录音，请重新同步。');
+   const blob=await load(row.audio),latest=await cloudReadDefaultBlob(row.key);
+   if((latest?await cloudHash(latest):null)!==sha)throw Error('下载期间另一个页面更新了默认音频，已保留原录音，请重新同步。');
+   await restoreDefaultAudio([{key:row.key,blob}]);
+   const saved=await cloudReadDefaultBlob(row.key);if(!saved||saved.size!==row.audio.size||await cloudHash(saved)!==row.audio.sha)throw Error('录音保存回读校验未通过，尚未标记同步完成，请重试。');
+  }
+  status('已保存并校验本机默认录音',{done:++done,total:rows.length});
+  if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
+ }
+}
+
 
 /* Server revisions decide what changed. No client-clock watermark or blind push. */
 const cloudReadCapabilities=new WeakMap();
@@ -1629,7 +1659,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           const sha=await cloudHash(blob),path=uid+'/'+sha+'-'+mime.replace(/[^a-z0-9]/g,'_');blobs.set(path,blob);return {path,sha,mime,size:blob.size};
         };
         const entryAudio=new Array(entries.length),cacheAudio=new Array(cache.length);let audioChecked=0;
-        await cloudSyncPool(entries.map((item,index)=>({item,index})),4,async({item,index})=>{entryAudio[index]=await descriptor(audioBlobFor(item));status('正在并行检查本机词条录音',{done:++audioChecked,total:entries.length});});
+        await cloudSyncPool(entries.map((item,index)=>({item,index})),1,async({item,index})=>{entryAudio[index]=await descriptor(audioBlobFor(item));status('正在逐条检查本机词条录音',{done:++audioChecked,total:entries.length});});
         let prepared=0;
         for(const item of entries){
           status('正在检查词条与录音',{done:prepared++,total:entries.length});if(prepared%50===0)await new Promise(resolve=>setTimeout(resolve,0));
@@ -1638,7 +1668,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           const key='entry:'+item.syncId;if(local.has(key))throw new Error('发现重复同步编号，请先核对重复词条。');
           local.set(key,{deleted:false,payload:{version:1,entry:cloudEntryData(item),audio:entryAudio[prepared-1]}});entryByKey.set(key,item);
         }
-        audioChecked=0;await cloudSyncPool(cache.map((row,index)=>({row,index})),4,async({row,index})=>{cacheAudio[index]={key:'default_audio:'+await cloudHash(new Blob([row.key])),audio:await descriptor(row.blob)};status('正在并行检查本机默认录音',{done:++audioChecked,total:cache.length});});
+        audioChecked=0;await cloudSyncPool(cache.map((row,index)=>({row,index})),1,async({row,index})=>{cacheAudio[index]={key:'default_audio:'+await cloudHash(new Blob([row.key])),audio:await descriptor(row.blob)};status('正在逐条检查本机默认录音',{done:++audioChecked,total:cache.length});});
         let cachePrepared=0;
         for(const row of cache){
           status('正在检查默认音频',{done:cachePrepared++,total:cache.length});
@@ -1688,6 +1718,9 @@ async function cloudReadRemote(uid,api,table,known,status){
         const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,blobs));
         conflicts.forEach((c,i)=>plan.push({key:c.key,row:c.row,action:resolutions[i],target:resolutions[i]==='local'?c.local:c.remote}));
         const uploads=plan.filter(x=>x.action==='local').length,downloads=plan.filter(x=>x.action==='remote').length;
+        const checkpointCurrent=plan.every(p=>p.row&&base[p.key]?.revision===p.row.revision&&cloudSame(base[p.key]?.value,p.target))&&Object.keys(base).length===plan.filter(p=>p.row).length;
+        if(!uploads&&!downloads&&!linkedEntries.length&&checkpointCurrent){status('词典与录音没有变化，已核对云端版本，无需合并或重新保存。');return true;}
+
         if(uploads||downloads){
           status((downloadOnly?'只下载模式：':'双向同步：')+'词典阶段上传 '+uploads+' 项，接收 '+downloads+' 项；随后继续检查课程与录音');
           if(!confirm(downloadOnly?'只下载词典：上传 0 项，接收 '+downloads+' 项。\n云端版本将更新本机对应词条、设置和删除状态。\n本机独有资料保留，不上传；请先备份重要的本机修改。继续吗？':'双向同步：词典阶段将上传 '+uploads+' 项、接收 '+downloads+' 项（包括词条、音频索引和删除记录）。\n随后还会单独确认学习资料的上传。\n请确认已导出备份。继续吗？')){status('已取消同步，数据未改变。');return;}
@@ -1721,8 +1754,8 @@ async function cloudReadRemote(uid,api,table,known,status){
           }else if(p.key.startsWith('entry:')){
             const old=entryByKey.get(p.key);
             if(p.target.deleted){if(old)changes.push({deleteId:old.id});}
-            else {const payload=p.target.payload,audio=await audioPayload(payload.audio?await loadAudio(payload.audio):null);const value={...cloudEntryData(payload.entry),...audio};if(old)value.id=old.id;changes.push({value});}
-          }else if(!p.target.deleted)audioChanges.push({key:p.target.payload.cacheKey,blob:await loadAudio(p.target.payload.audio)});
+            else {const payload=p.target.payload,blob=payload.audio?await loadAudio(payload.audio):null,audio={audio:blob,audioStorage:'blob-v1',audioData:null,audioDataUrl:null,audioType:blob?.type||'',audioBytes:blob?.size||0};const value={...cloudEntryData(payload.entry),...audio};if(old)value.id=old.id;changes.push({value});}
+          }else if(!p.target.deleted)audioChanges.push({key:p.target.payload.cacheKey,audio:p.target.payload.audio});
         }
         const pending=plan.filter(x=>x.action==='local'),preparedAudio=new Map();
         if(downloadOnly&&pending.length)throw Error('只下载模式已阻止上传计划。');
@@ -1742,9 +1775,8 @@ async function cloudReadRemote(uid,api,table,known,status){
         batchRows.forEach(r=>pendingById.get(r.kind+':'+r.id).row=r.result);
         status('正在保存本机词典与同步检查点…');
         // Downloads may complete after another local tab edits: refuse overwriting that tab's entries.
-        const cacheFingerprint=async rows=>{const result=new Array(rows.length);await cloudSyncPool(rows.map((row,index)=>({row,index})),4,async({row,index})=>{result[index]=[row.key,await cloudHash(row.blob)];});return cloudStable(result);};
-        if(audioChanges.length&&await cacheFingerprint(await cloudCacheRows())!==cloudStable(cache.map((row,i)=>[row.key,cacheAudio[i].audio.sha])))throw new Error('另一个页面更新了默认音频，请重新同步。');
-        await restoreDefaultAudio(audioChanges);
+        const expectedAudio=new Map(cache.map((row,i)=>[row.key,cacheAudio[i].audio.sha]));
+        await cloudSaveDefaultAudio(audioChanges,expectedAudio,loadAudio,status);
         const checkpoint={};for(const p of plan)if(p.row)checkpoint[p.key]={revision:p.row.revision,value:p.target};
         const database=await openDB();
         await new Promise((resolve,reject)=>{
@@ -3170,10 +3202,10 @@ async function learningSeedLessonOne(){
 </script>
 <script data-learning-bundle="cloud">
 /* Learning records use their own cloud table so older dictionary clients remain compatible. */
-function learningApplySyncDelta(t,before,after){
+function learningApplySyncDelta(t,before,after,changedKeys=null){
  for(const kind of learningStores){const old=new Map(before[kind].map(row=>[row.id,row])),next=new Set(after[kind].map(row=>row.id)),store=t.objectStore(kind);
-  for(const row of after[kind]){const previous=old.get(row.id);if(!previous||!cloudSame(previous,row)||kind==='learningAudio'&&previous.blob!==row.blob)store.put(row);}
-  for(const row of before[kind])if(!next.has(row.id))store.delete(row.id);
+  for(const row of after[kind]){if(changedKeys&&!changedKeys.has(kind+':'+row.id))continue;const previous=old.get(row.id);if(!previous||!cloudSame(previous,row)||kind==='learningAudio'&&previous.blob!==row.blob)store.put(row);}
+  for(const row of before[kind])if((!changedKeys||changedKeys.has(kind+':'+row.id))&&!next.has(row.id))store.delete(row.id);
  }
 }
 var learningSyncRunning=false;
@@ -3215,6 +3247,10 @@ async function learningCloudSync(uid,api,status,options={}){
   const resolutions=await cloudResolveConflicts(conflicts,cloudConflictPreviewLoader(uid,api,assets));conflicts.forEach((c,i)=>{plan[c.index].action=resolutions[i];plan[c.index].target=resolutions[i]==='local'?c.local:c.remote;});
   const uploads=plan.filter(p=>p.action==='local'&&p.target).length,downloads=plan.filter(p=>p.action==='remote').length;
   if(downloadOnly&&uploads)throw Error('只下载模式禁止上传学习资料。');
+  // A true no-op must not reconstruct/rewrite every material and Blob.
+  const checkpointCurrent=plan.every(p=>p.target&&p.row&&cloudSame(base[p.key],p.target)&&saved.revisions[p.key]===p.row.revision)&&Object.keys(base).length===plan.length;
+  if(!uploads&&!downloads&&checkpointCurrent){status('学习资料与录音没有变化，已核对云端版本，无需合并或重新保存。');return;}
+
   if(uploads&&options.requireUploadConfirmation&&!confirm('学习资料阶段将上传 '+uploads+' 项、接收 '+downloads+' 项。\n包括课程、语法／发音分析、学习记录和录音索引。\n这是双向同步，会修改云端；取消则不执行本阶段。继续吗？'))throw Error('已取消学习资料阶段；本阶段未上传。');
   if(downloadOnly&&downloads&&!confirm('只下载学习资料：上传 0 项，接收 '+downloads+' 项。\n云端版本将更新本机对应资料；本机独有资料保留，不上传。\n请先确认重要的本机修改已有备份。继续吗？'))throw Error('已取消学习资料下载；未上传。');
   const validateAudio=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw new Error('学习音频索引无效。');};
@@ -3224,7 +3260,7 @@ async function learningCloudSync(uid,api,status,options={}){
   const merged=Object.fromEntries(learningStores.map(s=>[s,[]]));merged.learningMaterials.push(...privateLocal);
   let checked=0;
   for(const p of plan){status('正在整理已就绪的学习资料与录音',{done:checked++,total:plan.length});if(checked%50===0)await new Promise(resolve=>setTimeout(resolve,0));if(!p.target)continue;let value={...p.target.payload};if(value.id!==p.id)throw new Error('材料编号不一致。');if(p.kind==='learningAudio'){
-   const a=value.audio;validateAudio(a);const blob=await audioSession.load(a);assets.set(a.path,blob);delete value.audio;value.blob=blob;
+   const a=value.audio;validateAudio(a);const blob=await audioSession.load(a);delete value.audio;value.blob=blob;
   }learningValidateRecord(p.kind,value);merged[p.kind].push(value);}
   learningValidateLinks(merged);
   const pending=plan.filter(p=>p.action==='local'&&p.target),pendingById=new Map(pending.map(p=>[p.key,p])),preparedAudio=new Map();
@@ -3238,7 +3274,7 @@ async function learningCloudSync(uid,api,status,options={}){
   status('正在保存本机学习资料与同步检查点…');
   const checkpoint=Object.fromEntries(plan.filter(p=>p.target&&p.action!=='keep-local').map(p=>[p.key,p.target]));
   const database=await openDB(),t=database.transaction([...learningStores,'cloud_meta'],'readwrite'),done=transactionDone(t);let remaining=learningStores.length;
-  const current={};for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{current[kind]=r.result;if(--remaining===0){learningApplySyncDelta(t,current,learningSyncRebase(current,snap,merged));t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
+  const current={};for(const kind of learningStores){const r=t.objectStore(kind).getAll();r.onsuccess=()=>{current[kind]=r.result;if(--remaining===0){learningApplySyncDelta(t,current,learningSyncRebase(current,snap,merged),new Set(plan.filter(p=>p.action==='remote').map(p=>p.key)));t.objectStore('cloud_meta').put(checkpoint,'learningCheckpoint');t.objectStore('cloud_meta').put(Object.fromEntries(plan.filter(p=>p.target&&p.row).map(p=>[p.key,p.row.revision])),'learningServerRevisions');}};}
   await done;await audioSession.release();const phoneticCount=merged.learningMaterials.filter(m=>!m.deleted&&m.pronunciationAnalysis).length;status(downloadOnly?'只下载学习资料完成：上传 0 项，接收 '+downloads+' 项；保留本机独有 '+plan.filter(p=>p.action==='keep-local').length+' 项（未上传）。':'学习资料同步完成：本次上传 '+pending.length+' 项学习资料（含 '+pending.filter(p=>p.kind==='learningAudio').length+' 份录音），接收 '+plan.filter(p=>p.action==='remote').length+' 项；学习清单、每日目标、评级记录和背词断点已同步；发音分析 '+phoneticCount+' 项；共有 '+merged.learningMaterials.filter(m=>!m.deleted&&m.sentenceAnalysis).length+' 条语法解析；本次上传 '+plan.filter(p=>p.action==='local'&&p.target?.payload?.sentenceAnalysis).length+' 条解析、接收 '+plan.filter(p=>p.action==='remote'&&p.target?.payload?.sentenceAnalysis).length+' 条解析。请在另一设备使用同一账号再同步。');if(activeView==='learning')await renderLearning();
  }finally{learningSyncRunning=false;}
 }

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="859d5e2597345458">
+  <meta name="lao-app-build" content="e40f6c48dc5f1e95">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3800,7 +3800,7 @@ function batchReturnToParent(){
 const batchDraftKey=workspaceName('lao-batch-audio-draft-v1');
 const batchDialog=document.createElement('dialog');batchDialog.id='batchAudioDialog';document.body.append(batchDialog);
 function batchNotice(message){batchDialog.querySelector('[data-batch-status]').textContent=message;}
-function batchRemember(){if(batchAudioState?.key)localStorage.setItem(batchDraftKey,JSON.stringify({pageMode:Boolean(batchAudioState.pageMode),dialogueReplace:Boolean(batchAudioState.dialogueReplace),analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));}
+function batchRemember(){if(batchAudioState?.key){localStorage.setItem(batchDraftKey,JSON.stringify({sourceHash:batchAudioState.sourceHash||null,pageMode:Boolean(batchAudioState.pageMode),dialogueReplace:Boolean(batchAudioState.dialogueReplace),analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));localStorage.setItem(batchDraftKey+':'+batchAudioState.key,localStorage.getItem(batchDraftKey));}}
 function batchClose(){if(batchAudioBusy||batchReturning)return;stopPracticeAudio();batchDialog.querySelectorAll('audio').forEach(a=>a.pause());if(batchAudioURL)URL.revokeObjectURL(batchAudioURL);batchAudioURL=null;if(batchReturnToParent())return;batchDialog.close();}
 batchDialog.addEventListener('cancel',e=>{e.preventDefault();batchClose();});
 async function batchDecode(blob){const ctx=new (window.AudioContext||window.webkitAudioContext)();try{return await ctx.decodeAudioData(await blob.arrayBuffer());}finally{await ctx.close();}}
@@ -3856,8 +3856,11 @@ function batchEditor(){
  batchDialog.querySelectorAll('[data-preview]').forEach(b=>b.onclick=async()=>{try{$('#batchFull').pause();const r=range(Number(b.dataset.preview));batchValidate([r],s.buffer.duration);await learningPlayBlob(batchWav(s.buffer,...r));}catch(e){batchNotice(e.message);}});
  $('#batchSave').onclick=async()=>{if(batchAudioBusy)return;batchAudioBusy=true;$('#batchSave').disabled=true;try{remember();batchValidate(s.ranges,s.buffer.duration);if(s.words.some((_,i)=>!batchDialog.querySelector('[data-confirm="'+i+'"]').checked))throw Error('请逐项试听并勾选确认');if(s.analysisParent){await saAudioSave(s);return;}if(s.pageMode){await lessonPageSaveClips(s);return;}const [current,cache,currentSnapshot]=await Promise.all([allEntries(),cloudCacheRows(),learningSnapshot()]);const eligible=batchClipsStillMissing(s,current,cache,currentSnapshot);if(!eligible.length){batchNotice('本批词条都已有录音或默认音频，未重复保存；原切分草稿保留。');$('#batchSave').disabled=false;return;}const skipped=s.words.length-eligible.length,clips=eligible.map(({word:w,index})=>({key:JSON.stringify([ttsSettings.endpoint||'',w.word]),blob:batchWav(s.buffer,...s.ranges[index])}));await batchSaveClips(clips);localStorage.removeItem(batchDraftKey);batchNotice('已保存 '+clips.length+' 段默认音频'+(skipped?'，跳过 '+skipped+' 个已有音频的词':'')+'，个人录音未改动。请导出备份保存；跨设备使用需手动同步。');$('#batchSave').textContent='已保存';}catch(e){batchNotice(e.message);if(Number.isInteger(e.segmentIndex)){batchDialog.querySelectorAll('[data-segment]').forEach(el=>el.style.outline='');const row=batchDialog.querySelector('[data-segment="'+e.segmentIndex+'"]');row.style.outline='2px solid #c33';row.scrollIntoView({block:'center',behavior:'smooth'});row.querySelector('input').focus();}$('#batchSave').disabled=false;}finally{batchAudioBusy=false;}};
  if(typeof allEntries==='function'&&typeof learningSnapshot==='function')void batchMarkExistingReferences(s).catch(()=>{});
+ if(typeof batchSplitNavigation==='function')batchSplitNavigation(s);
 }
-function batchSaveClips(clips){return new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio'),read=store.getAllKeys();let issue;read.onsuccess=()=>{try{const words=new Set(clips.map(c=>JSON.parse(c.key)[1]));if(read.result.some(k=>{try{return words.has(JSON.parse(k)[1]);}catch(_){return false;}}))throw Error('音频缓存已变化，本次未覆盖');for(const c of clips)store.put(c.blob,c.key);}catch(e){issue=e;tx.abort();}};tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(issue||tx.error);};};});}
+async function batchSaveClips(clips){await new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio'),read=store.getAllKeys();let issue;read.onsuccess=()=>{try{const words=new Set(clips.map(c=>JSON.parse(c.key)[1]));if(read.result.some(k=>{try{return words.has(JSON.parse(k)[1]);}catch(_){return false;}}))throw Error('音频缓存已变化，本次未覆盖');for(const c of clips)store.put(c.blob,c.key);}catch(e){issue=e;tx.abort();}};tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(issue||tx.error);};};});
+ for(const c of clips)if(typeof qaDefaultSaved==='function')await qaDefaultSaved(c.key,c.blob);
+}
 const batchLaunch=document.createElement('button');batchLaunch.type='button';batchLaunch.textContent='音频批量生成与切分';batchLaunch.onclick=()=>openBatchAudio().catch(e=>alert(e.message));$('#dictionaryBatchTools').prepend(batchLaunch);
 </script>
 <script data-learning-bundle="page-audio">
@@ -4098,7 +4101,7 @@ async function lessonPagePrepare(page,fromBatch=false){
     if(!await learningCachedSpeech(fullText))await batchSaveClips([{key:JSON.stringify([ttsSettings.endpoint||'',fullText]),blob}]);
    }
    const dialogueGroups=(page.dialogueGroups||[]).filter(g=>g.words.every(w=>chosen.some(c=>c.id===w.id&&c.dialogueId===g.id))).map(g=>({id:g.id,itemIds:g.words.map(w=>w.id)}));
-   batchAudioState={pageMode:true,dialogueReplace:Boolean(page.replaceDefaults),dialogueGroups,words:chosen,key,blob,ranges:[]};batchRemember();
+   batchAudioState={pageMode:true,dialogueReplace:Boolean(page.replaceDefaults),dialogueGroups,words:chosen,key,blob,sourceHash:typeof cloudHash==='function'?await cloudHash(blob):null,ranges:[]};batchRemember();
    batchAudioState.buffer=await batchDecode(blob);batchAudioState.ranges=batchRanges(batchAudioState.buffer,chosen.length,.25)||[];batchRemember();batchEditor();
   }catch(e){batchNotice(e.message);}finally{batchAudioBusy=false;if($('#pageGenerate'))$('#pageGenerate').disabled=false;}
  };
@@ -4238,8 +4241,10 @@ function batchCourseContent(snap){
 }
 function batchModeButtons(){return '<nav class="batch-modes"><button data-batch-mode="words">词汇</button><button data-batch-mode="sentences">句子</button><button data-batch-mode="dialogues">完整对话</button></nav>';}
 function batchSentenceReady(word,m,snap,cache){
- if(!m||m.deleted||m.audioNeedsReview)return false;
+ if(m?.deleted)return false;
+ // An exact-text default clip is independent of an old reference's review flag.
  if(cache.get(word.word)?.blob?.size)return true;
+ if(!m||m.audioNeedsReview)return false;
  return (m.audioSources||[]).some(ref=>{
   if(!learningIsReference(ref)||ref.needsReview)return false;
   const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
@@ -4287,16 +4292,17 @@ async function batchOpenSavedDialogue(id){
  if(!full.words)throw Error('原音属于较大的批次，其中部分句子已不在课程中。请用“恢复切分草稿”打开；不会重复生成。');
  batchAudioBusy=true;
  try{
-  let draft=null;try{draft=JSON.parse(localStorage.getItem(batchDraftKey)||'null');}catch(_){}
+  let draft=null;try{draft=JSON.parse(localStorage.getItem(batchDraftKey+':'+full.key)||localStorage.getItem(batchDraftKey)||'null');}catch(_){}
   if(draft&&draft.key!==full.key&&!confirm('打开已有原音会替换当前切分草稿，但不会删除原音和已保存切片。继续？'))return;
   stopPracticeAudio();let blob=full.blob,buffer=await batchDecode(blob);
   if(full.start||full.end!=null){const end=full.end??buffer.duration;if(full.start<0||end>buffer.duration+.05||end<=full.start)throw Error('原音片段范围无效，请在详情中核对。');blob=batchWav(buffer,full.start,Math.min(end,buffer.duration));buffer=await batchDecode(blob);}
-  const sameDraft=!full.fresh&&draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
+  const sourceHash=typeof cloudHash==='function'?await cloudHash(blob):null,sameSource=sourceHash?draft?.sourceHash===sourceHash:!full.fresh;
+  const sameDraft=sameSource&&draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
   const words=sameDraft?draft.words:full.words,current=await lessonPageResolve(words);if(current.some((w,i)=>w.word!==words[i].word))throw Error('原音对应文字已变化，请先核对。');
   const key=full.key||JSON.stringify([ttsSettings.endpoint||'',lessonPageText(words)]);
-  await ttsCache('readwrite',key,blob);
-  const resume=!full.fresh&&draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
-  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,dialogueGroups:resume?draft.dialogueGroups||[]:(full.fresh||state.full)?[{id,itemIds:d.words.map(w=>w.id)}]:[],ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
+  if(!full.key)await ttsCache('readwrite',key,blob);
+  const resume=sameSource&&draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
+  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,sourceHash,dialogueGroups:resume?draft.dialogueGroups||[]:inventory.content.dialogues.filter(g=>g.words.every(w=>words.some(x=>x.id===w.id))).map(g=>({id:g.id,itemIds:g.words.map(w=>w.id)})),ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
   batchRemember();batchEditor();
  }finally{batchAudioBusy=false;}
 }
@@ -4323,10 +4329,11 @@ async function batchOpenContent(mode,view=null){
  (mode==='dialogues'?'<nav aria-label="对话完成状态" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button data-batch-completion="all">全部对话（'+rows.length+'）</button><button data-batch-completion="pending">未完成（'+rows.filter(r=>!inventory.states.get(r.id).completed).length+'）</button><button data-batch-completion="completed">已完成切分（'+rows.filter(r=>inventory.states.get(r.id).completed).length+'）</button></nav>':'')+
  '<div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+
  '<p><button id="batchContentSelect">全选本页可补项目</button><button id="batchContentUnselect">取消本页</button><button id="batchContentClear">清空已选</button></p><p>'+
- (mode==='dialogues'?'<button id="batchContentMissingGo">批量仅补缺句</button>':'')+
+ (mode==='dialogues'?'<button id="batchContinueSources">连续处理待切分原音</button><button id="batchContentMissingGo">批量仅补缺句</button>':'')+
  '<button id="batchContentGo">'+(mode==='dialogues'?'生成所选完整对话':'准备合成与切分')+'</button></p><p><button data-batch-mode="words">返回词汇／恢复切分草稿</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;$('#batchContentSearch').value=view?.search||'';
  const origin=()=>batchViewSnapshot(mode,page,$('#batchContentSearch').value,selected,completionFilter);
+ if(mode==='dialogues')$('#batchContinueSources').onclick=async()=>{if(batchAudioBusy)return;try{const fresh=await batchFreshInventory(),pending=batchPendingSources(fresh);if(!pending.length){batchNotice('没有待切分的可用原音。');return;}await batchFromView(origin(),()=>batchOpenSavedDialogue(pending[0].id));}catch(error){batchNotice(error.message);}};
  const draw=()=>{
   const q=$('#batchContentSearch').value.toLowerCase(),filtered=rows.filter(r=>(mode!=='dialogues'||completionFilter==='all'||(completionFilter==='completed')===inventory.states.get(r.id).completed)).filter(r=>[r.title,r.word,r.meaning,r.category,...(r.words||[]).flatMap(w=>[w.word,w.meaning])].join(' ').toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/30));page=Math.max(0,Math.min(page,pages-1));visible=filtered.slice(page*30,page*30+30);
   $('#batchContentList').innerHTML=visible.map(r=>{
@@ -4365,6 +4372,30 @@ async function batchOpenContent(mode,view=null){
  draw();batchRestoreView(view);
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-batch-mode]');if(!b||batchAudioBusy)return;try{if(b.dataset.batchMode==='words')await openBatchAudio();else await batchOpenContent(b.dataset.batchMode);}catch(error){batchNotice(error.message);}});
+// A saved batch may cover several dialogue rows. Continue by original audio,
+// and always re-read completion after saving rather than replay a stale list.
+function batchPendingSources(inventory,excludeKey=null){
+ const seen=new Set(),result=[];
+ for(const d of inventory.content.dialogues){const state=inventory.states.get(d.id),source=state?.full||state?.savedBatch;
+  if(state?.completed||!source?.words)continue;
+  const key=source.key||'dialogue:'+d.id;if(key===excludeKey||seen.has(key))continue;seen.add(key);result.push(d);
+ }return result;
+}
+function batchSplitNavigation(s){
+ if(!s.pageMode||!batchParentView||batchParentView.mode!=='dialogues')return;
+ const save=batchDialog.querySelector('#batchSave');if(!save)return;
+ const next=document.createElement('button');next.type='button';next.textContent='保存后继续下一段';save.after(next);
+ const original=save.onclick;
+ next.onclick=async()=>{
+  if(batchAudioBusy)return;next.disabled=true;
+  try{await original();if(batchAudioState!==s||save.textContent!=='已保存')return;
+   const inventory=await batchFreshInventory(),pending=batchPendingSources(inventory,s.key);
+   if(!pending.length){batchNotice('当前可切分原音已处理完，可关闭返回列表查看；已有音频不会重新生成。');next.textContent='已处理完';return;}
+   await batchOpenSavedDialogue(pending[0].id);
+  }catch(error){batchNotice(error.message);}finally{next.disabled=false;}
+ };
+ const note=document.createElement('p');note.className='tag-hint';note.textContent='本段包含 '+s.words.length+' 句；同一批原音只需切分一次，保存会更新对应的多组对话。';save.parentElement.before(note);
+}
 </script>
 <style data-pronunciation-bundle="styles">
 #pronunciationPanel{grid-column:1/-1}#pronunciationPanel h2{margin:12px 0 22px}#pronunciationPanel h3{font-size:17px;margin:26px 0 12px}.pron-intro,.pron-footnote,.pron-notes{color:var(--muted,#637a76);font-size:14px;line-height:1.7}.pron-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.pron-entry{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:28px!important;text-align:left;background:#edf7f3!important;border:1px solid #d8e8e3!important}.pron-entry strong{font-size:24px}.pron-entry span{font-size:15px;color:#657b76}.pron-entry small{align-self:flex-end;color:#087f6e}.pron-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#637a76;font-size:14px;margin-bottom:16px}#pronunciationPanel .pron-section-heading button,#pronunciationPanel .pron-back{font-size:14px;padding:6px 10px;min-height:34px}.pron-matrix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pron-matrix.pron-three{grid-template-columns:repeat(3,minmax(0,1fr))}.pron-column{font-size:14px;color:#637a76;padding:8px}.pron-card{position:relative;border:1px solid #dce9e5;border-radius:14px;background:#fff;overflow:hidden}.pron-card:hover{border-color:#58a798;background:#f4faf7}#pronunciationPanel .pron-card-main{display:flex;flex-direction:column;gap:15px;align-items:flex-start;text-align:left;border:0;background:transparent;width:100%;padding:19px 18px;min-height:140px}.pron-card-main span{font-size:13px;color:#637a76;padding-right:26px}.pron-card-main strong{font-size:28px;color:#087f6e}.pron-card-main small{font-size:12px;align-self:flex-end;color:#637a76}#pronunciationPanel .pron-play{position:absolute;right:10px;top:10px;padding:5px 9px;min-height:32px;font-size:14px;border:0;background:#edf7f3}.pron-notes{margin-top:20px}.pron-footnote{margin-top:26px;font-size:12px}.pron-combination{color:#637a76}.pron-rule{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-size:14px;background:#edf7f3;padding:16px;border-radius:12px}.pron-rule dt{color:#637a76;font-size:12px}.pron-rule dd{margin:8px 0 0}.pron-example{display:flex;align-items:center;gap:10px;border-bottom:1px solid #e4eeea;padding:12px 0}.pron-example>span{flex:1}.pron-example small{display:block;font-size:12px;color:#637a76;margin-bottom:5px}.pron-example b{font-size:23px;font-weight:500}#pronunciationPanel .pron-example button{padding:5px 10px;font-size:13px;min-height:32px}#pronunciationStatus{font-size:14px;color:#087f6e;line-height:1.6}#pronunciationPanel button:focus-visible{outline:3px solid #087f6e;outline-offset:2px}@media(max-width:600px){.pron-entries{grid-template-columns:1fr}.pron-entry{padding:22px!important}.pron-matrix{gap:7px}.pron-card-main span{font-size:11px;padding-right:0;padding-top:26px}#pronunciationPanel .pron-card-main{padding:12px 9px;min-height:160px}.pron-card-main strong{font-size:23px}.pron-column{font-size:12px;padding:5px}.pron-rule{grid-template-columns:repeat(2,1fr)}.pron-section-heading{align-items:flex-start}.pron-example{flex-wrap:wrap}.pron-example .pron-manage{font-size:12px!important}}
@@ -6621,15 +6652,17 @@ async function dialogueReplaceClips(s){
  localStorage.removeItem(batchDraftKey);batchNotice('已更新 '+clips.size+' 个词句默认音频。整段原音及手录参考音未修改；普通播放仍手录优先。请备份或同步音频。');
  batchDialog.querySelector('#batchSave').textContent='已保存';
 }
-function dialogueWriteClips(clips){return new Promise((resolve,reject)=>{
+async function dialogueWriteClips(clips){const written=new Map();await new Promise((resolve,reject)=>{
  const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);
  req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);
  req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio'),read=store.getAllKeys();
-  read.onsuccess=()=>{for(const key of read.result){let text;try{text=JSON.parse(key)[1];}catch(_){continue;}if(clips.has(text))store.put(clips.get(text),key);}
-   for(const [text,blob] of clips)store.put(blob,JSON.stringify([ttsSettings.endpoint||'',text]));};
+  read.onsuccess=()=>{for(const key of read.result){let text;try{text=JSON.parse(key)[1];}catch(_){continue;}if(clips.has(text)){store.put(clips.get(text),key);written.set(key,clips.get(text));}}
+   for(const [text,blob] of clips){const key=JSON.stringify([ttsSettings.endpoint||'',text]);store.put(blob,key);written.set(key,blob);}};
   tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};
  };
-});}
+});
+ for(const [key,blob] of written)if(typeof qaDefaultSaved==='function')await qaDefaultSaved(key,blob);
+}
 const dialogueOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){
  await dialogueOriginalDetail(id);if(learningDetail!==id)return;
@@ -10356,11 +10389,28 @@ async function qaRunJob(job,api,options={}){
  for(const p of plan){if(!options.manual&&!qaAllowed(job.records))throw Object.assign(Error('已暂停自动上传'),{blocked:true});if(p.action==='same'){await qaAck(p.record,p.remote);continue;}await qaUploadBlob(api,job.uid,p.record,p.remote);const row={kind:p.record.kind,id:p.record.id,payload:p.record.payload,revision:p.remote?.revision??null,deleted:false};await cloudBatchWrite(job.uid,api,p.record.table,[row],()=>{});await qaAck(p.record,row.result);}
  await qaRemove(job.token);
 }
+// One-time repair for clips saved by older bulk writers without an outbox hook.
+// Read one blob at a time; never rebuild the entire dictionary or fetch audio.
+async function qaRecoverBulkClips(uid,status){
+ const marker=workspaceName('bulk-audio-journal-repaired-v1');if(localStorage.getItem(marker)==='done')return;
+ const meta=await qaReadMeta(),pending=new Set((meta[qaQueueKey]||[]).flatMap(j=>j.records.filter(r=>r.kind==='default_audio').map(r=>r.cacheKey)));
+ const keys=await new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readonly'),q=tx.objectStore('audio').getAllKeys();tx.oncomplete=()=>{db.close();resolve(q.result);};tx.onabort=()=>{db.close();reject(tx.error);};};});
+ for(let i=0;i<keys.length;i++){
+  if(uid!==cloudWorkspace)throw Error('账号已切换，检查停止');const key=keys[i];if(pending.has(key))continue;
+  status('首次检查旧版批量保存的漏传音频',{done:i,total:keys.length});
+  const id=await cloudHash(new Blob([key])),blob=await ttsCache('readonly',key);if(!blob?.size)continue;
+  const old=meta.checkpoint['default_audio:'+id]?.value?.payload?.audio;
+  if(old&&old.size===blob.size&&old.sha===await cloudHash(blob))continue;
+  await qaEnqueue([{table:'lao_dictionary_records',kind:'default_audio',id,cacheKey:key,blob}]);
+ }
+ localStorage.setItem(marker,'done');
+}
 // Explicit manual upload uses only the durable outbox, never historical library scans.
 async function qaFlushPending(uid,api,status){
  if(uid!==cloudWorkspace)throw Error('账号已切换，请重新操作');
+ if(typeof indexedDB!=='undefined')await qaRecoverBulkClips(uid,status);
  const jobs=(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid);let done=0,blocked=0;
- if(!jobs.length){status('没有待上传的本机更新。本入口只处理新版保存的更新；接收其他设备资料或核对旧资料，请用“完整云端核对”。');return {done,blocked};}
+ if(!jobs.length){status('没有待上传的本机更新。接收其他设备的新资料请用“接收更新”；处理冲突请用“完整核对”。');return {done,blocked};}
  for(const job of jobs){
   if(uid!==cloudWorkspace)throw Error('账号已切换，同步停止');
   status('正在上传本机更新',{done,total:jobs.length});

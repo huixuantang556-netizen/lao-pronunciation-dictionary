@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="e40f6c48dc5f1e95">
+  <meta name="lao-app-build" content="5791f82157023d87">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1366,10 +1366,22 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
  }
 }
 
-/* Verified immutable audio, on-demand sequential downloads and optional resumable staging.
+/* Verified immutable audio, on-demand bounded parallel downloads and optional resumable staging.
    Staging is private to the current workspace; it never changes word/audio references. */
 const cloudAudioSessions=new WeakMap();
 function cloudAudioPhoneMode(){return typeof navigator!=='undefined'&&/iPhone|iPod/.test(navigator.userAgent||'');}
+// Bound both simultaneous work and bytes; a single large file runs alone.
+function cloudTransferLimits(){const ua=typeof navigator==='undefined'?'':navigator.userAgent||'';return /iPhone|iPod/.test(ua)?{count:2,bytes:4194304}:/Android|iPad/.test(ua)?{count:2,bytes:8388608}:{count:3,bytes:16777216};}
+async function cloudTransferPool(items,work,weight=()=>0,limits=cloudTransferLimits()){
+ let next=0,active=0,bytes=0,error=null;const waiting=[];
+ const wake=()=>{for(const resolve of waiting.splice(0))resolve();};
+ const runner=async()=>{for(;;){if(error||next>=items.length)return;const size=Math.max(0,Number(weight(items[next]))||0);
+  if(active&&bytes+size>limits.bytes){await new Promise(resolve=>waiting.push(resolve));continue;}
+  const i=next++,item=items[i];active++;bytes+=size;
+  try{await work(item,i);}catch(e){error=error||e;}finally{active--;bytes-=size;wake();}
+ }};
+ await Promise.all(Array.from({length:Math.min(limits.count,items.length)},runner));if(error)throw error;
+}
 function cloudAudioStage(uid){
  const prefix='sync-audio-stage-v1:'+uid+':',limit=134217728,metadata=new Map();let available=true,bytes=0,initializing=null;
  const transaction=async(mode,work)=>{const d=await openDB();return new Promise((resolve,reject)=>{const t=d.transaction('cloud_meta',mode);let value; t.oncomplete=()=>resolve(value);t.onerror=()=>{};t.onabort=()=>reject(t.error||Error('Audio staging unavailable'));try{value=work(t.objectStore('cloud_meta'));}catch(error){t.abort();reject(error);}});};
@@ -1394,24 +1406,26 @@ function cloudAudioStage(uid){
 function cloudAudioSession(uid,api,assets){
  let session=cloudAudioSessions.get(api);
  if(session){if(session.uid!==uid)throw Error('音频同步账号不一致。');for(const [path,blob] of assets)session.local.set(path,blob);return session;}
- const phoneMode=cloudAudioPhoneMode(),local=new Map(assets),recent=new Map(),memoryLimit=phoneMode?0:8388608;let recentBytes=0,tail=Promise.resolve(),report=()=>{};
+ const phoneMode=cloudAudioPhoneMode(),local=new Map(assets),recent=new Map(),memoryLimit=phoneMode?0:8388608;let recentBytes=0,report=()=>{};const limits=cloudTransferLimits(),waiters=[];let active=0,inflightBytes=0,saveTail=Promise.resolve();
+ const commit=work=>{const task=saveTail.then(work);saveTail=task.then(()=>undefined,()=>undefined);return task;};
+ const gate=async(size,work)=>{while(active&&(active>=limits.count||inflightBytes+size>limits.bytes))await new Promise(resolve=>waiters.push(resolve));active++;inflightBytes+=size;try{return await work();}finally{active--;inflightBytes-=size;for(const wake of waiters.splice(0))wake();}};
  const descriptors=new Map(),pending=new Map(),used=new Set(),stage=phoneMode?{get:async()=>null,put:async()=>true,clear:async()=>{}}:cloudAudioStage(uid),stats={network:0,resumed:0,cacheLimited:false};
  const remember=(path,blob)=>{recentBytes-=recent.get(path)?.size||0;recent.delete(path);if(blob.size<=memoryLimit){recent.set(path,blob);recentBytes+=blob.size;}while(recentBytes>memoryLimit){const [key,value]=recent.entries().next().value;recentBytes-=value.size;recent.delete(key);}};
  const validate=a=>{if(!a||!/^[0-9a-f]{64}$/.test(a.sha)||!['audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/x-wav','audio/ogg','audio/aac','audio/flac','audio/x-m4a'].includes(a.mime)||a.path!==uid+'/'+a.sha+'-'+a.mime.replace(/[^a-z0-9]/g,'_')||!Number.isInteger(a.size)||a.size<=0||a.size>20971520)throw Error('云端音频索引无效，已停止。');const old=descriptors.get(a.path);if(old&&(old.size!==a.size||old.mime!==a.mime||old.sha!==a.sha))throw Error('同一音频的索引信息不一致，已停止。');descriptors.set(a.path,a);};
  const load=async a=>{
   validate(a);if(local.has(a.path)){const blob=local.get(a.path);if(blob.size!==a.size)throw Error('本机音频大小与云端索引不一致。');return blob;}
   if(recent.has(a.path)){const blob=recent.get(a.path);remember(a.path,blob);return blob;}
-  if(!pending.has(a.path)){const task=tail.then(async()=>{
+  if(!pending.has(a.path)){const task=gate(a.size,async()=>{
    // Yield between files so mobile input and status updates can paint.
    if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
    const cached=await stage.get(a.path);let blob;
    if(cached&&cached.blob instanceof Blob&&cached.sha===a.sha&&cached.mime===a.mime&&cached.size===a.size&&cached.blob.size===a.size&&await cloudHash(cached.blob)===a.sha){blob=cached.blob;stats.resumed++;}
-   else{const downloaded=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(!(downloaded instanceof Blob)||downloaded.size!==a.size||await cloudHash(downloaded)!==a.sha)throw Error('下载的音频校验失败，未覆盖本机资料。');blob=downloaded.type===a.mime?downloaded:downloaded.slice(0,downloaded.size,a.mime);stats.network++;if(!await stage.put(a,blob))stats.cacheLimited=true;}
+   else{const downloaded=await api('/storage/v1/object/authenticated/lao-dictionary-audio/'+a.path,{blobResponse:true});if(!(downloaded instanceof Blob)||downloaded.size!==a.size||await cloudHash(downloaded)!==a.sha)throw Error('下载的音频校验失败，未覆盖本机资料。');blob=downloaded.type===a.mime?downloaded:downloaded.slice(0,downloaded.size,a.mime);stats.network++;if(!await commit(()=>stage.put(a,blob)))stats.cacheLimited=true;}
    used.add(a.path);remember(a.path,blob);report(a.path);return blob;
-  });pending.set(a.path,task);tail=task.then(()=>undefined,()=>undefined);}
+  });pending.set(a.path,task);}
   const task=pending.get(a.path);try{return await task;}finally{if(pending.get(a.path)===task)pending.delete(a.path);}
  };
- session={uid,local,stats,load,validate,
+ session={uid,local,stats,load,validate,commit,
   async prefetch(list,status,label){
    // Validate the whole index first, but do not fetch the entire library into RAM.
    const waiting=new Set();for(const a of list){validate(a);if(!local.has(a.path))waiting.add(a.path);}
@@ -1420,7 +1434,7 @@ function cloudAudioSession(uid,api,assets){
    report=path=>{if(waiting.delete(path)){done++;show();}};show();
   },
   get retainedBytes(){return recentBytes;},
-  async release(){await tail;await stage.clear(used);used.clear();recent.clear();recentBytes=0;pending.clear();local.clear();descriptors.clear();report=()=>{};cloudAudioSessions.delete(api);}
+  async release(success=true){await Promise.allSettled([...pending.values()]);await saveTail;if(success)await stage.clear(used);used.clear();recent.clear();recentBytes=0;pending.clear();local.clear();descriptors.clear();report=()=>{};cloudAudioSessions.delete(api);}
 
  };
  cloudAudioSessions.set(api,session);return session;
@@ -1430,8 +1444,8 @@ function cloudAudioSession(uid,api,assets){
 async function cloudReadDefaultBlob(key){const box={};await withDefaultAudioStore('readonly',store=>{const r=store.get(key);r.onsuccess=()=>box.blob=r.result;});return box.blob||null;}
 async function cloudSaveDefaultAudio(rows,expected,load,status){
  let done=0;
- for(const row of rows){
-  status('正在逐条保存本机默认录音',{done,total:rows.length});
+ await cloudTransferPool(rows,async row=>{
+  status('正在接收并保存默认录音',{done,total:rows.length});
   const current=await cloudReadDefaultBlob(row.key),sha=current?await cloudHash(current):null;
   if(sha!==row.audio.sha){
    if(sha!==(expected.get(row.key)||null))throw Error('另一个页面更新了默认音频，已保留该页面的录音，请重新同步。');
@@ -1442,7 +1456,7 @@ async function cloudSaveDefaultAudio(rows,expected,load,status){
   }
   status('已保存并校验本机默认录音',{done:++done,total:rows.length});
   if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
- }
+ },row=>(row.audio?.size||0)*3);
 }
 /* Server revisions decide what changed. No client-clock watermark or blind push. */
 const cloudReadCapabilities=new WeakMap();
@@ -10371,17 +10385,17 @@ async function qaAck(record,row){
 async function qaRemove(token){const db=await openDB(),t=db.transaction('cloud_meta','readwrite'),done=transactionDone(t),s=t.objectStore('cloud_meta'),q=s.get(qaQueueKey);q.onsuccess=()=>s.put((q.result||[]).filter(j=>j.token!==token),qaQueueKey);await done;}
 async function qaDependencies(uid,api,record,all){
  if(record.kind!=='learningMaterials')return;
- const row=record.row,meta=await qaReadMeta();
+ const row=record.row,meta=await qaReadMeta({includeOutbox:false});
  // Never publish a card pointing at an absent historical audio asset or word.
  for(const id of new Set((row.audioSources||[]).map(a=>a.assetId).filter(Boolean))){if(all.some(r=>r.kind==='learningAudio'&&r.id===id)||meta.learningCheckpoint['learningAudio:'+id])continue;if(!await qaReadRemote(uid,api,{table:'lao_learning_records',kind:'learningAudio',id}))throw Object.assign(Error('此词卡还有未同步的旧录音，请先做一次完整同步'),{blocked:true});}
  for(const id of row.linkedWordSyncIds||[]){if(meta.checkpoint['entry:'+id]?.value?.deleted===false)continue;if(!await qaReadRemote(uid,api,{table:'lao_dictionary_records',kind:'entry',id}))throw Object.assign(Error('关联词条尚未上云，请先做一次完整同步'),{blocked:true});}
 }
 async function qaRunJob(job,api,options={}){
- if(!(await qaReadMeta())[qaQueueKey].some(j=>j.token===job.token))return;
+ if(!options.knownPending&&!(await qaReadMeta())[qaQueueKey].some(j=>j.token===job.token))return;
  const records=await Promise.all(job.records.map(r=>qaPrepare(job.uid,r)));
  records.sort((a,b)=>(a.kind==='learningMaterials')-(b.kind==='learningMaterials'));
  // Preflight EVERY record before uploading any blob; stale cards are never silently pushed.
- const plan=[];for(const record of records){await qaDependencies(job.uid,api,record,records);const meta=await qaReadMeta(),remote=await qaReadRemote(job.uid,api,record),desired={deleted:false,payload:record.payload},current=await qaCurrent(record);if(!current||!cloudSame((await qaPrepare(job.uid,current)).payload,record.payload)){
+ const plan=[];for(const record of records){await qaDependencies(job.uid,api,record,records);const meta=await qaReadMeta({includeOutbox:false}),remote=await qaReadRemote(job.uid,api,record),desired={deleted:false,payload:record.payload},current=await qaCurrent(record);if(!current||!cloudSame((await qaPrepare(job.uid,current)).payload,record.payload)){
    // Full sync or another edit may have made this queued version obsolete. Never replay it.
    if(current&&cloudSame(qaRemoteValue(record,remote),{deleted:false,payload:(await qaPrepare(job.uid,current)).payload})){await qaRemove(job.token);return;}
    throw Object.assign(Error('词卡在保存后又有修改，请完整同步核对；旧版本不会自动回写'),{blocked:true});
@@ -10411,11 +10425,16 @@ async function qaFlushPending(uid,api,status){
  if(typeof indexedDB!=='undefined')await qaRecoverBulkClips(uid,status);
  const jobs=(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid);let done=0,blocked=0;
  if(!jobs.length){status('没有待上传的本机更新。接收其他设备的新资料请用“接收更新”；处理冲突请用“完整核对”。');return {done,blocked};}
- for(const job of jobs){
+ const run=async job=>{
   if(uid!==cloudWorkspace)throw Error('账号已切换，同步停止');
-  status('正在上传本机更新',{done,total:jobs.length});
-  try{await qaRunJob(job,api,{manual:true});done++;}catch(e){if(!e.blocked)throw e;await qaBlock(job.token,e.message);blocked++;}
- }
+  status('正在批量上传本机更新',{done:done+blocked,total:jobs.length});
+  try{await qaRunJob(job,api,{manual:true,knownPending:true});done++;}catch(e){if(!e.blocked)throw e;await qaBlock(job.token,e.message);blocked++;}
+  status('正在批量上传本机更新',{done:done+blocked,total:jobs.length});
+ };
+ // Only independent default-audio jobs run together. Card+reference dependencies
+ // and review history retain their original ordering and conflict checks.
+ let audio=[];const flush=async()=>{if(typeof cloudTransferPool==='function')await cloudTransferPool(audio,run,j=>j.records.reduce((n,r)=>n+(r.blob?.size||0),0));else for(const j of audio)await run(j);audio=[];};
+ for(const job of jobs){if(job.records.length===1&&job.records[0].kind==='default_audio')audio.push(job);else{await flush();await run(job);}}await flush();
  const left=(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid).length;
  status('本机更新上传完成：'+done+' 项。'+(left?'仍有 '+left+' 项需要完整核对，尚未上传，原资料保留。':'没有待传更新。')+' 本入口不接收其他设备资料。',{done:jobs.length,total:jobs.length});return {done,blocked};
 }
@@ -10461,11 +10480,13 @@ async function qiSaveLearningAudio(uid,row,session,status){
  const a=row.payload.audio;session.validate(a);const id=row.record_id,old=(await qiReadRows('learningAudio',[id])).get(id);
  if(old?.blob instanceof Blob&&old.blob.size===a.size&&await cloudHash(old.blob)===a.sha){const {audio,...metadata}=row.payload;learningValidateRecord('learningAudio',{...metadata,blob:old.blob});if(cloudSame({...old,blob:null},{...metadata,blob:null}))return;}
  const blob=old?.blob instanceof Blob&&old.blob.size===a.size&&await cloudHash(old.blob)===a.sha?old.blob:await session.load(a),{audio,...metadata}=row.payload,value={...metadata,blob};learningValidateRecord('learningAudio',value);
+ await session.commit(async()=>{
  if(uid!==cloudWorkspace)throw Error('账号已切换');const latest=(await qiReadRows('learningAudio',[id])).get(id);
  if(!cloudSame(old,latest)||(old?.blob instanceof Blob?(await cloudHash(old.blob))!==(latest?.blob instanceof Blob?await cloudHash(latest.blob):null):latest?.blob instanceof Blob))throw Error('接收期间参考音又有修改，已保留本机录音，请重试');
  status('正在保存并核对参考音…');const d=await openDB();await new Promise((resolve,reject)=>{const t=d.transaction('learningAudio','readwrite'),store=t.objectStore('learningAudio'),q=store.get(id);let conflict=false;t.oncomplete=resolve;t.onabort=()=>reject(Error(conflict?'保存期间参考音又有修改，请重试':'参考音保存失败，请重试'));t.onerror=()=>{};q.onsuccess=()=>{if(!cloudSame(q.result,latest)){conflict=true;t.abort();return;}store.put(value);};});
  const saved=(await qiReadRows('learningAudio',[id])).get(id);if(!(saved?.blob instanceof Blob)||saved.blob.size!==a.size||await cloudHash(saved.blob)!==a.sha)throw Error('参考音保存回读校验失败，尚未确认同步完成');
  if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
+ });
 }
 async function qiReceive(uid,api,status){
  if(uid!==cloudWorkspace)throw Error('账号已切换');
@@ -10476,7 +10497,7 @@ async function qiReceive(uid,api,status){
  const dict=[...dictionary].filter(([key,row])=>meta.checkpoint[key]?.revision!==row.revision),learn=[...learning].filter(([key,row])=>meta.learningServerRevisions[key]!==row.revision);
  if(!dict.length&&!learn.length){status('云端没有新版本，无需下载、检查本机录音或合并资料。');return {received:0};}
  if(!confirm('只接收云端更新：词典 '+dict.length+' 项，学习资料 '+learn.length+' 项。\n云端的新版本会更新本机对应资料；本机独有资料保留。本次不上传。继续吗？')){status('已取消接收，本机资料保留。');return {cancelled:true};}
- const session=cloudAudioSession(uid,api,new Map()),entries=await qiFindEntries(new Set(dict.filter(([key])=>key.startsWith('entry:')&&!alphabetConfigKey(key)).map(([key])=>key.slice(6)))),before={};
+ const session=cloudAudioSession(uid,api,new Map());let received=false;try{const entries=await qiFindEntries(new Set(dict.filter(([key])=>key.startsWith('entry:')&&!alphabetConfigKey(key)).map(([key])=>key.slice(6)))),before={};
  for(const kind of learningStores)before[kind]=kind==='learningAudio'?new Map():await qiReadRows(kind,learn.filter(([key])=>key.startsWith(kind+':')).map(([,row])=>row.record_id));
  const entryChanges=[],learningChanges=[],defaults=[],expected=new Map(),alphabetBefore=await readAlphabetOverrides(),alphabetAfter={...alphabetBefore};let done=0;
  const newDict={...meta.checkpoint},newLearn={...meta.learningCheckpoint},newRevs={...meta.learningServerRevisions};
@@ -10491,7 +10512,10 @@ async function qiReceive(uid,api,status){
  // A changed card can reference an asset whose server revision did not change.
  // Read only those dependencies, fetching an absent local asset when needed.
  const needed=new Map(learn);for(const [,row]of learn)if(row.record_kind==='learningMaterials')for(const a of row.payload.audioSources||[]){if(!a.assetId||before.learningAudio.has(a.assetId)||needed.has('learningAudio:'+a.assetId))continue;const found=await qiReadRows('learningAudio',[a.assetId]);if(found.has(a.assetId))continue;const remote=learning.get('learningAudio:'+a.assetId);if(!remote)throw Error('云端词卡关联的录音不存在，请完整核对');needed.set('learningAudio:'+a.assetId,remote);}
- for(const [key,row]of needed){if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(row.record_kind,row.payload,uid))continue;status('正在接收变化的学习资料',{done:done++,total:dict.length+needed.size});let value={...row.payload};if(row.record_kind==='learningAudio'){await qiSaveLearningAudio(uid,row,session,status);}else{learningValidateRecord(row.record_kind,value);learningChanges.push({kind:row.record_kind,id:row.record_id,before:before[row.record_kind].get(row.record_id),value});}newLearn[key]={deleted:false,payload:row.payload};newRevs[key]=row.revision;}
+ const receiveLearning=async([key,row])=>{if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(row.record_kind,row.payload,uid))return;let value={...row.payload};if(row.record_kind==='learningAudio'){await qiSaveLearningAudio(uid,row,session,status);}else{learningValidateRecord(row.record_kind,value);learningChanges.push({kind:row.record_kind,id:row.record_id,before:before[row.record_kind].get(row.record_id),value});}newLearn[key]={deleted:false,payload:row.payload};newRevs[key]=row.revision;status('已接收并保存变化的学习资料',{done:++done,total:dict.length+needed.size});};
+ const audioRows=[...needed].filter(([,row])=>row.record_kind==='learningAudio');
+ await cloudTransferPool(audioRows,receiveLearning,([,row])=>(row.payload.audio?.size||0)*3);
+ for(const pair of needed)if(pair[1].record_kind!=='learningAudio')await receiveLearning(pair);
  await cloudSaveDefaultAudio(defaults,expected,a=>session.load(a),status);
  if(uid!==cloudWorkspace)throw Error('账号已切换，接收停止');status('正在保存变化的资料与接收位置…');
  const d=await openDB();await new Promise((resolve,reject)=>{const t=d.transaction(['entries',...learningStores,'cloud_meta'],'readwrite'),m=t.objectStore('cloud_meta');let failure=null,left=4+entryChanges.length+learningChanges.length;
@@ -10500,7 +10524,8 @@ async function qiReceive(uid,api,status){
   for(const [key,prior]of [['checkpoint',meta.checkpoint],['learningCheckpoint',meta.learningCheckpoint],['learningServerRevisions',meta.learningServerRevisions],['alphabetCells',alphabetBefore]]){const q=m.get(key);q.onsuccess=()=>{if(!cloudSame(q.result||{},prior))abort('同步期间其他页面修改了接收位置，请重试');else finish();};}
   for(const change of entryChanges){if(!change.before){finish();continue;}const q=t.objectStore('entries').get(change.before.id);q.onsuccess=()=>{if(!cloudSame(q.result,change.before))abort('下载期间词条又有修改，已保留本机修改，请完整核对');else finish();};}
   for(const change of learningChanges){const q=t.objectStore(change.kind).get(change.id);q.onsuccess=()=>{if(!cloudSame(q.result,change.before))abort('下载期间学习资料又有修改，已保留本机修改，请完整核对');else finish();};}
- });await session.release();status('云端更新已接收：'+(dict.length+needed.size)+' 项。只读取变化资料，没有上传或扫描本机录音库。');return {received:dict.length+needed.size};
+ });received=true;status('云端更新已接收：'+(dict.length+needed.size)+' 项。只读取变化资料，没有上传或扫描本机录音库。');return {received:dict.length+needed.size};
+ }finally{await session.release(received);}
 }
 </script>
 <script data-practice-auto-sync>

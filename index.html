@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="1bbcb7638f23d90a">
+  <meta name="lao-app-build" content="9417d6e5554427b4">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -11445,7 +11445,12 @@ const lpFreeHost=$('#rpLegacy'),lpFreeSettings=lpFreeHost?.querySelector('.study
  function shown(kind){const host=document.querySelector(kind==='daily'?'#rpDaily':'#rpLegacy');return (!host||!host.hidden)&&(typeof activeView==='undefined'||activeView==='practice');}
  function update(){frame=0;
   if(!media.matches){for(const [card,state]of [...states])restore(card,state);resumeButton?.remove();resumeButton=null;overview=false;return;}
-  for(const [card,state]of [...states])if(!card.isConnected){state.shell.classList.remove('mp-shell');state.bar.remove();states.delete(card);}else if(state.kind!=='chapter'&&!shown(state.kind))restore(card,state);
+  for(const [card,state]of [...states])if(!card.isConnected){
+   // Detail navigation parks the original parent nodes off-document. Keep its
+   // existing scroll/dock pair: rewrapping on return creates nested viewports.
+   const parked=typeof letterDetailParents!=='undefined'&&letterDetailParents.some(parent=>parent.nodes?.some(node=>node===card||node.contains?.(card)));
+   if(!parked)restore(card,state);
+  }else if(state.kind!=='chapter'&&!shown(state.kind))restore(card,state);
   if(!overview){const daily=document.querySelector('#rpDaily #rrCard');if(daily&&shown('daily'))wrap(daily,'daily');
    const free=document.querySelector('#rpLegacy #practiceCard');if(free&&shown('free')&&(typeof practiceId==='undefined'||!!practiceId))wrap(free,'free');}
   const chapter=document.querySelector('#learningDialog .course-recall [data-recall-card]');if(chapter)wrap(chapter,'chapter');

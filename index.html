@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b49c171f40cad6dd">
+  <meta name="lao-app-build" content="da56145be1908794">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1371,7 +1371,7 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
 const cloudAudioSessions=new WeakMap();
 function cloudAudioPhoneMode(){return typeof navigator!=='undefined'&&/iPhone|iPod/.test(navigator.userAgent||'');}
 // Bound both simultaneous work and bytes; a single large file runs alone.
-function cloudTransferLimits(){const ua=typeof navigator==='undefined'?'':navigator.userAgent||'';return /iPhone|iPod/.test(ua)?{count:2,bytes:4194304}:/Android|iPad/.test(ua)?{count:2,bytes:8388608}:{count:3,bytes:16777216};}
+function cloudTransferLimits(fast=false){const ua=typeof navigator==='undefined'?'':navigator.userAgent||'';return /iPhone|iPod/.test(ua)?{count:fast?4:2,bytes:4194304}:/Android|iPad/.test(ua)?{count:fast?4:2,bytes:8388608}:{count:fast?6:3,bytes:16777216};}
 async function cloudTransferPool(items,work,weight=()=>0,limits=cloudTransferLimits()){
  let next=0,active=0,bytes=0,error=null;const waiting=[];
  const wake=()=>{for(const resolve of waiting.splice(0))resolve();};
@@ -1406,7 +1406,7 @@ function cloudAudioStage(uid){
 function cloudAudioSession(uid,api,assets){
  let session=cloudAudioSessions.get(api);
  if(session){if(session.uid!==uid)throw Error('音频同步账号不一致。');for(const [path,blob] of assets)session.local.set(path,blob);return session;}
- const phoneMode=cloudAudioPhoneMode(),local=new Map(assets),recent=new Map(),memoryLimit=phoneMode?0:8388608;let recentBytes=0,report=()=>{};const limits=cloudTransferLimits(),waiters=[];let active=0,inflightBytes=0,saveTail=Promise.resolve();
+ const phoneMode=cloudAudioPhoneMode(),local=new Map(assets),recent=new Map(),memoryLimit=phoneMode?0:8388608;let recentBytes=0,report=()=>{};const limits=cloudTransferLimits(true),waiters=[];let active=0,inflightBytes=0,saveTail=Promise.resolve();
  const commit=work=>{const task=saveTail.then(work);saveTail=task.then(()=>undefined,()=>undefined);return task;};
  const gate=async(size,work)=>{while(active&&(active>=limits.count||inflightBytes+size>limits.bytes))await new Promise(resolve=>waiters.push(resolve));active++;inflightBytes+=size;try{return await work();}finally{active--;inflightBytes-=size;for(const wake of waiters.splice(0))wake();}};
  const descriptors=new Map(),pending=new Map(),used=new Set(),stage=phoneMode?{get:async()=>null,put:async()=>true,clear:async()=>{}}:cloudAudioStage(uid),stats={network:0,resumed:0,cacheLimited:false};
@@ -1443,21 +1443,31 @@ function cloudAudioSession(uid,api,assets){
 // Read one cache entry; never clone the entire audio cache again during commit.
 async function cloudReadDefaultBlob(key){const box={};await withDefaultAudioStore('readonly',store=>{const r=store.get(key);r.onsuccess=()=>box.blob=r.result;});return box.blob||null;}
 async function cloudSaveDefaultAudio(rows,expected,load,status){
- let done=0;
- await cloudTransferPool(rows,async row=>{
-  status('正在接收并保存默认录音',{done,total:rows.length});
-  const current=await cloudReadDefaultBlob(row.key),sha=current?await cloudHash(current):null;
-  if(sha!==row.audio.sha){
+ let done=0,next=0;const limits=cloudTransferLimits(true),batchBytes=Math.floor(limits.bytes/3);
+ // Keep only one small window of downloaded Blobs. Oversized recordings run alone.
+ while(next<rows.length){
+  const batch=[];let bytes=0;
+  while(next<rows.length&&batch.length<8){const row=rows[next],size=row.audio.size;if(batch.length&&bytes+size>batchBytes)break;batch.push(row);bytes+=size;next++;}
+  const changes=[];
+  status('正在批量接收默认录音 · 最多 '+limits.count+' 路并行',{done,total:rows.length});
+  await cloudTransferPool(batch,async row=>{
+   const current=await cloudReadDefaultBlob(row.key),sha=current?await cloudHash(current):null;
+   if(sha===row.audio.sha)return;
    if(sha!==(expected.get(row.key)||null))throw Error('另一个页面更新了默认音频，已保留该页面的录音，请重新同步。');
-   const blob=await load(row.audio),latest=await cloudReadDefaultBlob(row.key);
-   if((latest?await cloudHash(latest):null)!==sha)throw Error('下载期间另一个页面更新了默认音频，已保留原录音，请重新同步。');
-   await restoreDefaultAudio([{key:row.key,blob}]);
-   const saved=await cloudReadDefaultBlob(row.key);if(!saved||saved.size!==row.audio.size||await cloudHash(saved)!==row.audio.sha)throw Error('录音保存回读校验未通过，尚未标记同步完成，请重试。');
-  }
-  status('已保存并校验本机默认录音',{done:++done,total:rows.length});
+   const blob=await load(row.audio);
+   if(!(blob instanceof Blob)||blob.size!==row.audio.size)throw Error('下载的默认录音校验失败，未覆盖本机资料。');
+   changes.push({key:row.key,blob,sha,audio:row.audio});
+  },row=>row.audio.size*3,limits);
+  // Recheck local edits immediately before the single batch write.
+  for(const row of changes){const latest=await cloudReadDefaultBlob(row.key);if((latest?await cloudHash(latest):null)!==row.sha)throw Error('下载期间另一个页面更新了默认音频，已保留原录音，请重新同步。');}
+  if(changes.length)await restoreDefaultAudio(changes.map(({key,blob})=>({key,blob})));
+  for(const row of changes){const saved=await cloudReadDefaultBlob(row.key);if(!saved||saved.size!==row.audio.size||await cloudHash(saved)!==row.audio.sha)throw Error('录音保存回读校验未通过，尚未标记同步完成，请重试。');}
+  done+=batch.length;status('已保存并校验本机默认录音 · 小批量接收',{done,total:rows.length});
+  changes.length=0;
   if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,0));
- },row=>(row.audio?.size||0)*3);
+ }
 }
+
 /* Server revisions decide what changed. No client-clock watermark or blind push. */
 const cloudReadCapabilities=new WeakMap();
 // A second, network-level fence: download mode cannot submit records or audio,

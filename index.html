@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="05f99276a3593ddb">
+  <meta name="lao-app-build" content="ebb3087d8590fbd2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8601,6 +8601,7 @@ function rrSession(queue,options={}){
   const prompt=recognition?'请回忆发音和含义，点击卡片揭晓':'先独立回忆，点击揭晓答案';
   render('每日回忆 · '+(index+1)+' / '+queue.length,'<p class="rp-card-direction">'+h(options.listening?'听力':rrDirections[row.direction])+' · '+(row.fresh?'新学':'到期复习')+'</p><div id="rrCard" class="rp-flashcard"><p class="rp-card-prompt">'+prompt+'</p><div class="rp-card-word" '+(recognition?'lang="lo"':'')+'>'+h(recognition?item.word:item.meaning)+'</div>'+(row.direction==='meaningToWord'?'<label>先完整写出答案（也可在纸上写）<input id="rrWritten" lang="lo" autocomplete="off" placeholder="在这里默写"></label>':'')+'<div id="rrAnswer" class="rp-card-answer" hidden><div class="rp-card-links"><button id="rrPlay">▶ 播放</button><button id="rrDetail">详情 / 参考发音</button></div><h3 '+(!recognition?'lang="lo"':'')+'>'+h(recognition?item.meaning:item.word)+'</h3>'+(recognition&&item.ipa?'<p>'+h(item.ipa)+'</p>':'')+'<p id="rrWritingResult"></p></div><div id="rrExamples" class="rp-card-examples"></div><button id="rrReveal" class="rp-card-reveal">点击揭晓 · 听发音</button><div class="rr-actions"><button id="rrRed" disabled>陌生</button><button id="rrYellow" disabled>模糊</button><button id="rrGreen" disabled>熟悉</button></div><div class="rp-card-navigation"><button id="rrPrevious">上一题</button><button id="rrNext" class="rp-card-next">下一题</button></div></div><details class="rr-session-more"><summary>本次学习与词条操作</summary><button id="rrPause" class="rr-pause">移出当前方向复习</button><p class="tag-hint">移出后不再安排这个词的当前方向，词句和历史仍保留，可从目标词库恢复。</p></details>');
  }
+ if(typeof sfWarm==='function'){const next=queue[index+1]?.item;sfWarm(item._practiceMaterialId||item.syncId&&'word:'+item.syncId);if(next)sfWarm(next._practiceMaterialId||next.syncId&&'word:'+next.syncId);}
  const current=()=>generation===drawGeneration&&index<queue.length&&queue[index]===row&&(options.host?(activeView==='practice'&&options.isCurrent?.()!==false):learningDialog.open)&&$('#rrPlay')?.isConnected;
  if(options.listening&&options.host){$('#rrCard').classList.add('rr-listening');$('#rrCard').querySelector('.rp-card-word').textContent='听音辨词';$('#rrCard').querySelector('.rp-card-prompt').textContent='先点击播放，只凭听力判断，再揭晓答案';$('#rrExamples').hidden=true;const listen=document.createElement('button');listen.type='button';listen.id='rrListen';listen.textContent='▶ 听单词';$('#rrAnswer').before(listen);$('#rrReveal').textContent='揭晓老挝语和中文';$('#rrAnswer').querySelector('h3').textContent=item.word+' · '+(item.meaning||'');}const play=()=>{const request=++audioRequest;stopPracticeAudio();return rrPlay(item,()=>request===audioRequest&&current()).catch(e=>{if(request===audioRequest&&current())status().textContent=e.message;});};$('#rrPlay').onclick=play;if(options.listening&&options.host)$('#rrListen').onclick=play;
  const reveal=(withAudio=true)=>{if(revealed)return;revealed=true;state.revealed=true;$('#rrAnswer').hidden=false;if(options.listening&&options.host){$('#rrExamples').hidden=false;$('#rrCard').querySelector('.rp-card-word').textContent=item.word;$('#rrAnswer').querySelector('h3').textContent=item.meaning||'';listeningContext?.reveal();}$('#rrReveal').hidden=true;for(const key of ['rrRed','rrYellow','rrGreen'])$('#'+key).disabled=state.paused;if(options.host)$('#rrCard').classList.add('rp-card-revealed');const input=$('#rrWritten');if(input){state.written=input.value;input.disabled=true;const value=input.value.normalize('NFC').trim();if(value){const matches=value===item.word.normalize('NFC').trim();$('#rrWritingResult').textContent=matches?'书写与保存答案一致（不代表长期掌握）':'书写与答案不同：请按实际情况选陌生或模糊';if(!matches)$('#rrGreen').disabled=true;}}if(withAudio&&(!options.host||typeof appPreference!=='function'||appPreference('revealAudio')))void play();};$('#rrReveal').onclick=()=>reveal();
@@ -10613,7 +10614,8 @@ function dfInvalidate(notify=false,changes=null){
  dfRevision++;dfData=null;dfLoading=null;dfViews.clear();dfIndexes=new WeakMap();
  if(!progressOnly&&typeof lnContentChanged==='function')lnContentChanged(changes);
  if(notify){dfStamp=Date.now()+':'+crypto.randomUUID();try{localStorage.setItem(dfStampKey,dfStamp);}catch(_){}dfChannel?.postMessage(dfStamp);}
- if(!progressOnly&&typeof dgInvalidate==='function')dgInvalidate(oldStamp,notify?changes:null);
+ if(typeof dgInvalidate==='function')dgInvalidate(oldStamp,notify?changes:null);
+ if(progressOnly&&typeof sfPreserveProgressReads==='function')sfPreserveProgressReads(oldStamp,dfStamp);
  if(progressOnly)return;
  clearTimeout(dfWarmTimer);dfWarmTimer=setTimeout(()=>{if(document.visibilityState!=='hidden')(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});},1200);
 }
@@ -11074,16 +11076,25 @@ document.addEventListener('pointerover',event=>{if(event.target.closest?.('#view
 </style>
 <script data-interaction-fast>
 /* Targeted local audio reads; no generation, network request or user-record writes. */
-const sfReads=new Map();
+const sfReads=new Map(),sfReadyReads=new Set();
+let sfSpeechKeys=null;
+function sfPreserveProgressReads(oldStamp,newStamp){
+ const oldPart='|'+oldStamp+'|',newPart='|'+newStamp+'|';
+ // Move only completed reads: retagging an unresolved promise could await itself.
+ for(const key of [...sfReadyReads])if(key.includes(oldPart)&&sfReads.has(key)){const next=key.replace(oldPart,newPart),value=sfReads.get(key);sfReads.delete(key);sfReadyReads.delete(key);sfReads.set(next,value);sfReadyReads.add(next);}
+}
+
 const sfPreviousCachedSpeech=learningCachedSpeech;
 learningCachedSpeech=async function(text){
  if(typeof withDefaultAudioStore!=='function')return sfPreviousCachedSpeech(text);
+ const owner=workspaceName('saved-default-key-index'),endpoint=ttsSettings.endpoint||'';
  const out=await withDefaultAudioStore('readonly',store=>{
-  const result={blob:null},exact=store.get(JSON.stringify([ttsSettings.endpoint||'',text]));
+  const result={blob:null},exact=store.get(JSON.stringify([endpoint,text]));
+  const choose=keys=>{const candidates=keys.filter(key=>{try{return JSON.parse(key)[1]===text;}catch(_){return false;}});return (!endpoint&&candidates.find(k=>{try{return JSON.parse(k)[0]==='imported-default';}catch(_){return false;}}))||candidates[0];};
+  const scan=()=>{const keys=store.getAllKeys();keys.onsuccess=()=>{sfSpeechKeys={owner,at:Date.now(),keys:keys.result};const key=choose(keys.result);if(key!==undefined){const q=store.get(key);q.onsuccess=()=>result.blob=q.result||null;}};};
   exact.onsuccess=()=>{if(exact.result){result.blob=exact.result;return;}
-   const keys=store.getAllKeys();keys.onsuccess=()=>{const candidates=keys.result.filter(key=>{try{return JSON.parse(key)[1]===text;}catch(_){return false;}}),key=(!ttsSettings.endpoint&&candidates.find(k=>{try{return JSON.parse(k)[0]==='imported-default';}catch(_){return false;}}))||candidates[0];
-    if(key!==undefined){const q=store.get(key);q.onsuccess=()=>result.blob=q.result||null;}
-   };
+   const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.keys):undefined;
+   if(key===undefined){scan();return;}const q=store.get(key);q.onsuccess=()=>{if(q.result)result.blob=q.result;else{sfSpeechKeys=null;scan();}};
   };return result;
  });return out.blob;
 };
@@ -11106,8 +11117,8 @@ async function sfRead(id){
   const assets=await dgGetRows('learningAudio',materials.flatMap(r=>(r.audioSources||[]).map(a=>a.assetId)));
   if(stamp!==dfStamp){sfReads.delete(key);return sfRead(id);}
   return {m,w,words:w?[w]:[],snap:{learningMaterials:materials,learningPlacements:[],learningAudio:assets}};
- })();sfReads.set(key,task);while(sfReads.size>4)sfReads.delete(sfReads.keys().next().value);
- try{return await task;}catch(e){sfReads.delete(key);throw e;}
+ })();sfReads.set(key,task);while(sfReads.size>4){const oldest=sfReads.keys().next().value;sfReads.delete(oldest);sfReadyReads.delete(oldest);}
+ try{const value=await task;if(sfReads.get(key)===task)sfReadyReads.add(key);return value;}catch(e){sfReads.delete(key);sfReadyReads.delete(key);throw e;}
 }
 function sfWarm(id){if(id&&typeof requestIdleCallback==='function')requestIdleCallback(()=>sfRead(id).catch(()=>{}),{timeout:1200});else if(id)setTimeout(()=>sfRead(id).catch(()=>{}),100);}
 // Both close affordances inside nested details return one level, never discard the test.
@@ -11636,5 +11647,25 @@ async function laStartAuto(play,isCurrent){
 })();
 
 </script>
+<style data-smooth-mobile>
+/* Avoid animating whole mobile documents and repeated recall rows. Keep desktop layout. */
+@media (max-width:760px), (hover:none) and (pointer:coarse){
+ dialog[open],.panel:not(.hidden),.rr-item,.rr-managed-item,
+ #practicePanel .practice-card,#practicePanel .rp-card,
+ #learningDialog .practice-card,#learningDialog .course-recall{
+  animation:none!important;
+ }
+ dialog::backdrop{animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+ #practicePanel button,#learningDialog button,#learningPanel button{
+  transition:background-color .1s ease-out,border-color .1s ease-out!important;
+ }
+ #practicePanel .practice-card,#learningDialog .practice-card{
+  scroll-behavior:auto;
+ }
+}
+@media(prefers-reduced-motion:reduce){
+ #practicePanel *,#learningDialog *,#learningPanel *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
 </body>
 </html>

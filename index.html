@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="03b9c5df74138bd0">
+  <meta name="lao-app-build" content="9d8ec59cf43f831c">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -11755,6 +11755,8 @@ function clGlossWrites(rows,snap){
  return {...rows,learningMaterials:[...writes.values()]};
 }
 function clCompositionHtml(text,snap,entries){
+ const reviewed=typeof clReviewedCompositions==='undefined'?null:clReviewedCompositions.get(saTextKey(text));
+ if(reviewed){const h=learningEsc;return '<section class="cl-composition"><h4>组成词与表达</h4>'+reviewed.parts.map(([lao,meaning,role])=>'<p><span lang="lo">'+h(lao)+'</span> · '+h(meaning)+' <small>'+h(role)+'</small></p>').join('')+'<p><strong>'+h(reviewed.pattern)+'</strong></p><p>'+h(reviewed.explanation)+'</p>'+(reviewed.sources||[]).map(([label,url])=>'<p><a href="'+h(url)+'" target="_blank" rel="noopener noreferrer">'+h(label)+'</a></p>').join('')+'</section>';}
  const matches=entries.filter(w=>saTextKey(w.word)===saTextKey(text));if(matches.length!==1)return '';
  const word=matches[0],row=snap.learningMaterials.find(m=>m.id==='word:'+word.syncId&&!m.deleted),a=row?.sentenceAnalysis;if(!a||saTextKey(a.original)!==saTextKey(text))return '';
  const parts=saWords(a).filter(w=>saTextKey(w.lao)!==saTextKey(text));if(!parts.length)return '';const h=learningEsc;
@@ -11781,5 +11783,345 @@ async function clSaveWord(id){
 const clPreviousDetail=learningOpenDetail;
 learningOpenDetail=async function(id){await clPreviousDetail(id);if(learningDetail!==id)return;const {m}=await learningResolve(id);if(learningDetail!==id||!m.analysisOwner||m.analysisUnitType!=='word')return;const detail=learningDialog.querySelector('.ss-detail,.learn-detail');if(!detail||detail.querySelector('[data-cl-save-word]'))return;const button=document.createElement('button');button.type='button';button.dataset.clSaveWord='';button.textContent='保存为词典词卡';button.className='cl-save-word';button.onclick=()=>clSaveWord(id).catch(error=>alert(error.message));(detail.querySelector('.ss-main-actions')||detail).append(button);const resolved=await learningResolve(id);if(learningDetail!==id)return;const composition=clCompositionHtml(m.textLao,resolved.snap,resolved.words||[]);if(composition){const section=document.createElement('section');section.innerHTML=composition;(detail.querySelector('.ss-reading')||detail).append(section);}};
 </script>
+<script data-context-compositions>
+/* Reviewed modern component explanations; no historical etymology inference. */
+const clReviewedCompositions=new Map([
+  [
+    "ສ້າງບ້ານແປງເມືອງ",
+    {
+      "parts": [
+        [
+          "ສ້າງ",
+          "建造；建设",
+          "动词"
+        ],
+        [
+          "ບ້ານ",
+          "家；村庄",
+          "前一动词的对象"
+        ],
+        [
+          "ແປງ",
+          "修整；修建；改善",
+          "动词"
+        ],
+        [
+          "ເມືອງ",
+          "城镇；地方；邦国",
+          "后一动词的对象"
+        ]
+      ],
+      "pattern": "ສ້າງ＋ບ້ານ / ແປງ＋ເມືອງ",
+      "explanation": "字面组成是“建设家／村庄、修建或改善城镇”。两组动宾结构并列，合起来概括建设家园、建设地方或国家的事业。本句自然译为“建设家园”，不是只指盖一栋房屋；ເມືອງ在不同语境也可指县、城市或邦国，不能机械地一律译成行政区“县”。这里说明可见的构词关系，不宣称考证了这个表达的历史词源。ແປງ的修建、改善义参考老越词典：https://vtudien.com/lao-viet/dictionary/nghia-cua-tu-%E0%BB%81%E0%BA%9B%E0%BA%87",
+      "sources": []
+    }
+  ],
+  [
+    "ຫ້ອງນອນ",
+    {
+      "parts": [
+        [
+          "ຫ້ອງ",
+          "房间",
+          "中心名词"
+        ],
+        [
+          "ນອນ",
+          "睡；躺",
+          "说明用途"
+        ]
+      ],
+      "pattern": "ຫ້ອງ＋ນອນ",
+      "explanation": "按现代组成理解为“睡觉的房间”，中文自然称“卧室”。ນອນ在这里限定房间的用途；整组是名词，不是说房间在睡觉。",
+      "sources": []
+    }
+  ],
+  [
+    "ຫ້ອງນ້ຳ",
+    {
+      "parts": [
+        [
+          "ຫ້ອງ",
+          "房间",
+          "中心名词"
+        ],
+        [
+          "ນ້ຳ",
+          "水",
+          "组成成分"
+        ]
+      ],
+      "pattern": "ຫ້ອງ＋ນ້ຳ",
+      "explanation": "字面可帮助记为“房间＋水”，但整词已经有约定俗成的“卫生间／浴室”用法；在日常问路、找厕所时自然译为“洗手间”，不是任何有水的房间。具体指厕所还是浴室由场所决定。",
+      "sources": []
+    }
+  ],
+  [
+    "ຮ້ານອາຫານ",
+    {
+      "parts": [
+        [
+          "ຮ້ານ",
+          "店；店铺",
+          "中心名词"
+        ],
+        [
+          "ອາຫານ",
+          "食物；饭菜",
+          "限定经营内容"
+        ]
+      ],
+      "pattern": "ຮ້ານ＋ອາຫານ",
+      "explanation": "“店铺＋食物”组成售卖、供应饭菜的场所，自然译为“餐馆／饭店”。不是一句“店铺吃食物”的句子；后面的名词限定前面店铺的种类。",
+      "sources": []
+    }
+  ],
+  [
+    "ບ່ອນຈອດລົດ",
+    {
+      "parts": [
+        [
+          "ບ່ອນ",
+          "地方；位置",
+          "中心名词"
+        ],
+        [
+          "ຈອດ",
+          "停靠；停放",
+          "用途动作"
+        ],
+        [
+          "ລົດ",
+          "车辆；车",
+          "动作对象"
+        ]
+      ],
+      "pattern": "ບ່ອນ＋（ຈອດ＋ລົດ）",
+      "explanation": "先由ຈອດລົດ表示“停车”，再用ບ່ອນ把这个活动变成场所：“停车的地方”，自然译为“停车处／停车位／停车场”。具体规模不能只凭这一词判断。",
+      "sources": []
+    }
+  ],
+  [
+    "ລູກຊາຍ",
+    {
+      "parts": [
+        [
+          "ລູກ",
+          "孩子；子女",
+          "亲属称谓的中心词"
+        ],
+        [
+          "ຊາຍ",
+          "男性；男",
+          "性别限定"
+        ]
+      ],
+      "pattern": "ລູກ＋ຊາຍ",
+      "explanation": "“孩子＋男性”在亲属语境组成“儿子”。不是泛指所有男孩：普通“男孩”与“某人的儿子”要结合是否表示亲属关系来区分。",
+      "sources": []
+    }
+  ],
+  [
+    "ລູກສາວ",
+    {
+      "parts": [
+        [
+          "ລູກ",
+          "孩子；子女",
+          "亲属称谓的中心词"
+        ],
+        [
+          "ສາວ",
+          "女孩；年轻女子",
+          "性别限定"
+        ]
+      ],
+      "pattern": "ລູກ＋ສາວ",
+      "explanation": "“孩子＋女性”在亲属语境组成“女儿”。整词表达亲属关系；不能只把ສາວ的“年轻女子”义照搬，误译为一个陌生女孩。",
+      "sources": []
+    }
+  ],
+  [
+    "ເຮືອນຊານບ້ານຊ່ອງ",
+    {
+      "parts": [
+        [
+          "ເຮືອນ",
+          "房屋；住宅",
+          "居住建筑"
+        ],
+        [
+          "ຊານ",
+          "房屋的露台／廊台",
+          "与房屋相联的组成成分"
+        ],
+        [
+          "ບ້ານ",
+          "家；村庄",
+          "家居／聚落成分"
+        ],
+        [
+          "ຊ່ອງ",
+          "孔；开口",
+          "本表达中的配对成分，不单独按字面翻译"
+        ]
+      ],
+      "pattern": "ເຮືອນຊານ ＋ ບ້ານຊ່ອງ",
+      "explanation": "这是涉及居住的成组成对表达，整体指房屋家园、住家处所。论文《老挝语复合名词》收录整个表达为复合名词（PDF第242页，条目133）；不能把四项字面义相加译成“房屋、露台、村庄和洞”。组成义可帮助识别结构，但这里的自然中文应结合语境译为“家园／住家”。本说明不推断其历史词源。",
+      "sources": [
+        [
+          "复合名词研究，条目133",
+          "https://sure.su.ac.th/xmlui/bitstream/handle/123456789/26478/MA_%E0%B9%80%E0%B8%99%E0%B8%95%E0%B8%8D%E0%B8%B2_%E0%B8%9A%E0%B8%B8%E0%B8%8D%E0%B8%AD%E0%B9%88%E0%B8%AD%E0%B8%99.pdf?isAllowed=y&sequence=1#page=242"
+        ],
+        [
+          "廊台语境参考",
+          "https://thesaurus.la/entry/%E0%BA%AA%E0%BA%B5%E0%BA%81"
+        ],
+        [
+          "ຊ່ອງ义项",
+          "https://en.wiktionary.org/wiki/%E0%BA%8A%E0%BB%88%E0%BA%AD%E0%BA%87"
+        ]
+      ]
+    }
+  ]
+].map(([text,value])=>[saTextKey(text),value]));
+</script>
+<script data-context-lexicon>
+/* Reviewed senses, not an exhaustive dictionary. No spelling or tone conversion. */
+const clLexiconSources={
+ n6:'https://seasite.niu.edu/lao/LaoLanguage/spoken_lao/vocabularyList/vocabulary6to10.htm',
+ n16:'https://seasite.niu.edu/lao/LaoLanguage/spoken_lao/vocabularyList/vocabulary16to20.htm',
+ n21:'https://seasite.niu.edu/lao/LaoLanguage/spoken_lao/vocabularyList/vocabulary21to25.htm',
+ n26:'https://seasite.niu.edu/lao/LaoLanguage/spoken_lao/vocabularyList/vocabulary26to30.htm',
+ request:'https://wowspeaklao.com/vocabulary/to-request-in-lao-khoh/',
+ fsi:'https://fsi-languages.yojik.eu/languages/FSI/Lao/Basic/Volume%201/Lao-basic-new/Lao%20Basic%20Course%20-%20Volume%201.pdf',
+ everyday:'https://fsi-languages.yojik.eu/languages/FSI/Lao/Every-day-lao/Everyday%20Lao.pdf',
+ meet:'https://pure.mpg.de/rest/items/item_94911_4/component/file_217961/content',
+ opening:'https://en.wiktionary.org/wiki/%E0%BA%8A%E0%BB%88%E0%BA%AD%E0%BA%87'
+};
+const clLexiconRows=[
+ ['ຂໍ','请求；请求允许；讨要','动词','独立词','请求与交流','request','用于请求某物或许可；与询问信息的“问”区分。'],
+ ['ວ່າ','说；引出所说的内容','动词／引述标记','独立词','表达与交流','n6','在“说、认为、称为”等结构中须结合前面的动词理解，不机械地每次译成“说”。'],
+ ['ສວາຍ','中午；午间','时间词','独立词','时间','n6','如午饭的名称中指午间；具体时间范围随语境。'],
+ ['ແລງ','傍晚；晚间；下午较晚时段','时间词','独立词','时间','n6','不能机械地一律当作深夜。'],
+ ['ເນາະ','对吧；好吗（征求认同的句末语气）','语气词','独立词','语气与交流','n6','本条核实征求认同用法；具体语气仍结合整句。'],
+ ['ກົກ','排行最前的；头生的（亲属语境）','修饰词','独立词','家庭','n16','本条只核实出生排行义，不声称覆盖同形词的全部义项。'],
+ ['ຫຼ້າ','最小的；最后出生的（亲属语境）','修饰词','独立词','家庭','n16','描述兄弟姐妹或子女的出生排行。'],
+ ['ລູກຊາຍ','儿子','名词','组合词','家庭','n16','ລູກ（子女）＋ຊາຍ（男性）；表示亲属关系，不泛指所有男孩。'],
+ ['ລູກສາວ','女儿','名词','组合词','家庭','n16','ລູກ（子女）＋ສາວ（女孩／女性）；整词表示女儿。'],
+ ['ຕ່າລ່າງ','楼下；底层','方位词','固定表达','居住','n21','教材收录此写法；不要仅因不熟悉就自动改写。'],
+ ['ຂະໜົມ','糕点；糖果；甜食','名词','独立词','饮食','n21','这是食物类别名称，实际是哪一种需结合上下文。'],
+ ['ຫຼັງຈາກ','在……之后','连接表达','固定表达','时间与衔接','n21','后面引出先发生的事件或时间参照，再说明其后的事情。'],
+ ['ຈຶ່ງ','因此；才（承接前因或条件）','副词／连接词','独立词','因果与语法','n21','表示前面情况引出的结果；“因此”或“才”依整句选择。'],
+ ['ຝາກ','托付；寄托；请人代为保管或带交','动词','独立词','日常事务','n21','核心是把事物托给别人，具体动作由对象和语境决定。'],
+ ['ລຸ່ມ','下面；较低处','方位词','独立词','方位','n21','用于位置或上下关系。'],
+ ['ອັດ','关闭；关上','动词','独立词','日常动作','n21','本条核实关闭义，具体所关对象由原句说明。'],
+ ['ແຮງ','力量；强；有力','名词／修饰词','独立词','状态与程度','n21','可表达力量或强度，按句中位置判断。'],
+ ['ສັ່ງ','命令；吩咐；订购、点餐','动词','独立词','购物与饮食','n26','核心为下达要求或订单；餐馆语境自然译为“点”。'],
+ ['ຄົວກິນ','做饭；准备饭菜','动词','组合词','饮食','n26','整组为教材收录的做饭表达；不把“做＋吃”逐字拼成中文句子。'],
+ ['ພຽງພໍ','足够；充足','修饰词','固定表达','数量与程度','n26','修饰数量或条件是否足够；不等于“非常多”。'],
+ ['ເມື່ອກີ້ນີ້','刚才','时间词','固定表达','时间','n26','指紧接当前之前的一段时间。'],
+ ['ເພາະສະນັ້ນ','因此；所以','连接词','固定表达','因果与语法','n26','引出前述原因带来的结论或结果。'],
+ ['ເກືອບ','差一点；几乎','副词','独立词','状态与程度','n26','表示接近某状态，是否已经发生需结合后续内容。'],
+ ['ເມົາ','醉；晕','状态词','独立词','身体与健康','n26','酒、车、船等语境决定是醉酒还是眩晕。'],
+ ['ເມົາເຮືອ','晕船','状态词','组合词','交通与健康','n26','ເມົາ（晕）＋ເຮືອ（船）；指乘船引起的不适。'],
+ ['ເມົາລົດ','晕车','状态词','组合词','交通与健康','n26','ເມົາ（晕）＋ລົດ（车）；不是车喝醉。'],
+ ['ເມົາເຫຼົ້າ','醉酒','状态词','组合词','身体与健康','n26','ເມົາ（醉）＋ເຫຼົ້າ（酒）。'],
+ ['ລາງເທື່ອ','有时；或许（依语境）','副词','固定表达','频率与推测','n26','频率义与推测义要在句中区分。'],
+ ['ແຕ່ເຊົ້າ','一大早；清早','时间表达','固定表达','时间','n26','教材收录的早晨时间表达。'],
+ ['ຟ້າວ','赶快；着急；赶着做','动词／副词','独立词','动作与速度','n26','放在禁止表达后可表示“别急着……”。'],
+ ['ລ້າງ','洗；清洗','动词','独立词','日常动作','fsi','本条核实清洗义；与衣物洗涤常用的ຊັກ区分搭配。'],
+ ['ແປງ','修理；修整','动词','独立词','日常动作','fsi','本条核实修理义；固定表达里的建设、改善义另在组成词解释中说明。'],
+ ['ກະລຸນາ','请；劳驾（礼貌请求）','请求表达','独立词','请求与交流','everyday','用于请求别人做某事；不是陈述帮助动作的ຊ່ວຍ。'],
+ ['ພົບ','遇见；会见','动词','独立词','交流','meet','本条核实相遇、见面义，不据此认定所有语境都只能译为见面。'],
+ ['ຊ່ອງ','孔；开口；缺口；山口','名词','独立词','空间与居住','opening','在固定表达ເຮືອນຊານບ້ານຊ່ອງ中不能机械地逐字译成“洞”。']
+];
+const clReviewedLexicon=new Map(clLexiconRows.map(([text,meaning,pos,structure,topic,source,note])=>[saTextKey(text),{text,meaning,pos,structure,topic,source:clLexiconSources[source],note}]));
+</script>
+<script data-context-word-batch>
+/* Explicit, atomic dictionary membership. Reading the preview never writes data. */
+function cbExistingKeys(entries){return new Set(entries.flatMap(w=>[w.word,...String(w.word||'').split(/[\/／,，;；]+/u)].filter(Boolean).map(saTextKey)));}
+function cbCandidates(snap,entries){
+ const existing=cbExistingKeys(entries),byId=new Map(snap.learningMaterials.map(m=>[m.id,m])),found=new Map();
+ for(const parent of snap.learningMaterials){
+  if(parent.deleted||parent.analysisOwner||parent.phoneticProfile||!parent.textLao||!parent.sentenceAnalysis)continue;
+  // Stale analyses cannot supply safe word/example links.
+  if(saTextKey(parent.sentenceAnalysis.original)!==saTextKey(parent.textLao))continue;
+  const tokens=[...saWords(parent.sentenceAnalysis)];
+  // Expand only one reviewed composition level, never recursively invent words.
+  if(typeof clReviewedCompositions!=='undefined')for(const original of [...tokens]){const composition=clReviewedCompositions.get(saTextKey(original.lao));if(composition)for(const [lao,meaning,role] of composition.parts)tokens.push({lao,meaning,role,kind:'word'});}
+  for(const raw of tokens){
+   if(saIsName(raw)||!raw.lao||!/^[\u0e80-\u0eff\s]+$/u.test(raw.lao))continue;
+   const key=saTextKey(raw.lao);if(existing.has(key)||key===saTextKey(parent.textLao)||!saTextKey(parent.textLao).includes(key))continue;
+   const token=typeof clToken==='function'?clToken(raw,parent,snap):raw;
+   let row=found.get(key);if(!row){row={key,text:raw.lao,review:clReviewedLexicon.get(key)||null,contexts:[]};found.set(key,row);}
+   if(row.contexts.some(c=>c.parentId===parent.id))continue;
+   const unit=byId.get(token.target),unitId=unit&&!unit.deleted&&unit.analysisOwner===parent.id&&unit.analysisUnitType==='word'&&saTextKey(unit.textLao)===key?unit.id:null;
+   row.contexts.push({parentId:parent.id,unitId,meaning:token.meaning||'',sentence:parent.textLao,chinese:parent.translationZh||''});
+  }
+ }
+ return [...found.values()].sort((a,b)=>Number(!!b.review)-Number(!!a.review)||b.contexts.length-a.contexts.length||a.text.localeCompare(b.text));
+}
+function cbPlan(keys,candidates,snap,entries,now=Date.now()){
+ if(!keys.length||keys.length>100)throw Error('每次请选择 1～100 个词');
+ const map=new Map(candidates.map(r=>[r.key,r])),existing=cbExistingKeys(entries),materials=new Map(),created=[];
+ for(const key of new Set(keys)){
+  const row=map.get(key),review=clReviewedLexicon.get(key);if(!row||!review)throw Error('只能批量加入本页已查证的义项');
+  if(existing.has(key))throw Error('“'+row.text+'”已经存在，请重新预览');
+  const contexts=row.contexts.filter(c=>snap.learningMaterials.some(m=>m.id===c.parentId&&!m.deleted));if(!contexts.length)throw Error('来源句已经变化，请重新预览');
+  const category=['来源·例句词汇','词性·'+review.pos,'结构·'+review.structure,'主题·'+review.topic,'核查·已查证义项'].join(',');
+  const entry={syncId:learningUid(),word:row.text,ipa:'',meaning:review.meaning,category,note:review.note+'\n义项依据：'+review.source+'\n核查日期：2026-11-02。只核实上述义项，不代表穷尽全部词义。原句复用作例句，不自动生成新句或加入学习清单。',updatedAt:now};
+  const base=learningWordMaterial(entry),refs=[];let needsReview=false,pronunciation=null;
+  for(const context of contexts){
+   const parent=materials.get(context.parentId)||snap.learningMaterials.find(m=>m.id===context.parentId);
+   materials.set(parent.id,{...parent,linkedWordSyncIds:[...new Set([...(parent.linkedWordSyncIds||[]),entry.syncId])],updatedAt:now});
+   const unit=snap.learningMaterials.find(m=>m.id===context.unitId&&!m.deleted&&m.analysisOwner===parent.id&&saTextKey(m.textLao)===key);
+   if(!unit)continue;
+   pronunciation||=unit.pronunciationAnalysis||null;
+   needsReview||=!!unit.audioNeedsReview;
+   for(const ref of unit.audioSources||[])if(!refs.some(r=>cloudStable(r)===cloudStable(ref)))refs.push({...ref,...(unit.audioNeedsReview?{needsReview:true}:{})});
+  }
+  // Whole-sentence audio is never relabeled as a word recording.
+  let wordCard={...base,textLao:entry.word,translationZh:entry.meaning,audioSources:refs,...(needsReview?{audioNeedsReview:true}:{}),...(pronunciation?{pronunciationAnalysis:pronunciation}:{}),updatedAt:now};
+  if(typeof clRelabelPronunciation==='function')wordCard=clRelabelPronunciation(wordCard);
+  materials.set(base.id,wordCard);
+  existing.add(key);created.push(entry);
+ }
+ return {entries:created,materials:[...materials.values()]};
+}
+async function cbOpen(){
+ btGuard();const workspace=workspaceName('context-word-batch'),[snap,entries]=await Promise.all([learningSnapshot(),allEntries()]);
+ if(workspace!==workspaceName('context-word-batch'))throw Error('账号空间已变化，请重新打开');
+ const candidates=cbCandidates(snap,entries),selected=new Set();let query='',page=0,busy=false;
+ const dialog=document.createElement('dialog');dialog.className='context-word-batch';dialog.setAttribute('aria-label','整理例句中的新词');
+ dialog.innerHTML='<header><h2>整理例句中的新词</h2><button type="button" data-cb-close aria-label="关闭">×</button></header><p>沿用原句作为例句，不自动加入学习清单。已有同写法词卡会跳过。</p><label>搜索词语或中文<input type="search" data-cb-search></label><p data-cb-count></p><div data-cb-list></div><footer><button type="button" data-cb-prev>上一页</button><span data-cb-page></span><button type="button" data-cb-next>下一页</button><button type="button" data-cb-all>勾选本页</button><button type="button" data-cb-save>加入我的词典</button><p data-cb-status role="status"></p></footer><details><summary data-cb-pending-title></summary><p>这些是旧解析提取的候选，包含普通短语、专名或不完整拆分，尚未逐项确认，不会自动入库。</p><button type="button" data-cb-export>导出待核查候选</button></details>';
+ document.body.append(dialog);const $cb=s=>dialog.querySelector(s),h=learningEsc;
+ const filtered=()=>candidates.filter(r=>r.review&&(!query||[r.text,r.review.meaning,r.review.topic].join(' ').includes(query)));
+ function render(){const rows=filtered(),pages=Math.max(1,Math.ceil(rows.length/12));page=Math.min(page,pages-1);const visible=rows.slice(page*12,page*12+12);
+  $cb('[data-cb-count]').textContent='可加入 '+candidates.filter(r=>r.review).length+' 个 · 已勾选 '+selected.size+' 个';
+  $cb('[data-cb-list]').innerHTML=visible.length?visible.map(r=>'<section class="cb-word"><label><input type="checkbox" data-cb-key="'+h(r.key)+'" '+(selected.has(r.key)?'checked':'')+'><strong lang="lo">'+h(r.text)+'</strong><span>'+h(r.review.meaning)+'</span></label><p class="cb-tags">'+h(r.review.pos+' · '+r.review.structure+' · '+r.review.topic)+'</p><p>'+h(r.review.note)+'</p><details><summary>义项依据与原句 · '+r.contexts.length+' 处</summary><a href="'+h(r.review.source)+'" target="_blank" rel="noopener noreferrer">查看参考来源</a>'+r.contexts.slice(0,3).map(c=>'<p lang="lo">'+h(c.sentence)+'</p><p>'+h(c.chinese)+'</p><small>原句中的解释：'+h(c.meaning)+'</small>').join('')+'</details></section>').join(''):'<p>当前没有符合条件的新词。</p>';
+  $cb('[data-cb-page]').textContent=(page+1)+' / '+pages;$cb('[data-cb-prev]').disabled=page===0;$cb('[data-cb-next]').disabled=page===pages-1;$cb('[data-cb-save]').disabled=!selected.size||busy;
+  $cb('[data-cb-pending-title]').textContent='待核查候选 · '+candidates.filter(r=>!r.review).length+' 个';
+ }
+ $cb('[data-cb-close]').onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ $cb('[data-cb-search]').oninput=e=>{query=e.target.value.trim();page=0;render();};
+ $cb('[data-cb-list]').onchange=e=>{if(busy)return;const key=e.target.dataset.cbKey;if(!key)return;if(e.target.checked)selected.add(key);else selected.delete(key);render();};
+ $cb('[data-cb-prev]').onclick=()=>{page--;render();};$cb('[data-cb-next]').onclick=()=>{page++;render();};
+ $cb('[data-cb-all]').onclick=()=>{if(busy)return;for(const r of filtered().slice(page*12,page*12+12))selected.add(r.key);render();};
+ $cb('[data-cb-export]').onclick=()=>{const pending=candidates.filter(r=>!r.review).map(r=>({text:r.text,contexts:r.contexts.map(c=>({sentence:c.sentence,chinese:c.chinese,contextMeaning:c.meaning})),status:'待核查，不是已确认词条'})),url=URL.createObjectURL(new Blob([JSON.stringify({format:'lao-context-word-candidates-v1',candidates:pending},null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='例句新词-待核查.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ $cb('[data-cb-save]').onclick=async()=>{if(busy)return;busy=true;render();try{
+  if(workspace!==workspaceName('context-word-batch'))throw Error('账号空间已变化，请重新打开');
+  const plan=cbPlan([...selected],candidates,snap,entries);await saCommitDictionary(plan,snap,entries);
+  $cb('[data-cb-status]').textContent='已加入 '+plan.entries.length+' 张词卡，可到“批量工具 → 音频批量生成与切分”勾选缺音词。未加入每日清单。';
+  $cb('[data-cb-save]').hidden=true;$cb('[data-cb-all]').hidden=true;$cb('[data-cb-search]').disabled=true;$cb('[data-cb-list]').querySelectorAll('input').forEach(i=>i.disabled=true);
+ }catch(error){$cb('[data-cb-status]').textContent=error.message;busy=false;render();}finally{busy=false;}};
+ render();dialog.showModal();
+}
+const cbEntry=document.createElement('section'),cbButton=document.createElement('button'),cbNote=document.createElement('p');
+cbButton.type='button';cbButton.textContent='整理例句中的新词';cbButton.dataset.batchTool='context-words';cbButton.onclick=()=>cbOpen().catch(e=>alert(e.message));cbNote.textContent='查词义来源，按词性、结构与主题分类，勾选加入词典；沿用已有例句。';cbEntry.append(cbButton,cbNote);btDialog.querySelector('.batch-tools-grid').append(cbEntry);
+</script>
+<style data-context-word-batch>
+.context-word-batch{width:min(760px,94vw);max-height:88dvh;box-sizing:border-box;padding:22px;border:1px solid #d5e5dc;border-radius:20px;color:#21443c;background:#fff;overflow:auto}.context-word-batch::backdrop{background:#173e3066}.context-word-batch header{display:flex;align-items:center;justify-content:space-between;gap:12px}.context-word-batch h2{margin:0;font-size:22px}.context-word-batch p{line-height:1.65}.context-word-batch input[type=search]{display:block;width:100%;box-sizing:border-box;margin-top:6px}.cb-word{padding:16px 0;border-top:1px solid #e1ebe5}.cb-word>label{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.cb-word input[type=checkbox]{width:20px;height:20px}.cb-word strong{font-size:24px}.context-word-batch .cb-tags{font-size:13px;color:#53766a}.context-word-batch footer{position:sticky;bottom:-22px;padding:12px 0;background:#fffffff5;border-top:1px solid #d5e5dc;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.context-word-batch footer p{flex-basis:100%;margin:0;font-size:14px}.context-word-batch button{min-height:40px;padding:8px 12px;font-size:14px}.context-word-batch details{margin:10px 0}.context-word-batch [data-cb-save]{background:#087e70;color:white}.context-word-batch a{color:#087e70}@media(max-width:600px){.context-word-batch{padding:16px;max-height:90dvh}.context-word-batch h2{font-size:19px}.context-word-batch p{font-size:14px}.context-word-batch footer{bottom:-16px}.cb-word>label span{flex-basis:100%;padding-left:32px}}
+</style>
 </body>
 </html>

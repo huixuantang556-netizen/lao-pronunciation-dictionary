@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="9417d6e5554427b4">
+  <meta name="lao-app-build" content="03b9c5df74138bd0">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6381,6 +6381,7 @@ function saValidate(value,target){
 function saTemplate(original){return {format:sentenceAnalysisFormat,original,translation:'',notes:'AI 整理，语言知识待核对。',segments:[{lao:original,chinese:'',words:[],grammar:[]}],patterns:[],quiz:[]};}
 function saPrompt(original){return `请为下面的老挝语原文提供中文学习解析，只输出一个合法 JSON 对象（不要 Markdown 表格，不要代码或 HTML）。不要改变原文、补写主语或标点。segments.lao 按顺序拼接后，忽略空白必须与 original 完全一致。words 只列必要的独立词汇和少量固定搭配，不要枚举各种排列组合。例如“想”“水”可作为独立词，“想喝水”应放在 grammar 解释，不另建组合词卡。每个 words.lao 必须实际出现在该段，原文没有的“喝”不能补进单词表。
 只使用以下字段；不要自行填写词条 ID、音频网址或材料 ID。words 每项必须标注 kind：独立词为 word，固定搭配／组合短语为 phrase，人名为 name，不确定为 unknown。分类只是待核对建议，不代表自动新增词典。同段同词义不要重复。words 每项可加 isName 布尔值，人名必须填 true，普通词填 false。词义填写本句含义，人名和多义词写清语境。无法确定的语法或翻译要在 notes 或 explanation 中明确标注待核对，不能编造。自然翻译补出的内容也要注明。
+教学拆解要求：自然译文与字面组成须分开。对可分析的复合词或固定表达，在 grammar 中列出可确认的组成词及其本句词义，再解释它们如何组合、为什么自然译文不能逐字照搬。不得用“整体学习”“结合下方句型”代替实际解释；也不得把仅仅多个音节的词硬拆为词源。对同一词的语法说明须根据本句结构判断，不能见到ຊ່ວຍ就一律套礼貌请求。普通陈述中的“帮助／共同”与请求“请帮忙”要区分。保留熟悉的六声调名称；不确定组成义明确标注待核对。新词可沿用当前原句作例句，禁止递归扩充例句或词库。
 格式说明：translation 是全文翻译；segments 为逐句／分句拆解；words 每项为 {"lao":"原词或短语","meaning":"本句词义","role":"词性或本句作用","kind":"word / phrase / name / unknown","isName":false}；grammar 和 patterns 每项为 {"pattern":"结构","explanation":"中文说明，可含例句"}；quiz 每项为 {"question":"题目","options":["选项一","选项二","选项三"],"answer":0,"explanation":"解析"}，answer 从 0 开始。空数组允许保留。建议提供 3–5 道小测验。
 数字专项：遇到阿拉伯数字，先按本句语境分辨数量、金额、钟点、日期月份、年份或电话号码／编号，再在 grammar.explanation 写出原数字对应的老挝语读法和用法。电话号码逐位读，保留前导0，不按数量展开；不要仅凭数字长度判断。点号可能是千位分组，不能一律读成小数点。不确定请标明待核对。展开后的老挝语只写在说明里，不改 original 或 segments.lao，也不要把原文没有的展开数词塞进 words.lao。
 请填充下面模板，保留 format 和 original：
@@ -6963,7 +6964,8 @@ learningOpenDetail=async function(id){
  const exportButton=document.createElement('button');exportButton.className='sa-export-saved';exportButton.textContent='导出已保存解析 JSON';exportButton.disabled=!m.sentenceAnalysis;exportButton.onclick=()=>saDownload('已保存句子解析.json',JSON.stringify(saValidate(m.sentenceAnalysis,m.textLao),null,2));host.querySelector('.sa-actions').append(exportButton);
  const a=m.sentenceAnalysis;if(!a)return;
  if(saTextKey(a.original)!==saTextKey(m.textLao)){const warning=document.createElement('p');warning.className='ss-stale-warning';warning.textContent='原句已变化，请更新解析；旧解析暂不用于句中点词。';host.prepend(warning);return;}
- const ranges=wslRanges(m.textLao,a),fallbacks=wslFallbacks(a,ranges),tokens=[...ranges.map(r=>r.token),...fallbacks],panel=document.createElement('section');panel.className='wsl-panel';
+ const displayAnalysis=typeof clToken==="function"?{...a,segments:a.segments.map(s=>({...s,words:s.words.map(t=>clToken(t,m,snap))}))}:a;
+ const ranges=wslRanges(m.textLao,displayAnalysis),fallbacks=wslFallbacks(displayAnalysis,ranges),tokens=[...ranges.map(r=>r.token),...fallbacks],panel=document.createElement('section');panel.className='wsl-panel';
  panel.innerHTML='<div class="wsl-sentence" lang="lo">'+wslSentenceHtml(m.textLao,ranges)+'</div><p class="wsl-translation">'+h(m.translationZh||a.translation||'')+'</p><p class="wsl-hint">点词听读 · 查看本句词义</p>'+(fallbacks.length?'<details class="wsl-other-meanings"><summary>其他词义</summary>'+fallbacks.map((t,i)=>'<button data-wsl-token="'+(ranges.length+i)+'"><span lang="lo">'+h(t.lao)+'</span> · '+h(t.meaning)+'</button>').join('')+'</details>':'')+'<div class="wsl-card" aria-live="polite" hidden></div><p class="wsl-status" role="status"></p>';
  host.prepend(panel);let timer=null,selection=0,selectedToken=-1;
  const status=panel.querySelector('.wsl-status'),card=panel.querySelector('.wsl-card');
@@ -6976,7 +6978,8 @@ learningOpenDetail=async function(id){
   if(request!==selection||!panel.isConnected)return;
   for(const old of panel.querySelectorAll('.ns-number-card'))old.hidden=true;
   card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);const close=document.createElement('button');close.type='button';close.dataset.wslCollapse='';close.textContent='收起词义';close.setAttribute('aria-label','收起当前词义卡片');close.style.cssText='float:right;font-size:13px;min-height:40px';card.prepend(close);
-  if(typeof cwSplits==='function'&&typeof cwIndex==='function'&&!token.isName&&token.kind!=='name'){
+  const savedComposition=typeof clCompositionHtml==='function'?clCompositionHtml(token.lao,snap,detailWords||[]):'';if(savedComposition){const composition=document.createElement('section');composition.innerHTML=savedComposition;card.append(composition);}
+  if(!savedComposition&&typeof cwSplits==='function'&&typeof cwIndex==='function'&&!token.isName&&token.kind!=='name'){
    const index=cwIndex(detailWords||[],snap.learningMaterials),html=wslCompoundHtml(token,index,h);
    if(html){const parts=document.createElement('section');parts.className='cw-components wsl-compound';parts.innerHTML=html;card.append(parts);cwBindComponents(parts);}
   }
@@ -7764,9 +7767,9 @@ async function srGrammarWrites(op,snap,entries){
  if(!Number.isFinite(op.savedAt)||op.savedAt<=0||op.analysis?.original!==text)throw Error('语法原文或保存时间无效');
  const data=saValidate(op.analysis,text),units=new Map(),old=parent.sentenceAnalysis;
  async function unit(type,lao,meaning,note){
-  const previous=(type==='segment'?old?.segments||[]:saWords(old||{segments:[]})).find(w=>w.lao===lao&&(type==='segment'?w.chinese===meaning:w.meaning===meaning));
-  const prior=snap.learningMaterials.find(m=>!m.deleted&&m.id===previous?.target&&m.analysisOwner===parent.id&&m.textLao===lao&&m.translationZh===meaning);
-  if(prior)return prior.id;
+  const previousRows=(type==='segment'?old?.segments||[]:saWords(old||{segments:[]})).filter(w=>w.lao===lao),previous=previousRows.find(w=>(type==='segment'?w.chinese:w.meaning)===meaning)||(previousRows.length===1?previousRows[0]:null);
+  const prior=snap.learningMaterials.find(m=>!m.deleted&&m.id===previous?.target&&m.analysisOwner===parent.id&&m.textLao===lao);
+  if(prior){if(prior.translationZh!==meaning||prior.note!==note)units.set(prior.id,{...prior,translationZh:meaning,note,updatedAt:op.savedAt});return prior.id;}
   const id='analysis-unit:refresh-'+await paDigest([parent.id,type,lao,meaning]);
   const exists=snap.learningMaterials.find(m=>m.id===id);
   if(exists){if(exists.deleted||exists.analysisOwner!==parent.id||exists.textLao!==lao||exists.translationZh!==meaning)throw Error('组成词编号冲突');return id;}
@@ -11726,5 +11729,57 @@ async function laStartAuto(play,isCurrent){
  #practicePanel *,#learningDialog *,#learningPanel *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 </style>
+<script data-context-learning>
+/* Keep sentence-local glosses editable; dictionary membership is an explicit action. */
+function clToken(token,parent,snap){
+ const unit=snap.learningMaterials.find(m=>m.id===token.target&&!m.deleted&&m.analysisOwner===parent.id&&m.analysisUnitType==='word'&&m.textLao===token.lao);
+ return unit?{...token,meaning:unit.translationZh||token.meaning}:token;
+}
+function clReadingShape(basis){return {mode:basis?.mode,original:basis?.original,segments:basis?.segments?.map(s=>({index:s.index,original:s.original,words:(s.words||[]).map(w=>({lao:w.lao,target:w.target||''}))}))};}
+function clRelabelPronunciation(m){
+ const a=m.pronunciationAnalysis;if(!a||!a.basisKey)return m;let before;try{before=JSON.parse(a.basisKey);}catch(_){return m;}
+ let basis;try{basis=paBasis({m,w:null,text:m.textLao});}catch(_){return m;}
+ if(cloudStable(clReadingShape(before))!==cloudStable(clReadingShape(basis)))return m;
+ if(a.segments.length!==basis.segments.length)return m;
+ const segments=basis.segments.map((s,i)=>({...a.segments[i],...s,words:s.words.map(w=>({...a.segments[i].words?.find(old=>old.lao===w.lao&&(old.target||'')===(w.target||'')),...w}))}));
+ return {...m,pronunciationAnalysis:{...a,basisKey:cloudStable(basis),segments}};
+}
+function clGlossWrites(rows,snap){
+ const before=new Map(snap.learningMaterials.map(m=>[m.id,m])),writes=new Map((rows.learningMaterials||[]).map(m=>[m.id,m]));
+ for(const unit of rows.learningMaterials||[]){const old=before.get(unit.id);if(!old||old.deleted||unit.deleted||!unit.analysisOwner||old.analysisOwner!==unit.analysisOwner||old.textLao!==unit.textLao||old.translationZh===unit.translationZh||unit.analysisUnitType!=='word')continue;
+  const source=writes.get(unit.analysisOwner)||before.get(unit.analysisOwner);if(!source||source.deleted||!source.sentenceAnalysis)continue;
+  let changed=false;const segments=source.sentenceAnalysis.segments.map(s=>({...s,words:(s.words||[]).map(w=>{if(w.target!==unit.id||w.lao!==unit.textLao)return w;changed=true;return {...w,meaning:unit.translationZh};})}));
+  if(changed){const analysis={...source.sentenceAnalysis,segments};let parent={...source,sentenceAnalysis:analysis,updatedAt:Math.max(source.updatedAt||0,unit.updatedAt||Date.now())};if(source.v2Data?.studyAnalysis?.grammar)parent.v2Data={...source.v2Data,studyAnalysis:{...source.v2Data.studyAnalysis,grammar:analysis}};writes.set(parent.id,clRelabelPronunciation(parent));}
+  writes.set(unit.id,clRelabelPronunciation(unit));
+ }
+ return {...rows,learningMaterials:[...writes.values()]};
+}
+function clCompositionHtml(text,snap,entries){
+ const matches=entries.filter(w=>saTextKey(w.word)===saTextKey(text));if(matches.length!==1)return '';
+ const word=matches[0],row=snap.learningMaterials.find(m=>m.id==='word:'+word.syncId&&!m.deleted),a=row?.sentenceAnalysis;if(!a||saTextKey(a.original)!==saTextKey(text))return '';
+ const parts=saWords(a).filter(w=>saTextKey(w.lao)!==saTextKey(text));if(!parts.length)return '';const h=learningEsc;
+ return '<section class="cl-composition"><h4>组成词与表达</h4><p class="tag-hint">沿用词典中的组成说明；本句词义仍以上方为准。</p><div>'+parts.map(w=>'<p><span lang="lo">'+h(w.lao)+'</span> · '+h(w.meaning)+(w.role?' <small>'+h(w.role)+'</small>':'')+'</p>').join('')+'</div>'+ssGrammarHtml(a)+'</section>';
+}
+const clPreviousWrite=learningWrite;
+learningWrite=async function(rows,expected,options){return clPreviousWrite(expected&&rows.learningMaterials?clGlossWrites(rows,expected):rows,expected,options);};
+function clDictionaryPlan(unit,snap,entries,{meaning,selected},now=Date.now()){
+ const current=snap.learningMaterials.find(m=>m.id===unit.id&&!m.deleted);if(!current||!current.analysisOwner||current.analysisUnitType!=='word'||current.textLao!==unit.textLao)throw Error('句中词卡已变化，请重新打开');
+ const owner=snap.learningMaterials.find(m=>m.id===current.analysisOwner&&!m.deleted);if(!owner)throw Error('原句已删除或尚未同步');
+ const matches=entries.filter(w=>saTextKey(w.word)===saTextKey(current.textLao));let entry=matches.find(w=>w.syncId===selected),created=[];
+ if(!entry){if(matches.length)throw Error('这个词已有词典卡，请选择原卡，避免重复');if(!meaning.trim())throw Error('请填写中文词义');entry={word:current.textLao,meaning:meaning.trim(),ipa:'',category:'句中词汇',note:'沿用已有来源句作为例句；不自动生成新例句。\n'+owner.textLao,syncId:learningUid(),updatedAt:now};created=[entry];}
+ const material=learningWordMaterial(entry),existing=snap.learningMaterials.find(m=>m.id===material.id&&!m.deleted);
+ const wordCard=existing||clRelabelPronunciation({...material,textLao:entry.word,translationZh:entry.meaning,audioSources:current.audioSources||[],...(current.audioNeedsReview?{audioNeedsReview:true}:{}),...(current.pronunciationAnalysis?{pronunciationAnalysis:current.pronunciationAnalysis}:{}),updatedAt:now});
+ return {entries:created,materials:[wordCard,{...owner,linkedWordSyncIds:[...new Set([...(owner.linkedWordSyncIds||[]),entry.syncId])],updatedAt:now}],target:wordCard.id};
+}
+async function clSaveWord(id){
+ if(learningHasWork()||recorder)throw Error('请先完成当前编辑或录音');const workspace=workspaceName('context-word'),snap=await learningSnapshot(),entries=await allEntries(),unit=snap.learningMaterials.find(m=>m.id===id&&!m.deleted);if(!unit||unit.analysisUnitType!=='word'||!unit.analysisOwner)throw Error('此处不是句中词卡');
+ const owner=snap.learningMaterials.find(m=>m.id===unit.analysisOwner&&!m.deleted),matches=entries.filter(w=>saTextKey(w.word)===saTextKey(unit.textLao)),h=learningEsc;
+ learningModal('保存为词典词卡','<p lang="lo">'+h(unit.textLao)+'</p><p>沿用来源句作为例句，不生成新句子，不自动加入每日清单。</p><form id="clWordForm">'+(matches.length?'<label>关联已有词卡<select id="clExisting">'+matches.map(w=>'<option value="'+h(w.syncId)+'">'+h(w.meaning||'未填写词义')+'</option>').join('')+'</select></label><p>保留原词卡释义和录音，不用句中含义覆盖它。</p>':'<label>词典中文释义<textarea id="clMeaning" rows="2">'+h(unit.translationZh||'')+'</textarea></label>')+'<details><summary>来源例句</summary><p lang="lo">'+h(owner?.textLao||'')+'</p><p>'+h(owner?.translationZh||'')+'</p></details><button type="submit">'+(matches.length?'关联已有词卡':'确认加入我的词典')+'</button><button type="button" id="clCancel">取消</button></form><p id="clStatus" role="status"></p>');
+ $('#clCancel').onclick=()=>learningOpenDetail(id);let saving=false;
+ $('#clWordForm').onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;try{if(workspace!==workspaceName('context-word'))throw Error('账号空间已变化，请重新打开');const plan=clDictionaryPlan(unit,snap,entries,{meaning:$('#clMeaning')?.value||'',selected:$('#clExisting')?.value||''});await saCommitDictionary(plan,snap,entries);if(workspace!==workspaceName('context-word'))return;await learningOpenDetail(plan.target);}catch(error){$('#clStatus').textContent=error.message;}finally{saving=false;}};
+}
+const clPreviousDetail=learningOpenDetail;
+learningOpenDetail=async function(id){await clPreviousDetail(id);if(learningDetail!==id)return;const {m}=await learningResolve(id);if(learningDetail!==id||!m.analysisOwner||m.analysisUnitType!=='word')return;const detail=learningDialog.querySelector('.ss-detail,.learn-detail');if(!detail||detail.querySelector('[data-cl-save-word]'))return;const button=document.createElement('button');button.type='button';button.dataset.clSaveWord='';button.textContent='保存为词典词卡';button.className='cl-save-word';button.onclick=()=>clSaveWord(id).catch(error=>alert(error.message));(detail.querySelector('.ss-main-actions')||detail).append(button);const resolved=await learningResolve(id);if(learningDetail!==id)return;const composition=clCompositionHtml(m.textLao,resolved.snap,resolved.words||[]);if(composition){const section=document.createElement('section');section.innerHTML=composition;(detail.querySelector('.ss-reading')||detail).append(section);}};
+</script>
 </body>
 </html>

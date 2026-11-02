@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="da56145be1908794">
+  <meta name="lao-app-build" content="bd28ecf55e49b90a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1470,6 +1470,8 @@ async function cloudSaveDefaultAudio(rows,expected,load,status){
 
 /* Server revisions decide what changed. No client-clock watermark or blind push. */
 const cloudReadCapabilities=new WeakMap();
+// Only read-only RPCs may fall back after a server failure. Never retry writes here.
+function cloudReadFallback(error){return [404,500,502,503,504].includes(error.status)&&!['40001','23505'].includes(error.code);}
 // A second, network-level fence: download mode cannot submit records or audio,
 // even if a later planning regression accidentally attempts an upload.
 function cloudDownloadOnlyApi(api){return (path,options={})=>{
@@ -1500,7 +1502,7 @@ async function cloudReadRemote(uid,api,table,known,status){
  let capabilities=cloudReadCapabilities.get(api);if(!capabilities){capabilities=new Map();cloudReadCapabilities.set(api,capabilities);}
  for(let attempt=0;attempt<2;attempt++)try{
   status('正在读取'+(learning?'学习资料':'词典')+'版本索引（不下载未变内容）…');
-  let index;if(capabilities.get(table)===false)index=await restIndex();else try{index=await api('/rest/v1/rpc/lao_sync_index_v1',{method:'POST',body:{target_table:table}});capabilities.set(table,true);}catch(error){if(error.status!==404)throw error;capabilities.set(table,false);index=await restIndex();}
+  let index;if(capabilities.get(table)===false)index=await restIndex();else try{index=await api('/rest/v1/rpc/lao_sync_index_v1',{method:'POST',body:{target_table:table}});capabilities.set(table,true);}catch(error){if(!cloudReadFallback(error))throw error;status('云端查询接口暂不可用，正在改用分页读取…');capabilities.set(table,false);index=await restIndex();}
   if(!Array.isArray(index)||index.length>100000)throw Error('云端版本索引无效或过大。');
   const out=new Map(),changed=[],seen=new Set();
   for(const row of index){const key=identity(row);if(seen.has(key))throw Error('云端版本索引有重复编号。');seen.add(key);const cached=known.get(key);if(cached&&cached.revision===row.revision){validate(cached);out.set(key,cached);}else changed.push(row);}
@@ -1508,7 +1510,7 @@ async function cloudReadRemote(uid,api,table,known,status){
   const batches=[];for(let i=0;i<changed.length;i+=100)batches.push(changed.slice(i,i+100));let done=0;
   status('云端有 '+changed.length+' 项变化，其余 '+out.size+' 项复用上次版本',{done,total:changed.length});
   await cloudSyncPool(batches,2,async batch=>{
-   let rows;if(capabilities.get(table)===false)rows=await restRead(batch);else try{rows=await api('/rest/v1/rpc/lao_sync_read_v1',{method:'POST',body:{target_table:table,keys:batch.map(r=>({record_kind:r.record_kind,record_id:r.record_id,revision:r.revision}))}});}catch(error){if(error.status!==404)throw error;capabilities.set(table,false);rows=await restRead(batch);}
+   let rows;if(capabilities.get(table)===false)rows=await restRead(batch);else try{rows=await api('/rest/v1/rpc/lao_sync_read_v1',{method:'POST',body:{target_table:table,keys:batch.map(r=>({record_kind:r.record_kind,record_id:r.record_id,revision:r.revision}))}});}catch(error){if(!cloudReadFallback(error))throw error;status('云端查询接口暂不可用，正在改用分页读取…');capabilities.set(table,false);rows=await restRead(batch);}
    if(!Array.isArray(rows)||rows.length!==batch.length)throw Object.assign(Error('云端变化记录返回不完整，可能被其他设备修改。'),{code:'40001'});const wanted=new Map(batch.map(r=>[r.record_kind+':'+r.record_id,r.revision])),returned=new Set();
    for(const row of rows){const key=validate(row);if(returned.has(key)||wanted.get(key)!==row.revision)throw Object.assign(Error('读取期间云端版本变化'),{code:'40001'});returned.add(key);out.set(key,row);}
    done+=rows.length;status('正在读取变化内容 · 复用 '+(index.length-changed.length)+' 项',{done,total:changed.length});
@@ -1904,7 +1906,7 @@ async function cloudReadRemote(uid,api,table,known,status){
           if(!response.ok){
             const code=data?.error_code||data?.code;
             const message=code==='40001'||code==='23505'?'其他设备已修改资料或存在同编号记录，请重新同步核对；本批次未覆盖云端新版本。':code==='invalid_credentials'?'邮箱或密码不正确。':code==='email_not_confirmed'?'这个账号的邮箱尚未确认，请在 Supabase 用户页面检查。':response.status===401?'登录凭证无效或已过期，请退出后重新登录。':response.status===403?'云端拒绝访问，请检查数据表与存储权限。':response.status===429?'请求过于频繁，请稍后重试。':'云端请求失败（'+response.status+'），请把此提示发给我排查。';
-            const error=new Error(message);error.status=response.status;error.code=code;throw error;
+            const operation=path.startsWith('/rest/v1/rpc/')?'查询接口 '+path.split('/').pop():path.startsWith('/rest/v1/')?'数据表 '+path.split('/').pop().split('?')[0]:path.startsWith('/auth/v1/')?'账号验证':path.startsWith('/storage/v1/')?'录音存储':'云端连接';const detail=typeof code==='string'&&/^[A-Za-z0-9_]{1,32}$/.test(code)?' · 错误码 '+code:'';const error=new Error(message+'（'+operation+detail+'）');error.status=response.status;error.code=code;throw error;
           }
           return data;
         }catch(error){

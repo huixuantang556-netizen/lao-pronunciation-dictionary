@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ebb3087d8590fbd2">
+  <meta name="lao-app-build" content="1bbcb7638f23d90a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8096,6 +8096,19 @@ showView=function(view,...args){
 #learningDialog[data-ss-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
 #learningDialog[data-df-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
 #learningDialog .ss-quick-management{display:contents}#learningDialog .ss-quick-management button{border-color:#aacdc0}#learningDialog .ss-quick-management [data-ss-regenerate]{background:#edf6f3;color:#087f70}
+
+/* Compact mobile sentence reading cards, with one aligned row of actions. */
+@media(max-width:650px){
+ #learningDialog .ss-reading .pa-segment-words{grid-template-columns:minmax(0,1fr);gap:8px}
+ #learningDialog .ss-reading .pa-segment-word{padding:10px 12px;border-radius:10px}
+ #learningDialog .ss-reading .pa-segment-word-text{font-size:22px;line-height:1.6;padding:0;min-height:32px}
+ #learningDialog .ss-reading .pa-segment-word p{font-size:14px;line-height:1.65;margin:4px 0 8px}
+ #learningDialog .ss-reading .pa-segment-word .pa-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 0}
+ #learningDialog .ss-reading .pa-segment-word .pa-toolbar button{font-size:12px;line-height:1.4;padding:7px 9px;min-height:36px;min-width:0;border-radius:8px;margin:0;flex:0 0 auto;box-shadow:none}
+ #learningDialog .ss-reading .pa-segment-word .pa-toolbar .fv-button{width:36px;padding:6px;font-size:19px;margin-left:auto}
+ #learningDialog .ss-reading .ss-pronunciation>summary{font-size:14px;padding:8px 0}
+ #learningDialog button[data-letter-detail-back]{font-size:13px;min-height:36px;padding:7px 11px}
+}
 </style>
 <script data-learning-bundle="sentence-study-layout">
 /* One reading surface; move existing controls, never clone handlers or rewrite saved analysis. */
@@ -8139,7 +8152,7 @@ function ssCompose(detail,resolved,id){
  if(trusted){const grammar=wholeFallback?'':ssGrammarHtml(a);if(grammar){const title=w?'构词与用法':'语法要点',section=ssGroup(title,'ss-grammar');section.innerHTML='<h3>'+title+'</h3>'+grammar;main.append(section);}else if(wholeFallback)main.append(ssElement('p','ss-whole-word-fallback','当前保存的分析仅有整体释义，尚未完成组成词拆分。'));if(quiz){const summary=quiz.querySelector('summary');if(summary)summary.textContent='语法小测验';main.append(quiz);}}
  else if(existing&&!m.analysisOwner)main.append(ssElement('p','ss-empty-analysis',a?'文字或词义已修改，旧构词／语法分析需更新，暂不用于学习。':'尚无语法解析；需要时可在设置中添加。'));
  const phonetics=[...detail.querySelectorAll('.pa-segment-analysis')].filter(n=>n.dataset.paReady==='true');
- if(phonetics.length){const fold=ssFold(w?'词语拼读':(a?.segments.length||0)>1?'分段拼读':'整句拼读','ss-pronunciation');phonetics.forEach((n,i)=>{const heading=n.querySelector('h4');if(heading){if(phonetics.length===1)heading.remove();else heading.textContent='第'+(Number(n.dataset.paIndex??i)+1)+'段';}fold.append(n);});main.append(fold);}
+ if(phonetics.length){const fold=ssFold(w?'词语拼读':(a?.segments.length||0)>1?'分段拼读':'整句拼读','ss-pronunciation');fold.dataset.ssSentenceReading=String(!w);phonetics.forEach((n,i)=>{const heading=n.querySelector('h4');if(heading){if(phonetics.length===1)heading.remove();else heading.textContent='第'+(Number(n.dataset.paIndex??i)+1)+'段';}fold.append(n);});main.append(fold);}
  else if(paTools){const saved=[...paTools.children].filter(n=>n.classList.contains('pa-section'));if(saved.length){const fold=ssFold('语音分析','ss-pronunciation');saved.forEach(n=>fold.append(n));main.append(fold);}}
  const related=detail.querySelector('.learn-related');if(related&&panel){metadata.append(related);}else if(related&&!related.querySelector('button')){related.remove();}else if(related&&!w&&related.querySelector('button')){const fallback=ssFold('词汇','ss-fallback-words');for(const n of [...related.children])if(n.tagName==='H3'||n.classList.contains('tag-hint'))n.remove();fallback.append(related);main.append(fallback);}
  if(w||m.analysisUnitType==='word'){const nodes=originalDetailChildren.filter(n=>(w&&n===related||n.classList.contains('letter-examples'))&&n.querySelector('button'));if(nodes.length){const examples=nodes.some(n=>n.dataset.wslUsage==='true')?ssGroup('例句与短语用法','ss-usage-examples'):ssFold('例句与用法','ss-word-examples');examples.open=true;for(const n of nodes){n.querySelector('h3')?.remove();examples.append(n);}main.append(examples);}}
@@ -8930,14 +8943,14 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,selfTestEnabled:false,selfTestHideLao:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,selfTestEnabled:false,selfTestHideLao:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
 const apPreferenceChoices={listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,saved?.[key])]));}
 function appPreference(key){return apReadPreferences()[key];}
 function apSavePreferences(value){const safe=Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,value[key])]));localStorage.setItem(apPreferenceKey(),JSON.stringify({version:1,...safe}));return safe;}
-function apApplyDetail(detail){if(!detail)return;const prefs=apReadPreferences();for(const n of detail.querySelectorAll('.ss-pronunciation,.pa-word-card,.pa-segment-rules'))n.open=prefs.expandPronunciation;for(const n of detail.querySelectorAll('.ss-word-examples'))n.open=prefs.expandExamples;}
+function apApplyDetail(detail){if(!detail)return;const prefs=apReadPreferences();for(const n of detail.querySelectorAll('.ss-pronunciation,.pa-word-card,.pa-segment-rules'))n.open=n.dataset.ssSentenceReading==='true'?prefs.expandSentenceReading:prefs.expandPronunciation;for(const n of detail.querySelectorAll('.ss-word-examples'))n.open=prefs.expandExamples;}
 function apGuard(){scGuard();if(typeof rpSaving!=='undefined'&&rpSaving||typeof practiceChecking!=='undefined'&&practiceChecking)throw Error('请等待当前学习结果保存完成');}
 const apDialog=profileDialog,apOldClose=document.querySelector('#closePersonal'),apTitle=apDialog.querySelector('h2'),apIdentity=document.querySelector('#profileIdentity'),apAvatar=document.querySelector('#avatarSection');
 apDialog.classList.add('ap-settings');apTitle.textContent='设置';apTitle.id='appSettingsTitle';apDialog.setAttribute('aria-labelledby',apTitle.id);
@@ -8988,6 +9001,19 @@ const adaptivePreference=document.createElement('label');adaptivePreference.clas
 const apPracticeDefaults=document.createElement('div');apPracticeDefaults.className='ap-course-check';apPracticeDefaults.innerHTML='<h4>每日清单默认方向</h4><label>练习方向<select data-ap-choice="dailyPracticeDirection"><option value="wordToMeaning">看老挝语回忆中文</option><option value="audio">听音辨词</option><option value="meaningToSpeech">看中文说老挝语</option><option value="meaningToWord">看中文写老挝语</option><option value="all">全部已加入方向</option></select></label><h4>自由练习默认设置</h4><label>内容<select data-ap-choice="freePracticeKind"><option value="words">单词（含短语）</option><option value="sentences">句子</option><option value="words-sentences">单词＋句子</option><option value="letters">字母</option></select></label><label>练习方向<select data-ap-choice="freePracticeDirection"><option value="wordToMeaning">看老挝语回忆中文</option><option value="meaningToWord">看中文回忆老挝语</option><option value="audioToWord">听音辨词</option><option value="wordToIpa">老挝语 → 音标</option><option value="ipaToWord">音标 → 老挝语</option><option value="mixed">混合随机</option></select></label><label>材料来源<select data-ap-choice="freePracticeLibrary"><option value="all">全部来源</option><option value="teaching">教学型材料</option><option value="communication">交流型材料</option></select></label><label>范围<select data-ap-choice="freePracticeScope"><option value="all">全部符合条件的词条</option><option value="mistakes">只复习错题</option><option value="focus">只复习重点项目</option></select></label><p class="ap-note">新一轮使用这些默认选项；有未完成轮次时优先接续断点。页面内仍可临时调整。熟悉词与揭晓播放沿用上方偏好；章节和标签保留在各练习页选择。</p>';document.querySelector('#apPreferences').append(apPracticeDefaults);apRefreshSettings();
 
 const apListeningAuto=document.createElement('div');apListeningAuto.className='ap-course-check';apListeningAuto.innerHTML='<h4>听音辨词自动播放</h4><label class="ap-switch-row"><span><strong>进入下一词时自动播放</strong><small>只播放已保存录音；手动操作、揭晓答案或离开页面时停止连播。</small></span><input type="checkbox" role="switch" data-ap-preference="listeningAutoPlay"></label><label>每个词自动播放次数<select data-ap-choice="listeningAutoRepeats"><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option><option value="4">4 次</option><option value="5">5 次</option></select></label>';document.querySelector('#apPreferences').append(apListeningAuto);apRefreshSettings();
+
+// Group existing controls without replacing their handlers or account state.
+const apReadingPreference=document.createElement('label');apReadingPreference.className='ap-switch-row';apReadingPreference.innerHTML='<span><strong>整句拼读默认展开</strong><small>打开句子详情时，展开整句或分段拼读；不自动播放。</small></span><input type="checkbox" role="switch" data-ap-preference="expandSentenceReading">';
+const apPrefs=document.querySelector('#apPreferences');
+apPrefs.querySelector('[data-ap-preference="expandExamples"]').closest('label').before(apReadingPreference);
+function apGroup(title,nodes,open=false){const fold=document.createElement('details');fold.className='ap-preference-group';fold.open=open;const summary=document.createElement('summary');summary.textContent=title;fold.append(summary);for(const n of nodes)if(n)fold.append(n);apPrefs.append(fold);return fold;}
+const apReadingRows=[...apPrefs.children].filter(n=>n.classList.contains('ap-switch-row')&&n!==familiarPreference&&n!==adaptivePreference);
+apGroup('阅读与播放',apReadingRows,true);
+apGroup('章节检测与自测',[apSelfTest,apCourseCheck,familiarPreference]);
+apGroup('每日清单与自由练习',[apPracticeDefaults,adaptivePreference]);
+apGroup('听音辨词自动播放',[apListeningAuto]);
+for(const n of [document.querySelector('#apResetPreferences'),document.querySelector('#apPreferenceStatus')])apPrefs.append(n);
+apRefreshSettings();
 </script>
 <style data-learning-bundle="app-settings">
 #personalCenter.ap-settings{width:min(960px,calc(100vw - 32px));max-width:960px;max-height:90dvh;padding:0 28px 24px;box-sizing:border-box;background:#f6f9f5;border-radius:22px;overflow:auto}#personalCenter .ap-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0 14px;background:#f6f9f5}#personalCenter .ap-header h2{font-size:25px;margin:0}#personalCenter .ap-header button{float:none;min-width:44px;min-height:44px;margin:0}#personalCenter .ap-intro{font-size:13px;color:#708279;margin:0 0 16px;line-height:1.7}#personalCenter .ap-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}#personalCenter .ap-wide,#personalCenter .ap-sections,#apSettingsStatus{grid-column:1/-1}#personalCenter .ap-sections{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 2px}#personalCenter .ap-sections button{font-size:13px;min-height:44px;padding:8px 18px;border-radius:24px;background:#e9f2eb;border:0;color:#3e6b59}#personalCenter .ap-card{min-width:0;scroll-margin-top:86px;background:#fff;border:1px solid #dce7dd;border-radius:16px;padding:20px}#personalCenter .ap-card h3{font-size:17px;margin:0 0 14px;color:#234c40}#personalCenter .ap-card h3:not(:first-child){margin-top:24px}#personalCenter .ap-note{font-size:12px;color:#6d7e72;line-height:1.8;overflow-wrap:anywhere;margin:12px 0 0}#personalCenter .ap-account-identity p{font-size:17px;margin:0 0 8px;overflow-wrap:anywhere;color:#275848}#personalCenter .ap-card details{margin-top:14px;padding-top:12px;border-top:1px solid #e7eee7}#personalCenter .ap-card summary{font-size:14px;line-height:1.7;min-height:40px;color:#335f4e;cursor:pointer}#personalCenter .ap-card p,#personalCenter .ap-card label{max-width:100%;overflow-wrap:anywhere}#personalCenter .ap-card button{min-height:44px}#personalCenter .ap-card input:not([type=checkbox]),#personalCenter .ap-card select{max-width:100%;box-sizing:border-box;font-size:16px}#personalCenter .ap-switch-row{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0;padding:14px 0;border-bottom:1px solid #e8eee7}#personalCenter .ap-switch-row span{min-width:0}#personalCenter .ap-switch-row strong{display:block;font-size:15px;font-weight:550;line-height:1.6}#personalCenter .ap-switch-row small{display:block;font-size:12px;color:#758378;line-height:1.7;margin-top:5px}#personalCenter .ap-switch-row input{appearance:auto;-webkit-appearance:checkbox;width:22px;height:22px;min-height:22px;flex:0 0 22px;margin:0;accent-color:#087f70;cursor:pointer}#personalCenter .ap-secondary{margin-top:14px;font-size:12px;padding:8px 10px;background:#f5f8f3;color:#587363;border-color:#dce7dd}#personalCenter .ap-link-row{display:flex;width:100%;justify-content:space-between;align-items:center;gap:16px;text-align:left;border:0;background:#edf5ef;padding:14px;border-radius:12px}#personalCenter .ap-link-row strong{display:block;font-size:14px;font-weight:550}#personalCenter .ap-link-row small{display:block;font-size:12px;line-height:1.7;color:#6d8072;margin-top:6px}#personalCenter .ap-data-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}#personalCenter .ap-data-actions button{font-size:14px;padding:10px 14px;background:#f4f8f2;color:#305c48;border-color:#c9ddce}#personalCenter #avatarChoices button{min-width:44px;min-height:44px;font-size:25px}#personalCenter #avatarSection h3{display:none}#personalCenter #apPreferenceStatus,#personalCenter #apSettingsStatus{font-size:13px;color:#087f70;line-height:1.8;white-space:pre-wrap}#personalCenter #apCompatibility{font-size:12px}#personalCenter [hidden]{display:none!important}.ap-more-entry{display:block;width:100%;margin-top:12px;text-align:left;font-size:14px;min-height:44px}#personalCenter .ap-card #cloudAccountPanel{margin-top:8px}#personalCenter .ap-card #cloudAccountPanel button{font-size:13px;padding:8px 11px}#personalCenter #cloudAccountPanel .cloud-actions{flex-wrap:wrap}
@@ -9011,6 +9037,34 @@ const apListeningAuto=document.createElement('div');apListeningAuto.className='a
 #personalCenter .ap-sync-actions button:focus-visible{outline:2px solid #087f70;outline-offset:3px}
 #personalCenter .ap-sync-actions button:disabled{opacity:.45;cursor:wait}
 @media(max-width:650px){#personalCenter .ap-account-heading{align-items:stretch;flex-direction:column;gap:12px;margin-bottom:18px}#personalCenter .ap-sync-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}#personalCenter .ap-sync-actions button{width:100%;min-height:42px;font-size:13px;padding:10px 12px}#personalCenter .ap-account-heading .ap-sync-actions #cloudSyncButton{grid-column:1/-1;justify-self:end;width:auto;min-height:32px;padding:5px 2px;font-size:12px}}
+
+/* Unified settings controls; original actions and form handlers stay attached. */
+#personalCenter .ap-preference-group{border:1px solid #e0e9e4;border-radius:12px;padding:0 14px;margin:12px 0;background:#fbfdfb}
+#personalCenter .ap-preference-group>summary{display:list-item;padding:12px 0;min-height:0;font-weight:600;font-size:14px}
+#personalCenter .ap-preference-group>div{margin:0;padding:8px 0;border:0}
+#personalCenter .ap-preference-group h4{font-size:13px;margin:12px 0 8px;color:#627b70}
+#personalCenter .ap-course-check>label{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-size:13px}
+#personalCenter .ap-course-check>label.ap-switch-row{flex-direction:row}
+#personalCenter .ap-course-check select{width:100%;margin:0;min-height:42px;padding:8px 10px;border-radius:9px}
+#personalCenter .ap-favorites-entry{margin-top:8px}
+#personalCenter .ap-card button{border-radius:10px;font-size:13px;padding:9px 12px;line-height:1.5;min-height:40px;margin-block:4px}
+#personalCenter .ap-data-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#personalCenter .ap-data-actions button{margin:0;width:100%}
+@media(max-width:650px){
+ #personalCenter .ap-intro{display:none}
+ #personalCenter .ap-header{border-bottom:1px solid #e2ebe5;margin-bottom:12px}
+ #personalCenter .ap-sections{gap:4px;background:#eaf1ec;border-radius:11px;padding:4px}
+ #personalCenter .ap-sections button{flex:1;padding:8px 10px;border-radius:8px;font-size:13px;min-height:38px;margin:0;white-space:nowrap}
+ #personalCenter .ap-sections button:focus-visible{outline:2px solid #087f70;outline-offset:-2px}
+ #personalCenter .ap-card{padding:14px}
+ #personalCenter .ap-card button{font-size:13px;min-height:40px;padding:8px 11px}
+ #personalCenter .ap-link-row{padding:12px;gap:8px}
+ #personalCenter .ap-switch-row{padding:12px 0;gap:12px}
+ #personalCenter .ap-switch-row strong{font-size:14px}
+ #personalCenter .ap-switch-row small,#personalCenter .ap-note{font-size:12px;line-height:1.65}
+ #personalCenter .ap-preference-group{padding:0 12px}
+ #personalCenter #speechSettings button,#personalCenter #cloudAccountPanel button{max-width:100%;white-space:normal}
+}
 </style>
 <script data-learning-bundle="profile-personalization">
 /* Compact profile cache and image editor; account sync transports compressed avatars, never original photos. */
@@ -9545,7 +9599,7 @@ async function fvOpen(button){
 async function fvSetRemoved(item){await fvToggle(item,false);}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-fv-toggle],[data-fv-open],[data-fv-parent]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();const status=()=>learningDialog.open?document.querySelector('#learningDialogStatus'):document.querySelector('#fvNotice');
  const task=async()=>{b.disabled=true;try{if(b.dataset.fvOpen!==undefined)return await fvOpen(b);if(b.dataset.fvParent)return await saOpenNested(b.dataset.fvParent,b);const active=await fvToggle(JSON.parse(b.dataset.fvToggle),b.getAttribute('aria-pressed')!=='true');if(status())status().textContent=active?'已收藏；不会加入每日学习任务。':'已取消收藏；原词句与学习进度保留。';}catch(error){if(status())status().textContent='收藏操作未完成：'+error.message;}finally{b.disabled=false;}};void task();},true);
-function fvEntries(){for(const parent of [typeof appMorePanel!=='undefined'?appMorePanel:null,document.querySelector('#apLearning')]){if(!parent||parent.querySelector('[data-fv-open]'))continue;const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.textContent='♡ 收藏夹';parent.append(b);}const nav=document.querySelector('#viewNav');if(nav&&!nav.querySelector('[data-fv-open]')){const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.className='fv-nav';b.textContent='♡ 收藏夹';nav.append(b);}if(!document.querySelector('#fvNotice')){const n=document.createElement('p');n.id='fvNotice';n.className='fv-notice';n.setAttribute('role','status');document.querySelector('main')?.append(n);}}
+function fvEntries(){for(const parent of [typeof appMorePanel!=='undefined'?appMorePanel:null,document.querySelector('#apLearning')]){if(!parent||parent.querySelector('[data-fv-open]'))continue;const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.textContent='♡ 收藏夹';if(parent.id==='apLearning'){b.className='ap-link-row ap-favorites-entry';b.innerHTML='<span><strong>收藏夹</strong><small>查看收藏的词句与文件夹</small></span><span aria-hidden="true">›</span>';parent.querySelector('[data-ap-action="goals"]')?.after(b);}else parent.append(b);}const nav=document.querySelector('#viewNav');if(nav&&!nav.querySelector('[data-fv-open]')){const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.className='fv-nav';b.textContent='♡ 收藏夹';nav.append(b);}if(!document.querySelector('#fvNotice')){const n=document.createElement('p');n.id='fvNotice';n.className='fv-notice';n.setAttribute('role','status');document.querySelector('main')?.append(n);}}
 const fvOriginalCloudSync=learningCloudSync;
 learningCloudSync=async function(...args){const result=await fvOriginalCloudSync(...args);try{await fvRefresh();fvQueue();}catch(error){args[2]?.('资料同步已完成，但收藏入口暂未刷新：'+error.message);}return result;};
 fvEntries();fvQueue();fvReadPending=fvRefresh().catch(error=>console.warn('收藏读取失败：',error.message)).finally(()=>{fvReadPending=null;});

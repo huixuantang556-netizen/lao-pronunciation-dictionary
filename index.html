@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ca2149fdfb60e0d9">
+  <meta name="lao-app-build" content="27ec3573b404c8f8">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6983,7 +6983,7 @@ learningOpenDetail=async function(id){
  const exportButton=document.createElement('button');exportButton.className='sa-export-saved';exportButton.textContent='导出已保存解析 JSON';exportButton.disabled=!m.sentenceAnalysis;exportButton.onclick=()=>saDownload('已保存句子解析.json',JSON.stringify(saValidate(m.sentenceAnalysis,m.textLao),null,2));host.querySelector('.sa-actions').append(exportButton);
  const a=m.sentenceAnalysis;if(!a)return;
  if(saTextKey(a.original)!==saTextKey(m.textLao)){const warning=document.createElement('p');warning.className='ss-stale-warning';warning.textContent='原句已变化，请更新解析；旧解析暂不用于句中点词。';host.prepend(warning);return;}
- const displayAnalysis=typeof clToken==="function"?{...a,segments:a.segments.map(s=>({...s,words:s.words.map(t=>clToken(t,m,snap))}))}:a;
+ const displayAnalysis=typeof clToken==="function"?{...a,segments:a.segments.map(s=>({...s,words:s.words.map(t=>clToken(t,m,snap,detailWords||[]))}))}:a;
  const ranges=wslRanges(m.textLao,displayAnalysis),fallbacks=wslFallbacks(displayAnalysis,ranges),tokens=[...ranges.map(r=>r.token),...fallbacks],panel=document.createElement('section');panel.className='wsl-panel';
  panel.innerHTML='<div class="wsl-sentence" lang="lo">'+wslSentenceHtml(m.textLao,ranges)+'</div><p class="wsl-translation">'+h(m.translationZh||a.translation||'')+'</p><p class="wsl-hint">点词听读 · 查看本句词义</p>'+(fallbacks.length?'<details class="wsl-other-meanings"><summary>其他词义</summary>'+fallbacks.map((t,i)=>'<button data-wsl-token="'+(ranges.length+i)+'"><span lang="lo">'+h(t.lao)+'</span> · '+h(t.meaning)+'</button>').join('')+'</details>':'')+'<div class="wsl-card" aria-live="polite" hidden></div><p class="wsl-status" role="status"></p>';
  host.prepend(panel);let timer=null,selection=0,selectedToken=-1;
@@ -6997,6 +6997,8 @@ learningOpenDetail=async function(id){
   if(request!==selection||!panel.isConnected)return;
   for(const old of panel.querySelectorAll('.ns-number-card'))old.hidden=true;
   card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);const close=document.createElement('button');close.type='button';close.dataset.wslCollapse='';close.textContent='收起词义';close.setAttribute('aria-label','收起当前词义卡片');close.style.cssText='float:right;font-size:13px;min-height:40px';card.prepend(close);
+  if(typeof smeEditGloss==='function'){const edit=document.createElement('button');edit.type='button';edit.textContent='修改本句词义';edit.onclick=()=>smeEditGloss(m.id,token).catch(error=>status.textContent=error.message);card.querySelector('.wsl-word-actions')?.append(edit);const dictionary=smeDictionary(token,detailWords||[]);if(dictionary){const info=document.createElement('p');info.className='tag-hint';info.textContent='词典最新释义：'+dictionary.meaning+' · '+(token.meaningSource==='dictionary'?'本句跟随词典':'本句使用独立释义');card.querySelector('.wsl-meaning')?.after(info);}}
+
   const savedComposition=typeof clCompositionHtml==='function'?clCompositionHtml(token.lao,snap,detailWords||[]):'';if(savedComposition){const composition=document.createElement('section');composition.innerHTML=savedComposition;card.append(composition);}
   if(!savedComposition&&typeof cwSplits==='function'&&typeof cwIndex==='function'&&!token.isName&&token.kind!=='name'){
    const index=cwIndex(detailWords||[],snap.learningMaterials),html=wslCompoundHtml(token,index,h);
@@ -11768,9 +11770,11 @@ async function laStartAuto(play,isCurrent){
 </style>
 <script data-context-learning>
 /* Keep sentence-local glosses editable; dictionary membership is an explicit action. */
-function clToken(token,parent,snap){
+function clToken(token,parent,snap,entries=[]){
  const unit=snap.learningMaterials.find(m=>m.id===token.target&&!m.deleted&&m.analysisOwner===parent.id&&m.analysisUnitType==='word'&&m.textLao===token.lao);
- return unit?{...token,meaning:unit.translationZh||token.meaning}:token;
+ const result=unit?{...token,meaning:unit.translationZh??token.meaning,meaningSource:unit.contextMeaningSource||token.meaningSource,dictionaryRef:unit.contextDictionaryRef||token.dictionaryRef}:token;
+ if(result.meaningSource==='dictionary'&&typeof smeDictionary==='function'){const word=smeDictionary(result,entries);if(word&&word.syncId===result.dictionaryRef)return {...result,meaning:word.meaning};}
+ return result;
 }
 function clReadingShape(basis){return {mode:basis?.mode,original:basis?.original,segments:basis?.segments?.map(s=>({index:s.index,original:s.original,words:(s.words||[]).map(w=>({lao:w.lao,target:w.target||''}))}))};}
 function clRelabelPronunciation(m){
@@ -11785,7 +11789,7 @@ function clGlossWrites(rows,snap){
  const before=new Map(snap.learningMaterials.map(m=>[m.id,m])),writes=new Map((rows.learningMaterials||[]).map(m=>[m.id,m]));
  for(const unit of rows.learningMaterials||[]){const old=before.get(unit.id);if(!old||old.deleted||unit.deleted||!unit.analysisOwner||old.analysisOwner!==unit.analysisOwner||old.textLao!==unit.textLao||old.translationZh===unit.translationZh||unit.analysisUnitType!=='word')continue;
   const source=writes.get(unit.analysisOwner)||before.get(unit.analysisOwner);if(!source||source.deleted||!source.sentenceAnalysis)continue;
-  let changed=false;const segments=source.sentenceAnalysis.segments.map(s=>({...s,words:(s.words||[]).map(w=>{if(w.target!==unit.id||w.lao!==unit.textLao)return w;changed=true;return {...w,meaning:unit.translationZh};})}));
+  let changed=false;const segments=source.sentenceAnalysis.segments.map(s=>({...s,words:(s.words||[]).map(w=>{if(w.target!==unit.id||w.lao!==unit.textLao)return w;changed=true;return {...w,meaning:unit.translationZh,...(unit.contextMeaningSource?{meaningSource:unit.contextMeaningSource,dictionaryRef:unit.contextDictionaryRef||''}:{})};})}));
   if(changed){const analysis={...source.sentenceAnalysis,segments};let parent={...source,sentenceAnalysis:analysis,updatedAt:Math.max(source.updatedAt||0,unit.updatedAt||Date.now())};if(source.v2Data?.studyAnalysis?.grammar)parent.v2Data={...source.v2Data,studyAnalysis:{...source.v2Data.studyAnalysis,grammar:analysis}};writes.set(parent.id,clRelabelPronunciation(parent));}
   writes.set(unit.id,clRelabelPronunciation(unit));
  }
@@ -12174,5 +12178,63 @@ cbButton.type='button';cbButton.textContent='整理例句中的新词';cbButton.
 <style data-context-word-batch>
 .context-word-batch{width:min(760px,94vw);max-height:88dvh;box-sizing:border-box;padding:22px;border:1px solid #d5e5dc;border-radius:20px;color:#21443c;background:#fff;overflow:auto}.context-word-batch::backdrop{background:#173e3066}.context-word-batch header{display:flex;align-items:center;justify-content:space-between;gap:12px}.context-word-batch h2{margin:0;font-size:22px}.context-word-batch p{line-height:1.65}.context-word-batch input[type=search]{display:block;width:100%;box-sizing:border-box;margin-top:6px}.cb-word{padding:16px 0;border-top:1px solid #e1ebe5}.cb-word>label{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.cb-word input[type=checkbox]{width:20px;height:20px}.cb-word strong{font-size:24px}.context-word-batch .cb-tags{font-size:13px;color:#53766a}.context-word-batch footer{position:sticky;bottom:-22px;padding:12px 0;background:#fffffff5;border-top:1px solid #d5e5dc;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.context-word-batch footer p{flex-basis:100%;margin:0;font-size:14px}.context-word-batch button{min-height:40px;padding:8px 12px;font-size:14px}.context-word-batch details{margin:10px 0}.context-word-batch [data-cb-save]{background:#087e70;color:white}.context-word-batch a{color:#087e70}@media(max-width:600px){.context-word-batch{padding:16px;max-height:90dvh}.context-word-batch h2{font-size:19px}.context-word-batch p{font-size:14px}.context-word-batch footer{bottom:-16px}.cb-word>label span{flex-basis:100%;padding-left:32px}}
 </style>
+<script data-simple-material-edit>
+/* Single-record editing uses named fields; context glosses keep explicit dictionary links. */
+function smeDictionary(token,entries){
+ const refs=[token.dictionaryRef,token.target?.startsWith('word:')?token.target.slice(5):''].filter(Boolean);
+ const matches=entries.filter(w=>!w.deleted&&saTextKey(w.word)===saTextKey(token.lao));
+ const explicit=matches.filter(w=>refs.includes(w.syncId)||(w.syncAliases||[]).some(r=>refs.includes(r)));
+ return explicit.length===1?explicit[0]:matches.length===1?matches[0]:null;
+}
+function smeGlossPlan(parent,token,snap,{meaning,note,source,ref},now=Date.now()){
+ if(!String(meaning).trim())throw Error('请填写本句中文词义。');
+ if(!parent?.sentenceAnalysis)throw Error('本句解析不存在，请重新打开。');
+ let found=false;const segments=parent.sentenceAnalysis.segments.map(s=>({...s,words:(s.words||[]).map(w=>{
+  if(w.lao!==token.lao||(w.target||'')!==(token.target||''))return w;
+  found=true;return {...w,meaning:meaning.trim(),note,meaningSource:source,dictionaryRef:ref||''};
+ })}));if(!found)throw Error('句中词已变化，请重新打开。');
+ const a={...parent.sentenceAnalysis,segments},next={...parent,sentenceAnalysis:a,updatedAt:now};
+ if(parent.v2Data?.studyAnalysis?.grammar)next.v2Data={...parent.v2Data,studyAnalysis:{...parent.v2Data.studyAnalysis,grammar:a}};
+ const unit=snap.learningMaterials.find(m=>m.id===token.target&&!m.deleted&&m.analysisOwner===parent.id&&m.analysisUnitType==='word'&&m.textLao===token.lao);
+ return [clRelabelPronunciation(next),...(unit?[clRelabelPronunciation({...unit,translationZh:meaning.trim(),note,contextMeaningSource:source,contextDictionaryRef:ref||'',updatedAt:now})]:[])];
+}
+async function smeEditGloss(parentId,token){
+ const workspace=workspaceName('simple-edit'),snap=await learningSnapshot(),parent=snap.learningMaterials.find(m=>m.id===parentId&&!m.deleted),entries=await allEntries();
+ if(!parent)throw Error('原句不存在，请重新打开。');
+ const unit=snap.learningMaterials.find(m=>m.id===token.target&&m.analysisOwner===parentId&&!m.deleted),word=smeDictionary({...token,dictionaryRef:unit?.contextDictionaryRef||token.dictionaryRef},entries),h=learningEsc;
+ learningDraft={kind:'context-gloss',dirty:false};
+ learningModal('修改本句词义','<p lang="lo">'+h(token.lao)+'</p><p>本句：'+h(parent.translationZh||parent.textLao)+'</p><form id="smeGlossForm"><label>词义来源<select id="smeSource"><option value="context">本句专用释义</option>'+(word?'<option value="dictionary">跟随词典释义</option>':'')+'</select></label>'+(word?'<p>词典最新释义：<span id="smeDictionaryMeaning">'+h(word.meaning)+'</span></p><button type="button" id="smeCopy">复制词典释义到本句，再自行精简</button>':'<p>没有找到唯一对应的词典词条，可直接填写本句释义。</p>')+'<label>本句中文词义<textarea id="smeMeaning" rows="3"></textarea></label><label>用法与备注（可换行）<textarea id="smeNote" rows="5"></textarea></label><p>本句专用释义只影响这句；选择跟随词典后，以后修改对应词典释义，本句会显示最新内容。</p><button type="submit" class="primary">保存本句词义</button><button type="button" id="smeCancel">取消</button></form><p id="smeStatus" role="status"></p>');
+ $('#smeMeaning').value=unit?.translationZh??token.meaning??'';$('#smeNote').value=unit?.note||token.note||'';
+ $('#smeSource').value=word&&(unit?.contextMeaningSource||token.meaningSource)==='dictionary'?'dictionary':'context';
+ const mode=()=>{const follow=$('#smeSource').value==='dictionary';$('#smeMeaning').readOnly=follow;if(follow)$('#smeMeaning').value=word.meaning;};mode();
+ $('#smeSource').onchange=()=>{mode();learningDraft.dirty=true;};
+ if(word)$('#smeCopy').onclick=()=>{$('#smeSource').value='context';mode();$('#smeMeaning').value=word.meaning;learningDraft.dirty=true;};
+ $('#smeGlossForm').oninput=()=>{learningDraft.dirty=true;};
+ $('#smeCancel').onclick=()=>{learningDraft=null;return learningOpenDetail(parentId);};
+ $('#smeGlossForm').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{
+  if(workspace!==workspaceName('simple-edit'))throw Error('账号空间已变化，请重新打开。');const fresh=await learningSnapshot(),current=fresh.learningMaterials.find(m=>m.id===parentId);if(!cloudSame(current,parent)||unit&&!cloudSame(unit,fresh.learningMaterials.find(m=>m.id===unit.id)))throw Error('本句刚被其他页面修改，请重新打开后再保存。');
+  const source=$('#smeSource').value,latest=source==='dictionary'?smeDictionary({...token,dictionaryRef:word?.syncId},await allEntries()):null;
+  if(source==='dictionary'&&(!latest||latest.syncId!==word?.syncId))throw Error('对应词典词条已变化，请重新打开。');
+  const rows=smeGlossPlan(current,token,fresh,{meaning:latest?latest.meaning:$('#smeMeaning').value,note:$('#smeNote').value,source,ref:source==='dictionary'?latest.syncId:''});
+  await learningWrite({learningMaterials:rows},fresh);learningDraft=null;learningBusy=false;await learningOpenDetail(parentId);
+ }catch(error){$('#smeStatus').textContent=error.message;}finally{learningBusy=false;}};
+}
+const smePreviousEditor=learningEditor;
+learningEditor=async function(id=null){
+ if(!id)return smePreviousEditor(id);
+ const workspace=workspaceName('simple-edit'),resolved=await learningResolve(id),old=resolved.m;if(resolved.w||old.schemaVersion===2)return smePreviousEditor(id);
+ learningDraft={kind:'single-material',dirty:false};const h=learningEsc;
+ learningModal('修改学习材料','<form id="smeMaterialForm"><label>老挝语原文<textarea id="smeLao" rows="2"></textarea></label><label>中文释义／翻译<textarea id="smeZh" rows="3"></textarea></label><label>用法与备注（可换行）<textarea id="smeMaterialNote" rows="6"></textarea></label><label>来源<input id="smeMaterialSource"></label><label>标签（逗号分隔）<input id="smeTags"></label><p>每个框填写对应内容即可。备注可以换行，无需填写分隔符或重新选择录音。</p><button type="submit" class="primary">保存修改</button><button type="button" id="smeMaterialCancel">取消</button></form><p id="smeMaterialStatus" role="status"></p>');
+ for(const [id,value]of [['smeLao',old.textLao],['smeZh',old.translationZh],['smeMaterialNote',old.note],['smeMaterialSource',old.source],['smeTags',(old.tags||[]).join(',')]])$('#'+id).value=value||'';
+ $('#smeMaterialForm').oninput=()=>{learningDraft.dirty=true;};$('#smeMaterialCancel').onclick=()=>{learningDraft=null;return learningOpenDetail(id);};
+ $('#smeMaterialForm').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{
+  if(workspace!==workspaceName('simple-edit'))throw Error('账号空间已变化，请重新打开。');const snap=await learningSnapshot(),current=snap.learningMaterials.find(m=>m.id===old.id);if(!cloudSame(current,old))throw Error('材料已在其他页面修改，请重新打开。');
+  const text=$('#smeLao').value.trim();if(!text)throw Error('请填写老挝语原文。');
+  const next={...current,textLao:text,translationZh:$('#smeZh').value,note:$('#smeMaterialNote').value,source:$('#smeMaterialSource').value,tags:learningTags($('#smeTags').value),...(current.analysisOwner?{contextMeaningSource:'context',contextDictionaryRef:''}:{}),updatedAt:Date.now()};
+  await learningWrite({learningMaterials:[next]},snap);learningDraft=null;learningBusy=false;await learningOpenDetail(id);
+ }catch(error){$('#smeMaterialStatus').textContent=error.message;}finally{learningBusy=false;}};
+};
+</script>
+<style data-simple-material-edit>#smeMaterialForm textarea,#smeGlossForm textarea{white-space:pre-wrap}#smeMaterialForm button,#smeGlossForm button{min-height:42px;padding:9px 14px;font-size:14px;margin:5px 6px 5px 0}.wsl-word-actions{display:flex;flex-wrap:wrap;gap:6px}.wsl-word-actions button{min-height:40px;padding:8px 12px;font-size:14px}.wsl-card .tag-hint{white-space:pre-wrap}</style>
 </body>
 </html>

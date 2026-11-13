@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="36ce6b593ceba3ac">
+  <meta name="lao-app-build" content="43b89b7380d2673f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -723,7 +723,7 @@ return new Promise((resolve,reject)=>{const open=indexedDB.open(workspaceName('l
     async function defaultSpeech(text,options={}) {
       const key=JSON.stringify([ttsSettings.endpoint||'',text]);
       const cached=options.force?null:await ttsCache('readonly',key);if(cached instanceof Blob)return cached;
-      if(!options.force&&!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;const rows=await cloudCacheRows();const saved=rows.find(row=>{try{return JSON.parse(row.key)[1]===text;}catch(_){return false;}});if(saved?.blob instanceof Blob)return saved.blob;}
+      if(!options.force&&!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;const saved=await findSavedAudioByText(text);if(saved instanceof Blob)return saved;}
       if(!ttsSettings.endpoint||!ttsSettings.token)throw new Error('请先展开“在线发音设置”，配置服务地址和访问口令。');
       if(ttsPending.has(key)){if(options.force)throw Error('本条正在生成，请等待完成后再操作。');return ttsPending.get(key);}
 const job=(async()=>{speechResultGuard(key);speechRateGate();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),195000);try{const response=await fetch(ttsSettings.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ttsSettings.token},body:JSON.stringify({text,language:'lo-LA',...(options.batchPause?{batchPause:true}:{})}),signal:controller.signal});if(!response.ok){let message='在线发音失败（'+response.status+'）';try{message=(await response.json()).error||message;}catch(_){}if(response.status===429)speechRateLimit();const error=new Error(message);error.status=response.status;throw error;}if(!response.headers.get('Content-Type')?.startsWith('audio/'))throw new Error('服务没有返回有效音频。');const blob=await response.blob();if(!blob.size)throw new Error('语音服务返回了空录音。');try{if(!options.previewOnly)await ttsCache('readwrite',key,blob);}catch(_){$('#ttsStatus').textContent='语音已生成，但本机缓存失败，下次可能需重新生成。';}speechResultClear();return blob;}catch(error){if(error.name==='AbortError'||error.name==='TimeoutError'||error instanceof TypeError||error.status>=500){speechResultUncertain(key);throw new Error('未收到可用音频结果。请求可能已处理并消耗额度；不会自动重试。请至少等待 2 分钟，核对用量后再决定是否重新提交。'+(error.message?' 原因：'+error.message:''));}throw error;}finally{clearTimeout(timer);}})();ttsPending.set(key,job);try{return await job;}finally{ttsPending.delete(key);}
@@ -894,6 +894,24 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         };
       });
     }
+async function findSavedAudioByText(text){
+ // The key cursor does not load audio data for unrelated words.
+ const result=await withDefaultAudioStore('readonly',store=>{
+  const match={};
+  const cursor=store.openKeyCursor();
+  cursor.onsuccess=()=>{
+   const row=cursor.result;
+   if(!row)return;
+   let word;
+   try{word=JSON.parse(row.key)[1];}catch(_){}
+   if(word!==text){row.continue();return;}
+   const audio=store.get(row.key);
+   audio.onsuccess=()=>{match.blob=audio.result;};
+  };
+  return match;
+ });
+ return result.blob;
+}
     async function exportDefaultAudio() {
       const rows=await withDefaultAudioStore('readonly',store=>{
         const rows=[],cursor=store.openCursor();
@@ -2599,7 +2617,7 @@ async function codaCachedSpeech(word){
  if(exact||ttsSettings.endpoint)return exact;
  const imported=await ttsCache('readonly',JSON.stringify(['imported-default',word]));
  if(imported)return imported;
- return (await cloudCacheRows()).find(row=>{try{return JSON.parse(row.key)[1]===word;}catch(_){return false;}})?.blob;
+ return await findSavedAudioByText(word);
 }
 async function codaShowEntry(id){
  if($('#codaReferences')?.isConnected)codaReferenceOrigin=window.scrollY||0;
@@ -2759,7 +2777,7 @@ async function learningWrite(rows,expected=null,options={}){
 function learningFindWord(ref,words){return words.find(x=>syncKeys(x).includes(ref));}
 function learningWordMaterial(word){return {id:'word:'+word.syncId,contentType:'word',linkedWordSyncIds:[word.syncId],textLao:'',translationZh:'',tags:[],note:'',focusLetters:[],focusVowels:[],audioSources:[],sourceType:'textbook_vocab',updatedAt:Date.now()};}
 // Read the shared cache, including saved audio from a previous endpoint. Never copy its Blob.
-async function learningCachedSpeech(text){const exact=await codaCachedSpeech(text);if(exact)return exact;return (await cloudCacheRows()).find(row=>{try{return JSON.parse(row.key)[1]===text;}catch(_){return false;}})?.blob;}
+async function learningCachedSpeech(text){const exact=await codaCachedSpeech(text);if(exact||!ttsSettings.endpoint)return exact;return findSavedAudioByText(text);}
 async function learningWordSpeech(word){const clip=await recordedReferenceForWord(word);if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}if(hasAudio(word)){await playEntrySpeech(word,'personal');return;}const blob=await learningCachedSpeech(word.word);if(blob){await learningPlayBlob(blob);return;}await playEntrySpeech(word,'default');}
 async function learningUnlink(id){const snap=await learningSnapshot(),place=snap.learningPlacements.find(p=>p.lessonId===learningLesson.id&&p.materialId===id&&!p.deleted);if(!place)return;await learningWrite({learningPlacements:[{...place,deleted:true,updatedAt:Date.now()}]},snap);}
 function learningPlacementFor(id,section,position,lesson){return {id:lesson.id+':'+id,materialId:id,materialType:'teaching',textbookId:lesson.textbookId,chapterId:lesson.chapterId,lessonId:lesson.id,section,position,updatedAt:Date.now()};}
@@ -6298,6 +6316,10 @@ function recordedReference(material,snap){
  return {blob:asset.blob,start:ref.start||0,end:ref.end??null,label:'手录参考发音 · '+(asset.name||ref.assetId)};
 }
 async function recordedReferenceForWord(word){
+ if(word.syncId&&typeof sfRead==='function'){
+  const {snap}=await sfRead('word:'+word.syncId);
+  return recordedReferenceForWordSnapshot(word,snap);
+ }
  return recordedReferenceForWordSnapshot(word,await learningSnapshot());
 }
 function recordedReferenceForWordSnapshot(word,snap){

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="2d6a39f4c9ed9968">
+  <meta name="lao-app-build" content="36ce6b593ceba3ac">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -385,7 +385,19 @@
  #practicePanel .mp-study-bar button{white-space:nowrap}
  #practicePanel #rpStatus:not(:empty){font-size:12px;line-height:1.6;color:#8d4f3a;padding:10px;overflow-wrap:anywhere}
 }
+.cc-result .cc-result-actions{margin:14px 0;padding:0;border:0}
+.cc-review-options{margin:14px 0 20px;padding:12px 14px;border:1px solid #dce8e1;border-radius:12px}
+.cc-review-options legend{padding:0 5px;color:#536e63;font-size:14px}
+.cc-review-choices{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.cc-review-choices label{display:flex;align-items:center;gap:7px;margin:0;padding:8px 10px;min-height:40px;box-sizing:border-box;border:1px solid #dce8e1;border-radius:8px;font-size:14px;cursor:pointer}
+.cc-review-choices label:has(:checked){background:#eef6f1;border-color:#7fb29d}
+.cc-review-choices input[type=radio]{width:auto;margin:0;accent-color:#087e6e}
+.cc-review-options button{font-size:14px;min-height:40px}
+.cc-review-options [role=status]{margin:8px 0 0;font-size:13px;color:#536e63}
+.cc-review-options [role=status]:empty,.cc-result [data-cc-result-status]:empty{display:none}
+.cc-result-list-title{font-size:16px;margin:0;padding:0 0 9px;border-bottom:1px solid #e1ebe4}
 
+.cc-result-pages[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -6794,21 +6806,43 @@ function courseCheckGroups(data,course,snap,words,scope,key,kind){
   return {id,lao:w?String(w.word||''):r.textLao||'',zh:w?String(w.meaning||''):r.translationZh||'',learningState:w?.learningState||m?.practiceReview?.learningState||m?.learningState,...(w?{reviewWord:w}:{})};
  }).filter(r=>r.lao.trim()&&r.zh.trim())}))).filter(g=>g.items.length);
 }
-function courseCheckFilter(groups,includeFamiliar=true){return includeFamiliar?groups:groups.map(g=>({...g,items:g.items.filter(r=>(r.reviewWord?.learningState||r.learningState)!=='green')})).filter(g=>g.items.length);}
+function courseCheckItemKey(row){
+ return JSON.stringify([row.id,row.lao,row.zh]);
+}
+function courseCheckRatings(snap,courseId){
+ const latest=new Map();
+ const summaries=snap.learningMaterials
+  .filter(m=>!m.deleted&&m.chapterResult?.courseId===courseId&&ccResultValid(m.chapterResult))
+  .map(m=>m.chapterResult).sort((a,b)=>a.at-b.at);
+ for(const summary of summaries){
+  for(const row of summary.items){
+   if(row.rating!=='skipped')latest.set(courseCheckItemKey(row),row.rating);
+  }
+ }
+ return latest;
+}
+function courseCheckFilter(groups,includeFamiliar=true,ratings=new Map()){
+ if(includeFamiliar)return groups;
+ return groups.map(group=>({...group,items:group.items.filter(row=>{
+  const rating=ratings.get(courseCheckItemKey(row))??row.reviewWord?.learningState??row.learningState;
+  return rating!=='green';
+ })})).filter(group=>group.items.length);
+}
 function courseCheckShuffle(items){const out=items.slice();for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;}
 function courseCheckQueue(groups,order){if(order==='random-all')return courseCheckShuffle(groups.flatMap(g=>g.items.map(r=>({...r,group:g.title}))));const random=order===true||order==='random';return (random?courseCheckShuffle(groups):groups).flatMap(g=>(random&&!g.dialogue?courseCheckShuffle(g.items):g.items).map(r=>({...r,group:g.title})));}
 async function courseCheckOpen(scope='course',key='',skipResume=false){
  if(learningHasWork())throw Error('请先结束编辑或录音');stopPracticeAudio();
  const course={...learningLesson},model=typeof ccReadCourse==='function'?await ccReadCourse():{snap:await learningSnapshot(),words:await allEntries()},snap=model.snap,words=model.words,data=lessonV2Export(snap,course),h=learningEsc;
  const groups=courseCheckGroups(data,course,snap,words,scope,key,'all');
+ const ratings=typeof ccResultValid==='function'?courseCheckRatings(snap,course.id):new Map();
  const checkpointKey=typeof ccCheckpointKey==='function'?ccCheckpointKey(course,scope,key):'',saved=!skipResume&&typeof ccCheckpointRead==='function'?ccCheckpointRead(checkpointKey,data,course,snap,words):null;
  if(saved){learningModal('继续章节检测','<p>上次进行到第 '+(saved.index+1)+' / '+saved.queue.length+' 项，题序和已保存评级保留。</p><button type="button" class="primary" id="ccResume">继续上次</button><button type="button" id="ccRestart">重新设置检测</button>');$('#ccResume').onclick=()=>courseCheckSession(saved.queue,course,saved.direction,snap,{checkpointKey,resume:saved,scopeLabel:saved.scopeLabel});$('#ccRestart').onclick=()=>{ccCheckpointSave(checkpointKey,null);void courseCheckOpen(scope,key,true).catch(learningError);};return;}
  const title=scope==='block'?groups[0]?.title:scope==='section'?data.sections.find(s=>s.id===key)?.title:course.title;
 learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option><option value="audio">听音辨词（揭晓前隐藏文字）</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><label>熟悉项目<select id="ccFamiliar"><option value="include">包含已标记熟悉的词句</option><option value="exclude">排除已标记熟悉的词句</option></select></label><p id="ccQuestionCount" class="cc-count-summary" role="status"></p><p class="tag-hint">可选择是否包含熟悉项目；听音模式揭晓前只提供播放，不显示答案和例句。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><label>检测后的学习清单<select id="ccReviewMode"><option value="none">只检测，不加入每日清单</option><option value="weak">检测完成后，将陌生和模糊词加入明日复习</option><option value="all">检测完成后，将全部已测词加入明日复习</option></select></label><button class="primary">开始检测</button></form>');
  for(const [id,name,fallback]of [['ccScope','Scope','current'],['ccKind','Kind','all'],['ccDirection','Direction','lao'],['ccOrder','Order','ordered']])$('#'+id).value=(typeof appPreference==='function'&&appPreference('courseCheck'+name))||fallback;
- $('#ccFamiliar').value=(typeof appPreference==='function'&&appPreference('includeFamiliar')===false)?'exclude':'include';const count=()=>{const chosenScope=$('#ccScope').value==='course'?'course':scope,selected=courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,$('#ccKind').value),$('#ccFamiliar').value!=='exclude'),total=selected.reduce((n,g)=>n+g.items.length,0);$('#ccQuestionCount').textContent=(chosenScope==='course'?'整章':chosenScope==='section'?'当前小节':'当前分组')+' · '+total+' 项 · '+selected.length+' 组（'+($('#ccFamiliar').value==='exclude'?'排除熟悉':'包含熟悉')+'）';};for(const id of ['ccScope','ccKind','ccFamiliar'])$('#'+id).onchange=count;count();
- $('#courseCheckSetup').onsubmit=e=>{e.preventDefault();const chosenScope=$('#ccScope').value==='course'?'course':scope,kind=$('#ccKind').value,direction=$('#ccDirection').value,queue=courseCheckQueue(courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,kind),$('#ccFamiliar').value!=='exclude'),$('#ccOrder').value);
-  if(!queue.length){$('#learningDialogStatus').textContent='此范围没有同时具备老挝语和中文的可测项目。';return;}
+ $('#ccFamiliar').value=(typeof appPreference==='function'&&appPreference('includeFamiliar')===false)?'exclude':'include';const count=()=>{const chosenScope=$('#ccScope').value==='course'?'course':scope,selected=courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,$('#ccKind').value),$('#ccFamiliar').value!=='exclude',ratings),total=selected.reduce((n,g)=>n+g.items.length,0);$('#ccQuestionCount').textContent=(chosenScope==='course'?'整章':chosenScope==='section'?'当前小节':'当前分组')+' · '+total+' 项 · '+selected.length+' 组（'+($('#ccFamiliar').value==='exclude'?'排除熟悉':'包含熟悉')+'）';};for(const id of ['ccScope','ccKind','ccFamiliar'])$('#'+id).onchange=count;count();
+ $('#courseCheckSetup').onsubmit=e=>{e.preventDefault();const chosenScope=$('#ccScope').value==='course'?'course':scope,kind=$('#ccKind').value,direction=$('#ccDirection').value,queue=courseCheckQueue(courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,kind),$('#ccFamiliar').value!=='exclude',ratings),$('#ccOrder').value);
+  if(!queue.length){$('#learningDialogStatus').textContent='此范围没有可测项目，请检查检测范围和熟悉词筛选。';return;}
   courseCheckSession(queue,course,direction,snap,{checkpointKey,reviewMode:$('#ccReviewMode').value,scopeLabel:chosenScope==='course'?'整章全部':chosenScope==='section'?'当前小节':'当前分组'});
  };
 }
@@ -11652,7 +11686,6 @@ function ccResultCounts(result){return Object.fromEntries(['green','yellow','red
 function ccResultRecent(snap,courseId){return snap.learningMaterials.filter(m=>!m.deleted&&ccResultValid(m.chapterResult)&&m.chapterResult.courseId===courseId).sort((a,b)=>b.chapterResult.at-a.chapterResult.at)[0]?.chapterResult||null;}
 async function ccResultSave(result){if(!ccResultValid(result))throw Error('本轮结果格式无效');const snap=await learningSnapshot(),id='chapter-result:'+String(result.items[0].attempt||crypto.randomUUID()).replace(/^review-event:/,''),old=snap.learningMaterials.find(m=>m.id===id);if(old?.chapterResult&&JSON.stringify(old.chapterResult.items)===JSON.stringify(result.items)&&old.chapterResult.reviewMode===result.reviewMode)return old.chapterResult;
  const row={...learningBlank(id,'knowledge','章节检测结果'),chapterResult:result,updatedAt:result.at};if(new Blob([JSON.stringify(row)]).size>230000)throw Error('本轮结果过大，原逐题学习记录仍保留');await learningWrite({learningMaterials:[row]},snap,{quickProgress:true});return result;}
-function ccResultNext(snap,course){const courses=learningOrderedCourses(snap).filter(c=>(c.library==='communication')===(course.library==='communication')&&(typeof lbBook!=='function'||lbBook(c).key===lbBook(course).key)),at=courses.findIndex(c=>c.id===course.id);return at>=0?courses[at+1]:null;}
 function ccResultDate(at){if(!Number.isFinite(at))return '未安排';const today=ccSpacingDay(Date.now(),0);return (at<ccSpacingDay(Date.now(),1)?'今天 '+new Date(at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):at<ccSpacingDay(Date.now(),2)?'明天':new Date(at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'}));}
 // Explicit opt-in at completion; test-only rounds never create review memberships or attempts.
 async function ccEnrollResult(result,mode,now=Date.now()){
@@ -11667,16 +11700,49 @@ async function ccEnrollResult(result,mode,now=Date.now()){
  }
  if(ops.length)await rrSave(ops,snap);return count;
 }
+function ccResultWeakItems(result){
+ return result.items.filter(row=>row.rating==='red'||row.rating==='yellow');
+}
+async function ccResultListenAgain(result,course){
+ const {snap,words}=await ccReadCourse();
+ const groups=courseCheckGroups(lessonV2Export(snap,course),course,snap,words,'course','','all');
+ const current=new Map(courseCheckQueue(groups).map(row=>[courseCheckItemKey(row),row]));
+ const queue=ccResultWeakItems(result).map(row=>current.get(courseCheckItemKey(row))).filter(Boolean);
+ if(!queue.length)throw Error('本轮陌生和模糊词句已修改或移除，请重新检测。');
+ courseCheckSession(queue,course,'audio',snap,{reviewMode:'none',scopeLabel:'重听陌生和模糊词句'});
+}
 async function ccResultOpen(result,course,options={}){
- const owner=workspaceName('chapter-result');let saveError='',enrollMessage='';if(options.save)try{result=await ccResultSave(result);}catch(e){saveError=e.message;}
+ const owner=workspaceName('chapter-result');let saveError='',enrollMessage=options.enrollMessage||'';if(options.save)try{result=await ccResultSave(result);}catch(e){saveError=e.message;}
  if(options.save&&!saveError&&['weak','all'].includes(result.reviewMode))try{const n=await ccEnrollResult(result,result.reviewMode);enrollMessage='已加入明日复习 '+n+' 项（已安排的不重复添加）。';}catch(e){enrollMessage='尚未加入复习：'+e.message+'，可用下方按钮重试。';}
  if(owner!==workspaceName('chapter-result'))return;
- const {snap,words,model}=typeof rrRead==='function'?await rrRead():{snap:await learningSnapshot(),words:[],model:{rows:[]}},next=ccResultNext(snap,course),counts=ccResultCounts(result),h=learningEsc,labels={red:'陌生',yellow:'模糊',green:'熟悉',skipped:'未评级'},states=new Map();
+ const {model}=typeof rrRead==='function'?await rrRead():{model:{rows:[]}},counts=ccResultCounts(result),h=learningEsc,labels={red:'陌生',yellow:'模糊',green:'熟悉',skipped:'未评级'},states=new Map();
  for(const row of model.rows)for(const k of reviewKeys(row.item))states.set(k+'|'+row.direction,row);
- const skill=result.direction==='zh'?'meaningToSpeech':'wordToMeaning';let filter=counts.red?'red':counts.yellow?'yellow':'green',page=0;
- learningModal('本轮检测结果','<section class="cc-result"><p class="cc-result-heading">'+h(result.title)+' · '+result.items.length+' 项</p><div class="cc-result-counts">'+Object.keys(labels).map(k=>'<button type="button" data-cc-result-filter="'+k+'" aria-pressed="false"><strong>'+counts[k]+'</strong><span>'+labels[k]+'</span></button>').join('')+'</div><details class="cc-result-help"><summary>复习安排说明</summary><p class="cc-result-plan">本章检测默认只保存结果，不自动扩大每日清单。你可以选择把陌生、模糊词或全部已测词加入明日复习；加入后再按实际回忆表现安排后续间隔。</p></details><div class="cc-result-actions">'+(next?'<button class="primary" data-cc-result-next>继续下一章 →</button>':'<button class="primary" data-cc-result-catalog>返回教材目录</button>')+'<button data-pending-review>查看今日到期复习</button></div><div class="cc-result-actions"><label>加入明日复习<select data-cc-enroll-mode><option value="weak">仅陌生和模糊词</option><option value="all">全部已测词句</option></select></label><button data-cc-enroll>确认加入明日复习</button></div><p data-cc-enroll-status role="status">'+h(enrollMessage||(['weak','all'].includes(result.reviewMode)?'本轮选择的词句已安排或可点击下方按钮补入明日复习。':'本轮仅保存检测结果；未选择加入的词句不会新增到每日清单。'))+'</p><div data-cc-result-list></div><div class="cc-result-pages"><button data-cc-result-prev>上一页</button><span data-cc-result-page></span><button data-cc-result-more>下一页</button></div><p data-cc-result-status role="status">'+h(options.historical?'这些是已保存逐题记录中的最近评级，不代表同一轮。':saveError?'汇总尚未保存：'+saveError+'；逐题评级保留，可重试保存。':'本轮结果已保留，可从章节标题旁再次查看。')+'</p>'+(saveError?'<button data-cc-result-retry>重试保存汇总</button>':'')+'</section>');
- const host=learningDialog.querySelector('.cc-result');function draw(){const all=result.items.filter(r=>r.rating===filter),rows=all.slice(page*20,page*20+20);for(const b of host.querySelectorAll('[data-cc-result-filter]'))b.setAttribute('aria-pressed',String(b.dataset.ccResultFilter===filter));host.querySelector('[data-cc-result-list]').innerHTML=rows.map((r,i)=>{const state=states.get(r.target+'|'+(r.skill||skill)),date=state?.status==='paused'?'已暂停此方向':state?.state?'下次复习：'+ccResultDate(state.state.nextReviewAt):r.rating==='skipped'?'本题未评级':'未加入本方向的每日清单';return '<article class="cc-result-row"><div><strong lang="lo">'+h(r.lao)+'</strong><p>'+h(r.zh)+'</p><small>'+h(date)+'</small></div><div><button data-cc-result-play="'+(page*20+i)+'" aria-label="播放此词句">▶</button><button data-cc-result-detail="'+(page*20+i)+'">详情</button></div></article>';}).join('')||'<p class="tag-hint">本轮没有'+labels[filter]+'项目。</p>';host.querySelector('[data-cc-result-page]').textContent=all.length?'第 '+(page+1)+' / '+Math.ceil(all.length/20)+' 页':'';host.querySelector('[data-cc-result-prev]').disabled=!page;host.querySelector('[data-cc-result-more]').disabled=(page+1)*20>=all.length;}
- host.onclick=async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.hasAttribute('data-cc-enroll')){b.disabled=true;try{const mode=host.querySelector('[data-cc-enroll-mode]').value,n=await ccEnrollResult(result,mode);host.querySelector('[data-cc-enroll-status]').textContent='已加入明日复习 '+n+' 项；重复内容不会再添加。';result={...result,reviewMode:mode};await ccResultSave(result);await ccResultOpen(result,course);}finally{b.disabled=false;}return;}if(b.dataset.ccResultFilter!==undefined){filter=b.dataset.ccResultFilter;page=0;draw();}else if(b.hasAttribute('data-cc-result-prev')){page--;draw();}else if(b.hasAttribute('data-cc-result-more')){page++;draw();}else if(b.hasAttribute('data-cc-result-next')){learningDialog.close();learningLesson=next;if(typeof lbSelectCourse==='function')lbSelectCourse(next);learningRoute='lesson';learningTab='knowledge';await renderLearning();}else if(b.hasAttribute('data-cc-result-catalog')){learningDialog.close();learningRoute='catalog';await renderLearning();}else if(b.dataset.ccResultPlay!==undefined||b.dataset.ccResultDetail!==undefined){const r=result.items.filter(r=>r.rating===filter)[Number(b.dataset.ccResultPlay??b.dataset.ccResultDetail)];if(b.dataset.ccResultPlay!==undefined)await saPlay(r.target);else await saOpenNested(r.target,b);}else if(b.hasAttribute('data-cc-result-retry')){await ccResultSave(result);host.querySelector('[data-cc-result-status]').textContent='本轮汇总已保存。';b.remove();}}catch(error){host.querySelector('[data-cc-result-status]').textContent=error.message;}};draw();
+ const skill=result.direction==='zh'?'meaningToSpeech':'wordToMeaning';let filter=counts.red?'red':counts.yellow?'yellow':counts.green?'green':'skipped',page=0;
+ const weakCount=counts.red+counts.yellow;
+ const ratedCount=weakCount+counts.green;
+ const reviewOptions=ratedCount?`
+  <fieldset class="cc-review-options">
+   <legend>安排明日复习（可选）</legend>
+   <div class="cc-review-choices">
+    <label><input type="radio" name="cc-enroll-mode" value="weak" ${weakCount?'checked':'disabled'}>陌生和模糊 · ${weakCount} 项</label>
+    <label><input type="radio" name="cc-enroll-mode" value="all" ${weakCount?'':'checked'}>全部已评级 · ${ratedCount} 项</label>
+   </div>
+   <button type="button" data-cc-enroll>加入明日复习</button>
+   <p data-cc-enroll-status role="status">${h(enrollMessage)}</p>
+  </fieldset>`:'';
+ learningModal('本轮检测结果',`<section class="cc-result">
+  <p class="cc-result-heading">${h(result.title)} · ${result.items.length} 项</p>
+  <div class="cc-result-counts" role="group" aria-label="按评级查看词句">${Object.keys(labels).map(k=>'<button type="button" data-cc-result-filter="'+k+'" aria-pressed="false"><strong>'+counts[k]+'</strong><span>'+labels[k]+'</span></button>').join('')}</div>
+  ${weakCount?'<div class="cc-result-actions"><button type="button" class="primary" data-cc-listen-again>立即重听陌生和模糊词句（'+weakCount+'）</button></div>':''}
+  ${reviewOptions}
+  <h3 class="cc-result-list-title" data-cc-result-list-title></h3>
+  <div data-cc-result-list></div>
+  <div class="cc-result-pages"><button data-cc-result-prev>上一页</button><span data-cc-result-page></span><button data-cc-result-more>下一页</button></div>
+  <p data-cc-result-status role="status">${h(options.historical?'这些是以往检测中各项的最近评级。':saveError?'汇总尚未保存：'+saveError:'')}</p>
+  ${saveError?'<button data-cc-result-retry>重试保存汇总</button>':''}
+ </section>`);
+ const host=learningDialog.querySelector('.cc-result');function draw(){const all=result.items.filter(r=>r.rating===filter),rows=all.slice(page*20,page*20+20);for(const b of host.querySelectorAll('[data-cc-result-filter]'))b.setAttribute('aria-pressed',String(b.dataset.ccResultFilter===filter));host.querySelector('[data-cc-result-list-title]').textContent=labels[filter]+'词句 · '+all.length+' 项';host.querySelector('[data-cc-result-list]').innerHTML=rows.map((r,i)=>{const state=states.get(r.target+'|'+(r.skill||skill)),date=state?.status==='paused'?'已暂停此方向':state?.state?'下次复习：'+ccResultDate(state.state.nextReviewAt):r.rating==='skipped'?'本题未评级':'未加入本方向的每日清单';return '<article class="cc-result-row"><div><strong lang="lo">'+h(r.lao)+'</strong><p>'+h(r.zh)+'</p><small>'+h(date)+'</small></div><div><button data-cc-result-play="'+(page*20+i)+'" aria-label="播放此词句">▶</button><button data-cc-result-detail="'+(page*20+i)+'">详情</button></div></article>';}).join('')||'<p class="tag-hint">本轮没有'+labels[filter]+'项目。</p>';host.querySelector('[data-cc-result-page]').textContent=all.length?'第 '+(page+1)+' / '+Math.ceil(all.length/20)+' 页':'';host.querySelector('.cc-result-pages').hidden=all.length<=20;host.querySelector('[data-cc-result-prev]').disabled=!page;host.querySelector('[data-cc-result-more]').disabled=(page+1)*20>=all.length;}
+ host.onclick=async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.hasAttribute('data-cc-listen-again')){b.disabled=true;try{await ccResultListenAgain(result,course);}finally{b.disabled=false;}return;}if(b.hasAttribute('data-cc-enroll')){b.disabled=true;try{const mode=host.querySelector('input[name="cc-enroll-mode"]:checked').value,n=await ccEnrollResult(result,mode);result={...result,reviewMode:mode};await ccResultSave(result);await ccResultOpen(result,course,{...options,save:false,enrollMessage:n?'已加入明日复习 '+n+' 项。':'所选词句已安排，或内容已修改。'});}finally{b.disabled=false;}return;}if(b.dataset.ccResultFilter!==undefined){filter=b.dataset.ccResultFilter;page=0;draw();}else if(b.hasAttribute('data-cc-result-prev')){page--;draw();}else if(b.hasAttribute('data-cc-result-more')){page++;draw();}else if(b.dataset.ccResultPlay!==undefined||b.dataset.ccResultDetail!==undefined){const r=result.items.filter(r=>r.rating===filter)[Number(b.dataset.ccResultPlay??b.dataset.ccResultDetail)];if(b.dataset.ccResultPlay!==undefined)await saPlay(r.target);else await saOpenNested(r.target,b);}else if(b.hasAttribute('data-cc-result-retry')){await ccResultSave(result);host.querySelector('[data-cc-result-status]').textContent='本轮汇总已保存。';b.remove();}}catch(error){host.querySelector('[data-cc-result-status]').textContent=error.message;}};draw();
 }
 async function ccResultShowLatest(){const course={...learningLesson},snap=await learningSnapshot(),result=ccResultRecent(snap,course.id);if(result)return ccResultOpen(result,course);return ccResultRecover(course,snap);}
 async function ccResultRecover(course,snap){

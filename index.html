@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="27ec3573b404c8f8">
+  <meta name="lao-app-build" content="2d6a39f4c9ed9968">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9646,14 +9646,30 @@ async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspa
 function cfMaskButtons(){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button></div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
 const cfTapeAttributes=new WeakMap();
+function cfRefreshTape(node,scope,language){
+ const active=scope.classList.contains('cf-hide-'+language);
+ const hidden=active&&node.dataset.cfRevealed!=='true';
+ node.classList.toggle('cf-tape',hidden);
+ node.classList.toggle('cf-tape-toggle',active);
+ if(active){
+  if(!cfTapeAttributes.has(node))cfTapeAttributes.set(node,['tabindex','role','aria-label'].map(key=>[key,node.getAttribute(key)]));
+  node.setAttribute('tabindex','0');
+  node.setAttribute('role','button');
+  const name=language==='zh'?'中文':'老挝语';
+  node.setAttribute('aria-label',hidden?'揭晓'+name:node.textContent.trim()+'，点击重新遮住'+name);
+ }else if(cfTapeAttributes.has(node)){
+  for(const [key,value] of cfTapeAttributes.get(node)){
+   if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);
+  }
+  cfTapeAttributes.delete(node);
+ }
+}
 function cfMaskRefresh(scope){
  const selectors={lo:'[lang="lo"],.cf-table-lo',zh:'.cf-table-zh,.cf-meaning,.learn-card-main>span,.learn-meaning'};
  for(const [language,selector] of Object.entries(selectors))for(const n of scope.querySelectorAll(selector)){
   if(n.closest('.lesson-page-player')||!n.textContent.trim())continue;
-  const hidden=scope.classList.contains('cf-hide-'+language)&&n.dataset.cfRevealed!=='true';
-  n.classList.toggle('cf-tape',hidden);n.dataset.cfTapeLanguage=language;
-  if(hidden){if(!cfTapeAttributes.has(n))cfTapeAttributes.set(n,['tabindex','role','aria-label'].map(k=>[k,n.getAttribute(k)]));n.setAttribute('tabindex','0');n.setAttribute('role','button');n.setAttribute('aria-label','点击揭晓'+(language==='zh'?'中文':'老挝语'));}
-  else if(cfTapeAttributes.has(n)){for(const [k,value] of cfTapeAttributes.get(n))if(value===null)n.removeAttribute(k);else n.setAttribute(k,value);cfTapeAttributes.delete(n);}
+  n.dataset.cfTapeLanguage=language;
+  cfRefreshTape(n,scope,language);
  }
  for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset'){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
 }
@@ -9664,11 +9680,28 @@ function cfMaskDefaults(scope,force=false){
  if(typeof appPreference==='function'&&appPreference('selfTestEnabled'))scope.classList.add(appPreference('selfTestHideLao')?'cf-hide-lo':'cf-hide-zh');
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;cfMaskRefresh(scope);b.closest('details').open=false;});
-function cfRevealTape(e){const n=e.target.closest('.cf-tape');if(!n)return;if(e.type==='keydown'&&!['Enter',' '].includes(e.key))return;e.preventDefault();e.stopImmediatePropagation();n.dataset.cfRevealed='true';const scope=cfMaskScope(n);if(scope)cfMaskRefresh(scope);}
-document.addEventListener('click',cfRevealTape,true);
-document.addEventListener('dblclick',e=>{if(e.target.closest('.cf-tape')){e.preventDefault();e.stopImmediatePropagation();}},true);
-document.addEventListener('keydown',cfRevealTape,true);
-document.addEventListener('pointerdown',e=>{if(e.target.closest('.cf-tape'))e.stopImmediatePropagation();},true);
+function cfToggleTape(event){
+ const node=event.target.closest('.cf-tape-toggle');
+ if(!node||event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
+ const scope=cfMaskScope(node);
+ if(!scope)return;
+ event.preventDefault();
+ event.stopImmediatePropagation();
+ if(event.repeat)return;
+ if(node.dataset.cfRevealed==='true')delete node.dataset.cfRevealed;
+ else node.dataset.cfRevealed='true';
+ cfRefreshTape(node,scope,node.dataset.cfTapeLanguage);
+}
+document.addEventListener('click',cfToggleTape,true);
+document.addEventListener('dblclick',event=>{
+ if(!event.target.closest('.cf-tape-toggle'))return;
+ event.preventDefault();
+ event.stopImmediatePropagation();
+},true);
+document.addEventListener('keydown',cfToggleTape,true);
+document.addEventListener('pointerdown',event=>{
+ if(event.target.closest('.cf-tape-toggle'))event.stopImmediatePropagation();
+},true);
 document.addEventListener('ap-preferences-changed',()=>{for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope,true);cfMaskRefresh(scope);}});
 async function cfFavoritePlaylist(rows,bar){
  fvGuard();stopPracticeAudio();const token=lessonPageRun,workspace=fvWorkspace();lessonPageBar=bar;const playlist=[],status=bar.querySelector('[data-page-status]');status.textContent='正在核对收藏音频…';const snap=await learningSnapshot(),cache=new Map();for(const r of await cloudCacheRows())try{cache.set(JSON.parse(r.key)[1],r.blob);}catch(_){}
@@ -9762,7 +9795,8 @@ let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver
 .cf-regenerate{display:none}.learn-settings .cf-regenerate{display:inline-block}
 .cf-tape,.cf-tape *{color:transparent!important;text-shadow:none!important;-webkit-text-fill-color:transparent!important;user-select:none!important}
 .cf-tape{visibility:visible!important;background:#dbe7df!important;border-radius:5px;cursor:pointer!important;box-decoration-break:clone;-webkit-box-decoration-break:clone;outline-offset:3px}
-.cf-tape:focus-visible{outline:2px solid #087e6d}
+.cf-tape-toggle{cursor:pointer}
+.cf-tape-toggle:focus-visible{outline:2px solid #087e6d;outline-offset:3px}
 .cf-mask-controls button[aria-pressed="true"]{background:#deeee6;border-color:#078578}
 [data-fv-list] .lesson-page-player{position:static;display:block}[data-fv-list] select{max-width:100%;min-width:0}
 [data-fv-list] .fv-filters{align-items:end}[data-fv-list] .fv-item{gap:1rem}[data-fv-list] .fv-actions label{max-width:180px}

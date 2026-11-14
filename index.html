@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="43b89b7380d2673f">
+  <meta name="lao-app-build" content="80e13c3d68218d76">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -398,6 +398,12 @@
 .cc-result-list-title{font-size:16px;margin:0;padding:0 0 9px;border-bottom:1px solid #e1ebe4}
 
 .cc-result-pages[hidden]{display:none}
+
+.cc-pick-rows{max-height:38vh;overflow:auto;border:1px solid #dce8e1;border-radius:10px;padding:8px 12px}
+.cc-pick-rows label{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0;padding:8px 0;border-bottom:1px solid #e1ebe4}
+.cc-pick-rows input[type=checkbox],#ccPickWeak{width:auto;margin:0;accent-color:#087e6e}
+.cc-pick-rows small{color:#536e63}
+.dictation-home{margin:14px 0}
 </style>
 </head>
 <body>
@@ -6825,16 +6831,16 @@ batchEditor=function(){
 function courseCheckGroups(data,course,snap,words,scope,key,kind){
  return data.sections.filter(s=>scope!=='section'||s.id===key).flatMap(s=>s.blocks.filter(b=>scope!=='block'||b.id===key).filter(b=>['word-ref','sentence','dialogue','reading'].includes(b.contentType)).filter(b=>kind==='all'||(kind==='words')===(b.contentType==='word-ref')).map(b=>({id:b.id,title:b.title||s.title,dialogue:b.contentType==='dialogue',items:(b.content.items||[]).map(r=>{
   const id=lessonV2Id(course.packageKey,'item',r.itemId),m=snap.learningMaterials.find(m=>m.id===id),w=b.contentType==='word-ref'&&m?learningFindWord(m.linkedWordSyncIds?.[0],words):null;
-  return {id,lao:w?String(w.word||''):r.textLao||'',zh:w?String(w.meaning||''):r.translationZh||'',learningState:w?.learningState||m?.practiceReview?.learningState||m?.learningState,...(w?{reviewWord:w}:{})};
+  return {id,itemKind:b.contentType==='word-ref'?'word':'sentence',lao:w?String(w.word||''):r.textLao||'',zh:w?String(w.meaning||''):r.translationZh||'',learningState:w?.learningState||m?.practiceReview?.learningState||m?.learningState,...(w?{reviewWord:w}:{})};
  }).filter(r=>r.lao.trim()&&r.zh.trim())}))).filter(g=>g.items.length);
 }
 function courseCheckItemKey(row){
  return JSON.stringify([row.id,row.lao,row.zh]);
 }
-function courseCheckRatings(snap,courseId){
+function courseCheckRatings(snap,courseId,dictation=false){
  const latest=new Map();
  const summaries=snap.learningMaterials
-  .filter(m=>!m.deleted&&m.chapterResult?.courseId===courseId&&ccResultValid(m.chapterResult))
+  .filter(m=>!m.deleted&&m.chapterResult?.courseId===courseId&&Boolean(m.chapterResult.dictation)===dictation&&ccResultValid(m.chapterResult))
   .map(m=>m.chapterResult).sort((a,b)=>a.at-b.at);
  for(const summary of summaries){
   for(const row of summary.items){
@@ -6843,10 +6849,10 @@ function courseCheckRatings(snap,courseId){
  }
  return latest;
 }
-function courseCheckFilter(groups,includeFamiliar=true,ratings=new Map()){
+function courseCheckFilter(groups,includeFamiliar=true,ratings=new Map(),useWordRating=true){
  if(includeFamiliar)return groups;
  return groups.map(group=>({...group,items:group.items.filter(row=>{
-  const rating=ratings.get(courseCheckItemKey(row))??row.reviewWord?.learningState??row.learningState;
+  const rating=ratings.get(courseCheckItemKey(row))??(useWordRating?(row.reviewWord?.learningState??row.learningState):undefined);
   return rating!=='green';
  })})).filter(group=>group.items.length);
 }
@@ -6860,25 +6866,74 @@ async function courseCheckOpen(scope='course',key='',skipResume=false){
  const checkpointKey=typeof ccCheckpointKey==='function'?ccCheckpointKey(course,scope,key):'',saved=!skipResume&&typeof ccCheckpointRead==='function'?ccCheckpointRead(checkpointKey,data,course,snap,words):null;
  if(saved){learningModal('继续章节检测','<p>上次进行到第 '+(saved.index+1)+' / '+saved.queue.length+' 项，题序和已保存评级保留。</p><button type="button" class="primary" id="ccResume">继续上次</button><button type="button" id="ccRestart">重新设置检测</button>');$('#ccResume').onclick=()=>courseCheckSession(saved.queue,course,saved.direction,snap,{checkpointKey,resume:saved,scopeLabel:saved.scopeLabel});$('#ccRestart').onclick=()=>{ccCheckpointSave(checkpointKey,null);void courseCheckOpen(scope,key,true).catch(learningError);};return;}
  const title=scope==='block'?groups[0]?.title:scope==='section'?data.sections.find(s=>s.id===key)?.title:course.title;
-learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option><option value="audio">听音辨词（揭晓前隐藏文字）</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><label>熟悉项目<select id="ccFamiliar"><option value="include">包含已标记熟悉的词句</option><option value="exclude">排除已标记熟悉的词句</option></select></label><p id="ccQuestionCount" class="cc-count-summary" role="status"></p><p class="tag-hint">可选择是否包含熟悉项目；听音模式揭晓前只提供播放，不显示答案和例句。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><label>检测后的学习清单<select id="ccReviewMode"><option value="none">只检测，不加入每日清单</option><option value="weak">检测完成后，将陌生和模糊词加入明日复习</option><option value="all">检测完成后，将全部已测词加入明日复习</option></select></label><button class="primary">开始检测</button></form>');
+learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option><option value="pick">自选词句</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option><option value="audio">听音辨词</option><option value="dictation">听音写老挝语</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><label>熟悉项目<select id="ccFamiliar"><option value="include">包含已标记熟悉的词句</option><option value="exclude">排除已标记熟悉的词句</option></select></label><section id="ccPick" hidden><label>搜索词句<input id="ccPickSearch" type="search" placeholder="输入老挝语或中文"></label><label><input id="ccPickWeak" type="checkbox">只看上次陌生或模糊</label><div id="ccPickRows" class="cc-pick-rows"></div></section><p id="ccQuestionCount" class="cc-count-summary" role="status"></p><p class="tag-hint">可选择是否包含熟悉项目；听音模式揭晓前只提供播放，不显示答案和例句。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><label>检测后的学习清单<select id="ccReviewMode"><option value="none">只检测，不加入每日清单</option><option value="weak">检测完成后，将陌生和模糊词加入明日复习</option><option value="all">检测完成后，将全部已测词加入明日复习</option></select></label><button class="primary">开始检测</button></form>');
  for(const [id,name,fallback]of [['ccScope','Scope','current'],['ccKind','Kind','all'],['ccDirection','Direction','lao'],['ccOrder','Order','ordered']])$('#'+id).value=(typeof appPreference==='function'&&appPreference('courseCheck'+name))||fallback;
- $('#ccFamiliar').value=(typeof appPreference==='function'&&appPreference('includeFamiliar')===false)?'exclude':'include';const count=()=>{const chosenScope=$('#ccScope').value==='course'?'course':scope,selected=courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,$('#ccKind').value),$('#ccFamiliar').value!=='exclude',ratings),total=selected.reduce((n,g)=>n+g.items.length,0);$('#ccQuestionCount').textContent=(chosenScope==='course'?'整章':chosenScope==='section'?'当前小节':'当前分组')+' · '+total+' 项 · '+selected.length+' 组（'+($('#ccFamiliar').value==='exclude'?'排除熟悉':'包含熟悉')+'）';};for(const id of ['ccScope','ccKind','ccFamiliar'])$('#'+id).onchange=count;count();
- $('#courseCheckSetup').onsubmit=e=>{e.preventDefault();const chosenScope=$('#ccScope').value==='course'?'course':scope,kind=$('#ccKind').value,direction=$('#ccDirection').value,queue=courseCheckQueue(courseCheckFilter(courseCheckGroups(data,course,snap,words,chosenScope,key,kind),$('#ccFamiliar').value!=='exclude',ratings),$('#ccOrder').value);
-  if(!queue.length){$('#learningDialogStatus').textContent='此范围没有可测项目，请检查检测范围和熟悉词筛选。';return;}
-  courseCheckSession(queue,course,direction,snap,{checkpointKey,reviewMode:$('#ccReviewMode').value,scopeLabel:chosenScope==='course'?'整章全部':chosenScope==='section'?'当前小节':'当前分组'});
+ $('#ccFamiliar').value=(typeof appPreference==='function'&&appPreference('includeFamiliar')===false)?'exclude':'include';const picked=new Set();
+ const ratingMaps=[ratings,typeof ccResultValid==='function'?courseCheckRatings(snap,course.id,true):new Map()];
+ const settings=()=>{
+  const mode=$('#ccScope').value;
+  const direction=$('#ccDirection').value;
+  const chosenScope=mode==='course'||mode==='pick'?'course':scope;
+  const groups=courseCheckGroups(data,course,snap,words,chosenScope,key,$('#ccKind').value);
+  const history=ratingMaps[Number(direction==='dictation')];
+  const filtered=courseCheckFilter(groups,$('#ccFamiliar').value!=='exclude',history,direction!=='dictation');
+  return {mode,direction,chosenScope,history,filtered};
+ };
+ const draw=()=>{
+  const {mode,history,filtered}=settings();
+  const section=$('#ccPick');
+  section.hidden=mode!=='pick';
+  const reviewControl=$('#ccReviewMode');
+  if(reviewControl.closest)reviewControl.closest('label').hidden=$('#ccDirection').value==='dictation';
+  const rows=courseCheckQueue(filtered);
+  if(mode==='pick'){
+   const query=$('#ccPickSearch').value.trim().toLowerCase();
+   const weak=$('#ccPickWeak').checked;
+   $('#ccPickRows').innerHTML=rows.filter(row=>{
+    const rating=history.get(courseCheckItemKey(row));
+    return (!weak||rating==='red'||rating==='yellow')&&(!query||(row.lao+' '+row.zh).toLowerCase().includes(query));
+   }).map(row=>'<label><input type="checkbox" data-cc-pick-id="'+h(row.id)+'" '+(picked.has(row.id)?'checked':'')+'><span lang="lo">'+h(row.lao)+'</span><small>'+h(row.zh)+'</small></label>').join('')||'<p>没有符合条件的词句。</p>';
+  }
+  $('#ccQuestionCount').textContent=mode==='pick'?'已选 '+new Set(rows.filter(row=>picked.has(row.id)).map(row=>row.id)).size+' 项':rows.length+' 项 · '+filtered.length+' 组';
+ };
+ for(const id of ['ccScope','ccKind','ccFamiliar','ccDirection','ccPickWeak'])$('#'+id).onchange=draw;
+ $('#ccPickSearch').oninput=draw;
+ $('#ccPickRows').onchange=e=>{
+  const id=e.target.dataset.ccPickId;
+  if(id===undefined)return;
+  if(e.target.checked)picked.add(id);else picked.delete(id);
+  const visible=courseCheckQueue(settings().filtered);
+  $('#ccQuestionCount').textContent='已选 '+new Set(visible.filter(row=>picked.has(row.id)).map(row=>row.id)).size+' 项';
+ };
+ draw();
+ $('#courseCheckSetup').onsubmit=e=>{
+  e.preventDefault();
+  const {mode,direction,chosenScope,filtered}=settings(),dictation=direction==='dictation';
+  const seen=new Set();
+  const queue=courseCheckQueue(filtered,$('#ccOrder').value).filter(row=>{
+   if(mode==='pick'&&!picked.has(row.id)||seen.has(row.id))return false;
+   seen.add(row.id);return true;
+  });
+  if(!queue.length){$('#learningDialogStatus').textContent=mode==='pick'?'请勾选至少一个词句。':'此范围没有可测项目，请检查筛选。';return;}
+  courseCheckSession(queue,course,dictation?'audio':direction,snap,{
+   checkpointKey,dictation,roundKind:mode==='pick'?'picked':'chapter',reviewMode:dictation?'none':$('#ccReviewMode').value,
+   scopeLabel:mode==='pick'?'自选词句':chosenScope==='course'?'整章全部':chosenScope==='section'?'当前小节':'当前分组'
+  });
  };
 }
 let courseCheckRun=0;
 function courseCheckSession(queue,course,direction,snap,options={}){
+ const dictation=Boolean(options.dictation??options.resume?.dictation);
+ const roundKind=options.roundKind||options.resume?.roundKind||'chapter';
  const reviewMode=options.reviewMode||options.resume?.reviewMode||'none';
  let index=options.resume?.index||0,revealedAt=options.resume?.revealedAt??-1;const ratings=new Map(options.resume?.ratings||[]),attempts=options.resume?.attempts||queue.map(()=>'review-event:'+crypto.randomUUID()),h=learningEsc;
- const persist=(publish=false)=>{const value={reviewMode,queue:queue.map(r=>({id:r.id,lao:r.lao,zh:r.zh,group:r.group})),direction,index,ratings:[...ratings],attempts,revealedAt,scopeLabel:options.scopeLabel};const ok=typeof ccCheckpointSave!=='function'||ccCheckpointSave(options.checkpointKey,value);if(publish&&typeof ccCloudSchedule==='function')ccCloudSchedule(options.checkpointKey,value);return ok;};
+ const persist=(publish=false)=>{const value={reviewMode,dictation,roundKind,queue:queue.map(r=>({id:r.id,itemKind:r.itemKind,lao:r.lao,zh:r.zh,group:r.group})),direction,index,ratings:[...ratings],attempts,revealedAt,scopeLabel:options.scopeLabel};const ok=typeof ccCheckpointSave!=='function'||ccCheckpointSave(options.checkpointKey,value);if(publish&&typeof ccCloudSchedule==='function')ccCloudSchedule(options.checkpointKey,value);return ok;};
  let fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;
  function draw(){
   stopPracticeAudio();const run=++courseCheckRun;
   if(index>=queue.length){
    if(typeof ccCheckpointSave==='function')ccCheckpointSave(options.checkpointKey,null);if(typeof ccCloudSchedule==='function')ccCloudSchedule(options.checkpointKey,null);
-   if(typeof ccResultOpen==='function'){const result={...ccResultBuild(queue,course,direction,[...ratings],attempts),reviewMode};void ccResultOpen(result,course,{save:true}).catch(learningError);return;}
+   if(typeof ccResultOpen==='function'){const result={...ccResultBuild(queue,course,direction,[...ratings],attempts),reviewMode,dictation,roundKind};void ccResultOpen(result,course,{save:true}).catch(learningError);return;}
    const counts=key=>[...ratings.values()].filter(x=>x===key).length;
    learningModal('检测完成','<p>共 '+queue.length+' 项 · 熟悉 '+counts('green')+' 项 · 模糊 '+counts('yellow')+' 项 · 陌生 '+counts('red')+' 项 · 未评级／跳过 '+(queue.length-ratings.size)+' 项</p><p class="tag-hint">只有揭晓后主动选择的自评才会保存为复习记录；跳过不等于已掌握。</p><button type="button" data-cc-back>上一题</button><button data-pending-review>查看待复习词句</button>');
    $('[data-cc-back]').onclick=()=>{index=queue.length-1;draw();};return;
@@ -6890,7 +6945,8 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   learningModal('检测 · '+(index+1)+' / '+queue.length,'<div class="cc-session-meta"><span>'+h(options.scopeLabel||'章节检测')+' · '+queue.length+' 项</span><small>'+h(r.group)+'</small></div><div class="cc-progress" role="progressbar" aria-label="本轮进度" aria-valuemin="0" aria-valuemax="'+queue.length+'" aria-valuenow="'+index+'"><span style="width:'+(index/queue.length*100)+'%"></span></div><div class="course-recall">'+studyRecallCardHtml({question:direction==='lao'?r.lao:r.zh,reverse:direction==='zh',examples:exampleHtml,favorite:typeof fvMarkup==='function'?fvMarkup({target:r.reviewWord?'word:'+r.reviewWord.syncId:r.id}):'',h})+'</div>');
   const card=$('[data-recall-card]'),answer=$('[data-recall-answer]'),reveal=$('[data-recall-reveal]'),status=$('[data-recall-status]');
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
-  if(listening){card.classList.add('cc-listening');$('[data-recall-play]').textContent='▶ 听单词';card.querySelector('.question-ipa').textContent='听音辨词';card.querySelector('.recall-prompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓';reveal.textContent='揭晓老挝语和中文';$('[data-recall-play]').hidden=false;reveal.textContent='揭晓老挝语和中文';}
+  if(dictation)for(const button of grades())button.textContent=dictationRatings[button.dataset.recallGrade];
+  if(listening){card.classList.add('cc-listening');$('[data-recall-play]').textContent='▶ 听单词';card.querySelector('.question-ipa').textContent='听音辨词';card.querySelector('.recall-prompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓';reveal.textContent='揭晓老挝语和中文';$('[data-recall-play]').hidden=false;reveal.textContent='揭晓老挝语和中文';if(dictation){card.querySelector('.question-ipa').textContent='听音写老挝语';card.querySelector('.recall-prompt').textContent='听完先写在纸上，再揭晓并自评。';}}
   let suspended=false;
   const current=()=>!suspended&&run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);const context=listening&&typeof listeningContextPanel==='function'?listeningContextPanel(examples,{current,play:m=>saPlay(m.id,{isCurrent:current}),detail:(m,button)=>openDetail(m.id,button)}):null;if(context)card.querySelector('.study-examples').append(context.element);
   async function openDetail(target,button){
@@ -6904,7 +6960,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
      if(!force&&(detailRevision===null||detailRevision===dfRevision)){suspended=false;return;}
      const fresh=typeof ccReadCourse==='function'?await ccReadCourse():{snap:await learningSnapshot(),words:await allEntries()};
      if(run!==courseCheckRun||owner&&(workspaceName('chapter-check')!==owner))return;
-     const saved={queue,direction,index,ratings:[...ratings],attempts:[...attempts],revealedAt},next=typeof ccReconcile==='function'?ccReconcile(saved,lessonV2Export(fresh.snap,course),course,fresh.snap,fresh.words):saved;
+     const saved={queue,direction,index,ratings:[...ratings],attempts:[...attempts],revealedAt},next=roundKind!=='old'&&typeof ccReconcile==='function'?ccReconcile(saved,lessonV2Export(fresh.snap,course),course,fresh.snap,fresh.words):saved;
      if(!next){suspended=false;learningModal('本轮题目已移除','<p>此范围已没有可检测题目。原已保存的学习记录保留。</p>');return;}
      queue=next.queue;index=next.index;revealedAt=next.revealedAt;ratings.clear();for(const [i,rating]of next.ratings)ratings.set(i,rating);attempts.splice(0,attempts.length,...next.attempts);snap=fresh.snap;
      fast=typeof ccFastContext==='function'?ccFastContext(queue,course,direction,snap):null;suspended=false;draw();
@@ -6920,7 +6976,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
    card.classList.add('study-revealed');context?.element.remove();card.classList.remove('cc-listening');
    for(const row of card.querySelectorAll('.study-example'))row.hidden=false;
    card.querySelector('.question-ipa').textContent=r.lao;card.querySelector('.question-ipa').lang='lo';
-   card.querySelector('.recall-prompt').textContent='听发音、查看例句，再判断掌握程度';$('[data-recall-play]').textContent='▶ 播放';
+   card.querySelector('.recall-prompt').textContent=dictation?'对照老挝语答案，给这次听写评级。':'听发音、查看例句，再判断掌握程度';$('[data-recall-play]').textContent='▶ 播放';
    answer.hidden=false;answer.textContent=r.zh;answer.removeAttribute('lang');
    reveal.hidden=true;$('[data-recall-play]').hidden=false;$('[data-recall-detail]').hidden=false;
    for(const b of grades()){b.disabled=false;b.setAttribute('aria-pressed',String(ratings.get(at)===b.dataset.recallGrade));}
@@ -8124,7 +8180,7 @@ async function scRender(){
  let reviewHtml='',reviewError='';if(typeof rrHomeSectionHtml==='function')try{reviewHtml=rrHomeSectionHtml(rrModel(snap,words));}catch(error){reviewError='复习记录读取失败：'+error.message;}
  if(run!==scRenderRun||activeView!=='learning'||learningRoute!=='study')return;
  const courses=learningOrderedCourses(snap),books=scBooks(courses),plan=scPlan(snap),local=scLocal(),last=local.recent.find(l=>courses.some(c=>c.id===l.courseId)),latest=last&&courses.find(c=>c.id===last.courseId),goal=scGoalCourse(plan,courses,local),book=books.find(b=>b.key===plan.goal?.bookKey),h=learningEsc;
- learningPanel.className='panel';$('#learningContent').innerHTML='<section class="study-center"><header class="sc-heading"><div><p class="sc-eyebrow">少翻目录，接着上次学</p><h2>学习中心</h2></div><button type="button" data-sc-action="catalog">全部课程目录</button></header><div class="sc-overview"><section class="sc-box sc-continue"><h3>继续上次</h3>'+(latest?'<p class="sc-course-title">'+h(latest.title)+'</p><p>'+h(latest.textbookName||'')+'</p><small>'+h(last.label)+' · '+h(scDate(last.at))+'</small><button type="button" class="primary" data-sc-action="resume" data-id="'+h(latest.id)+'">继续学习 →</button>':'<p>打开一个章节后，会在这里记住上次的小分类、对话和词句位置。</p>')+'</section><section class="sc-box sc-goal-card"><h3>当前学习目标</h3>'+(goal?'<p class="sc-course-title">'+h(plan.goal.courseId?goal.title:book.title)+'</p><p>'+h(plan.goal.courseId?'目标章节':'整本教材／材料集；按你的课程顺序学习')+'</p><div class="sc-actions sc-goal-actions"><button type="button" class="primary" data-sc-action="resume" data-id="'+h(goal.id)+'">继续目标 →</button>'+(goal.schemaVersion===2?'<button type="button" data-sc-action="test" data-id="'+h(goal.id)+'">检测本章</button>':'')+'</div>':plan.goal?'<p>目标课程已删除或尚未同步。可先同步，或在下方更换目标。</p>':'<p>选择一本教材或一个章节作为近期目标。你仍可自由学习其他内容。</p>')+'<button type="button" data-sc-action="edit-goal">更换学习目标</button></section></div>'+reviewHtml+'<section class="sc-section"><h3>常学章节</h3><div class="sc-list">'+(plan.pinned.length?plan.pinned.map(id=>{const c=courses.find(c=>c.id===id);return c?scCourseCard(c,plan,local.recent.find(l=>l.courseId===id)):'<article class="sc-course"><p>固定章节已删除或尚未同步</p><button type="button" data-sc-action="pin" data-id="'+h(id)+'">移除快捷入口</button></article>';}).join(''):'<p>在章节顶部点“固定到学习中心”，就能在这里直接打开。最多固定12个，不移动原课程。</p>')+'</div></section><details class="sc-goal-editor" '+(!plan.goal?'open':'')+'><summary>选择／更换目标课本与章节</summary><form id="scGoalForm"><label>目标课本／材料集<select id="scGoalBook"><option value="">请选择</option>'+books.map(b=>'<option value="'+h(b.key)+'" '+(b.key===plan.goal?.bookKey?'selected':'')+'>'+h(b.title)+'</option>').join('')+'</select></label><label>目标章节<select id="scGoalCourse"></select></label><div class="sc-actions"><button class="primary" type="submit">保存学习目标</button><button type="button" data-sc-action="cancel-goal">取消修改</button>'+(plan.goal?'<button type="button" data-sc-action="clear-goal">取消当前目标</button>':'')+'</div><p id="scGoalStatus" role="status"></p></form></details><details class="sc-recent"><summary>最近打开的章节（本设备）</summary><div class="sc-list">'+(local.recent.filter(l=>courses.some(c=>c.id===l.courseId)).slice(0,5).map(l=>scCourseCard(courses.find(c=>c.id===l.courseId),plan,l)).join('')||'<p>暂无记录。</p>')+'</div></details><section class="sc-section"><h3>找章节并固定</h3><div class="sc-search"><label>课本／材料集<select id="scBrowseBook"><option value="">全部课本与材料</option>'+books.map(b=>'<option value="'+h(b.key)+'">'+h(b.title)+'</option>').join('')+'</select></label><label>搜索<input id="scSearch" type="search" placeholder="搜索课本、章节、课程名称"></label></div><p id="scBrowseCount" role="status"></p><div id="scBrowseRows" class="sc-list"></div><button id="scBrowseMore" type="button">再显示8个章节</button></section><p class="sc-note">目标与固定章节随完整备份、学习资料同步保存；最近位置仅保留在本设备、当前账号。最近打开不等于学会，不自动计算掌握率，也不消耗AI额度。</p></section>';
+ learningPanel.className='panel';$('#learningContent').innerHTML='<section class="study-center"><header class="sc-heading"><div><p class="sc-eyebrow">少翻目录，接着上次学</p><h2>学习中心</h2></div><button type="button" data-sc-action="catalog">全部课程目录</button></header><div class="sc-overview"><section class="sc-box sc-continue"><h3>继续上次</h3>'+(latest?'<p class="sc-course-title">'+h(latest.title)+'</p><p>'+h(latest.textbookName||'')+'</p><small>'+h(last.label)+' · '+h(scDate(last.at))+'</small><button type="button" class="primary" data-sc-action="resume" data-id="'+h(latest.id)+'">继续学习 →</button>':'<p>打开一个章节后，会在这里记住上次的小分类、对话和词句位置。</p>')+'</section><section class="sc-box sc-goal-card"><h3>当前学习目标</h3>'+(goal?'<p class="sc-course-title">'+h(plan.goal.courseId?goal.title:book.title)+'</p><p>'+h(plan.goal.courseId?'目标章节':'整本教材／材料集；按你的课程顺序学习')+'</p><div class="sc-actions sc-goal-actions"><button type="button" class="primary" data-sc-action="resume" data-id="'+h(goal.id)+'">继续目标 →</button>'+(goal.schemaVersion===2?'<button type="button" data-sc-action="test" data-id="'+h(goal.id)+'">检测本章</button>':'')+'</div>':plan.goal?'<p>目标课程已删除或尚未同步。可先同步，或在下方更换目标。</p>':'<p>选择一本教材或一个章节作为近期目标。你仍可自由学习其他内容。</p>')+'<button type="button" data-sc-action="edit-goal">更换学习目标</button></section></div>'+(typeof dictationHomeHtml==='function'?dictationHomeHtml(snap):'')+reviewHtml+'<section class="sc-section"><h3>常学章节</h3><div class="sc-list">'+(plan.pinned.length?plan.pinned.map(id=>{const c=courses.find(c=>c.id===id);return c?scCourseCard(c,plan,local.recent.find(l=>l.courseId===id)):'<article class="sc-course"><p>固定章节已删除或尚未同步</p><button type="button" data-sc-action="pin" data-id="'+h(id)+'">移除快捷入口</button></article>';}).join(''):'<p>在章节顶部点“固定到学习中心”，就能在这里直接打开。最多固定12个，不移动原课程。</p>')+'</div></section><details class="sc-goal-editor" '+(!plan.goal?'open':'')+'><summary>选择／更换目标课本与章节</summary><form id="scGoalForm"><label>目标课本／材料集<select id="scGoalBook"><option value="">请选择</option>'+books.map(b=>'<option value="'+h(b.key)+'" '+(b.key===plan.goal?.bookKey?'selected':'')+'>'+h(b.title)+'</option>').join('')+'</select></label><label>目标章节<select id="scGoalCourse"></select></label><div class="sc-actions"><button class="primary" type="submit">保存学习目标</button><button type="button" data-sc-action="cancel-goal">取消修改</button>'+(plan.goal?'<button type="button" data-sc-action="clear-goal">取消当前目标</button>':'')+'</div><p id="scGoalStatus" role="status"></p></form></details><details class="sc-recent"><summary>最近打开的章节（本设备）</summary><div class="sc-list">'+(local.recent.filter(l=>courses.some(c=>c.id===l.courseId)).slice(0,5).map(l=>scCourseCard(courses.find(c=>c.id===l.courseId),plan,l)).join('')||'<p>暂无记录。</p>')+'</div></details><section class="sc-section"><h3>找章节并固定</h3><div class="sc-search"><label>课本／材料集<select id="scBrowseBook"><option value="">全部课本与材料</option>'+books.map(b=>'<option value="'+h(b.key)+'">'+h(b.title)+'</option>').join('')+'</select></label><label>搜索<input id="scSearch" type="search" placeholder="搜索课本、章节、课程名称"></label></div><p id="scBrowseCount" role="status"></p><div id="scBrowseRows" class="sc-list"></div><button id="scBrowseMore" type="button">再显示8个章节</button></section><p class="sc-note">目标与固定章节随完整备份、学习资料同步保存；最近位置仅保留在本设备、当前账号。最近打开不等于学会，不自动计算掌握率，也不消耗AI额度。</p></section>';
  let limit=8;const draw=()=>{const q=$('#scSearch').value.trim().toLowerCase(),key=$('#scBrowseBook').value,filtered=courses.filter(c=>(!key||scBookKey(c)===key)&&scCourseLabel(c).toLowerCase().includes(q));$('#scBrowseRows').innerHTML=filtered.slice(0,limit).map(c=>scCourseCard(c,plan,local.recent.find(l=>l.courseId===c.id))).join('')||'<p>没有匹配的章节，请先导入或同步课程。</p>';$('#scBrowseCount').textContent='共'+filtered.length+'个章节 · 显示'+Math.min(limit,filtered.length)+'个';$('#scBrowseMore').hidden=limit>=filtered.length;};
  $('#scSearch').oninput=$('#scBrowseBook').onchange=()=>{limit=8;draw();};$('#scBrowseMore').onclick=()=>{limit+=8;draw();};draw();
  const goalCourses=()=>{const key=$('#scGoalBook').value;$('#scGoalCourse').innerHTML='<option value="">整本教材／材料集</option>'+(plan.goal?.courseId&&plan.goal.bookKey===key&&!courses.some(c=>c.id===plan.goal.courseId&&scBookKey(c)===key)?'<option disabled value="'+h(plan.goal.courseId)+'">原目标章节已删除或尚未同步，请重新选择</option>':'')+courses.filter(c=>scBookKey(c)===key).map(c=>'<option value="'+h(c.id)+'">'+h([c.chapterName,c.title].filter(Boolean).join(' · '))+'</option>').join('');$('#scGoalCourse').disabled=!key;};goalCourses();$('#scGoalCourse').value=plan.goal?.courseId||'';
@@ -11702,7 +11758,7 @@ function ccSpacingAdvance(previous,rating,at){return {...rrAdvance(previous,rati
 
 function ccResultValid(op){return op?.version===1&&op.type==='chapter-summary'&&Number.isSafeInteger(op.at)&&op.at>0&&typeof op.courseId==='string'&&typeof op.title==='string'&&op.title.length<=1000&&['lao','zh','audio'].includes(op.direction)&&Array.isArray(op.items)&&op.items.length>0&&op.items.length<=10000&&op.items.every(r=>typeof r.id==='string'&&typeof r.target==='string'&&/^(word|material):.+/.test(r.target)&&typeof r.lao==='string'&&r.lao.length<=12000&&typeof r.zh==='string'&&r.zh.length<=12000&&['red','yellow','green','skipped'].includes(r.rating));}
 function ccResultBuild(queue,course,direction,ratings,attempts,at=Date.now()){
- const map=new Map(ratings);return {version:1,type:'chapter-summary',at,courseId:course.id,title:course.title,direction,items:queue.map((r,i)=>({id:r.id,target:r.reviewWord?'word:'+r.reviewWord.syncId:'material:'+r.id,lao:r.lao,zh:r.zh,group:r.group||'',rating:map.get(i)||'skipped',attempt:attempts[i]}))};
+ const map=new Map(ratings);return {version:1,type:'chapter-summary',at,courseId:course.id,title:course.title,direction,items:queue.map((r,i)=>({id:r.id,...(r.itemKind?{itemKind:r.itemKind}:{}),target:r.reviewWord?'word:'+r.reviewWord.syncId:'material:'+r.id,lao:r.lao,zh:r.zh,group:r.group||'',rating:map.get(i)||'skipped',attempt:attempts[i]}))};
 }
 function ccResultCounts(result){return Object.fromEntries(['green','yellow','red','skipped'].map(k=>[k,result.items.filter(r=>r.rating===k).length]));}
 function ccResultRecent(snap,courseId){return snap.learningMaterials.filter(m=>!m.deleted&&ccResultValid(m.chapterResult)&&m.chapterResult.courseId===courseId).sort((a,b)=>b.chapterResult.at-a.chapterResult.at)[0]?.chapterResult||null;}
@@ -11731,18 +11787,21 @@ async function ccResultListenAgain(result,course){
  const current=new Map(courseCheckQueue(groups).map(row=>[courseCheckItemKey(row),row]));
  const queue=ccResultWeakItems(result).map(row=>current.get(courseCheckItemKey(row))).filter(Boolean);
  if(!queue.length)throw Error('本轮陌生和模糊词句已修改或移除，请重新检测。');
- courseCheckSession(queue,course,'audio',snap,{reviewMode:'none',scopeLabel:'重听陌生和模糊词句'});
+ courseCheckSession(queue,course,'audio',snap,{reviewMode:'none',dictation:Boolean(result.dictation),roundKind:'retry',scopeLabel:'重听陌生和模糊词句'});
 }
 async function ccResultOpen(result,course,options={}){
  const owner=workspaceName('chapter-result');let saveError='',enrollMessage=options.enrollMessage||'';if(options.save)try{result=await ccResultSave(result);}catch(e){saveError=e.message;}
- if(options.save&&!saveError&&['weak','all'].includes(result.reviewMode))try{const n=await ccEnrollResult(result,result.reviewMode);enrollMessage='已加入明日复习 '+n+' 项（已安排的不重复添加）。';}catch(e){enrollMessage='尚未加入复习：'+e.message+'，可用下方按钮重试。';}
+ if(options.save&&!result.dictation&&!saveError&&['weak','all'].includes(result.reviewMode))try{const n=await ccEnrollResult(result,result.reviewMode);enrollMessage='已加入明日复习 '+n+' 项（已安排的不重复添加）。';}catch(e){enrollMessage='尚未加入复习：'+e.message+'，可用下方按钮重试。';}
  if(owner!==workspaceName('chapter-result'))return;
- const {model}=typeof rrRead==='function'?await rrRead():{model:{rows:[]}},counts=ccResultCounts(result),h=learningEsc,labels={red:'陌生',yellow:'模糊',green:'熟悉',skipped:'未评级'},states=new Map();
+ const {model}=typeof rrRead==='function'?await rrRead():{model:{rows:[]}},counts=ccResultCounts(result),h=learningEsc,labels=result.dictation?dictationRatings:{red:'陌生',yellow:'模糊',green:'熟悉',skipped:'未评级'},states=new Map();
+ const dictationSnapshot=result.dictation?await learningSnapshot():null;
+ const history=dictationSnapshot?dictationSchedule(dictationSnapshot).states:null;
+ if(dictationSnapshot&&typeof dictationRefreshHome==='function')dictationRefreshHome(dictationSnapshot);
  for(const row of model.rows)for(const k of reviewKeys(row.item))states.set(k+'|'+row.direction,row);
  const skill=result.direction==='zh'?'meaningToSpeech':'wordToMeaning';let filter=counts.red?'red':counts.yellow?'yellow':counts.green?'green':'skipped',page=0;
  const weakCount=counts.red+counts.yellow;
  const ratedCount=weakCount+counts.green;
- const reviewOptions=ratedCount?`
+ const reviewOptions=ratedCount&&!result.dictation?`
   <fieldset class="cc-review-options">
    <legend>安排明日复习（可选）</legend>
    <div class="cc-review-choices">
@@ -11752,10 +11811,10 @@ async function ccResultOpen(result,course,options={}){
    <button type="button" data-cc-enroll>加入明日复习</button>
    <p data-cc-enroll-status role="status">${h(enrollMessage)}</p>
   </fieldset>`:'';
- learningModal('本轮检测结果',`<section class="cc-result">
+ learningModal(result.dictation?(result.roundKind==='old'?'旧词抽查结果':'本轮听写结果'):'本轮检测结果',`<section class="cc-result">
   <p class="cc-result-heading">${h(result.title)} · ${result.items.length} 项</p>
   <div class="cc-result-counts" role="group" aria-label="按评级查看词句">${Object.keys(labels).map(k=>'<button type="button" data-cc-result-filter="'+k+'" aria-pressed="false"><strong>'+counts[k]+'</strong><span>'+labels[k]+'</span></button>').join('')}</div>
-  ${weakCount?'<div class="cc-result-actions"><button type="button" class="primary" data-cc-listen-again>立即重听陌生和模糊词句（'+weakCount+'）</button></div>':''}
+  ${weakCount&&result.roundKind!=='old'?'<div class="cc-result-actions"><button type="button" class="primary" data-cc-listen-again>立即重听陌生和模糊词句（'+weakCount+'）</button></div>':''}
   ${reviewOptions}
   <h3 class="cc-result-list-title" data-cc-result-list-title></h3>
   <div data-cc-result-list></div>
@@ -11763,10 +11822,24 @@ async function ccResultOpen(result,course,options={}){
   <p data-cc-result-status role="status">${h(options.historical?'这些是以往检测中各项的最近评级。':saveError?'汇总尚未保存：'+saveError:'')}</p>
   ${saveError?'<button data-cc-result-retry>重试保存汇总</button>':''}
  </section>`);
- const host=learningDialog.querySelector('.cc-result');function draw(){const all=result.items.filter(r=>r.rating===filter),rows=all.slice(page*20,page*20+20);for(const b of host.querySelectorAll('[data-cc-result-filter]'))b.setAttribute('aria-pressed',String(b.dataset.ccResultFilter===filter));host.querySelector('[data-cc-result-list-title]').textContent=labels[filter]+'词句 · '+all.length+' 项';host.querySelector('[data-cc-result-list]').innerHTML=rows.map((r,i)=>{const state=states.get(r.target+'|'+(r.skill||skill)),date=state?.status==='paused'?'已暂停此方向':state?.state?'下次复习：'+ccResultDate(state.state.nextReviewAt):r.rating==='skipped'?'本题未评级':'未加入本方向的每日清单';return '<article class="cc-result-row"><div><strong lang="lo">'+h(r.lao)+'</strong><p>'+h(r.zh)+'</p><small>'+h(date)+'</small></div><div><button data-cc-result-play="'+(page*20+i)+'" aria-label="播放此词句">▶</button><button data-cc-result-detail="'+(page*20+i)+'">详情</button></div></article>';}).join('')||'<p class="tag-hint">本轮没有'+labels[filter]+'项目。</p>';host.querySelector('[data-cc-result-page]').textContent=all.length?'第 '+(page+1)+' / '+Math.ceil(all.length/20)+' 页':'';host.querySelector('.cc-result-pages').hidden=all.length<=20;host.querySelector('[data-cc-result-prev]').disabled=!page;host.querySelector('[data-cc-result-more]').disabled=(page+1)*20>=all.length;}
+ const host=learningDialog.querySelector('.cc-result');function draw(){const all=result.items.filter(r=>r.rating===filter),rows=all.slice(page*20,page*20+20);for(const b of host.querySelectorAll('[data-cc-result-filter]'))b.setAttribute('aria-pressed',String(b.dataset.ccResultFilter===filter));host.querySelector('[data-cc-result-list-title]').textContent=labels[filter]+'词句 · '+all.length+' 项';host.querySelector('[data-cc-result-list]').innerHTML=rows.map((r,i)=>{const state=states.get(r.target+'|'+(r.skill||skill)),dictation=history?.get(dictationItemKey(r)),date=result.dictation?(dictation?['首轮'+labels[dictation.first],dictation.firstCorrect?'当天第 '+dictation.firstCorrect+' 遍写对':'',dictation.lastCheck?'最近旧词抽查'+labels[dictation.lastCheck]:''].filter(Boolean).join(' · '):''):state?.status==='paused'?'已暂停此方向':state?.state?'下次复习：'+ccResultDate(state.state.nextReviewAt):r.rating==='skipped'?'本题未评级':'未加入本方向的每日清单';return '<article class="cc-result-row"><div><strong lang="lo">'+h(r.lao)+'</strong><p>'+h(r.zh)+'</p><small>'+h(date)+'</small></div><div><button data-cc-result-play="'+(page*20+i)+'" aria-label="播放此词句">▶</button><button data-cc-result-detail="'+(page*20+i)+'">详情</button></div></article>';}).join('')||'<p class="tag-hint">本轮没有'+labels[filter]+'项目。</p>';host.querySelector('[data-cc-result-page]').textContent=all.length?'第 '+(page+1)+' / '+Math.ceil(all.length/20)+' 页':'';host.querySelector('.cc-result-pages').hidden=all.length<=20;host.querySelector('[data-cc-result-prev]').disabled=!page;host.querySelector('[data-cc-result-more]').disabled=(page+1)*20>=all.length;}
  host.onclick=async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.hasAttribute('data-cc-listen-again')){b.disabled=true;try{await ccResultListenAgain(result,course);}finally{b.disabled=false;}return;}if(b.hasAttribute('data-cc-enroll')){b.disabled=true;try{const mode=host.querySelector('input[name="cc-enroll-mode"]:checked').value,n=await ccEnrollResult(result,mode);result={...result,reviewMode:mode};await ccResultSave(result);await ccResultOpen(result,course,{...options,save:false,enrollMessage:n?'已加入明日复习 '+n+' 项。':'所选词句已安排，或内容已修改。'});}finally{b.disabled=false;}return;}if(b.dataset.ccResultFilter!==undefined){filter=b.dataset.ccResultFilter;page=0;draw();}else if(b.hasAttribute('data-cc-result-prev')){page--;draw();}else if(b.hasAttribute('data-cc-result-more')){page++;draw();}else if(b.dataset.ccResultPlay!==undefined||b.dataset.ccResultDetail!==undefined){const r=result.items.filter(r=>r.rating===filter)[Number(b.dataset.ccResultPlay??b.dataset.ccResultDetail)];if(b.dataset.ccResultPlay!==undefined)await saPlay(r.target);else await saOpenNested(r.target,b);}else if(b.hasAttribute('data-cc-result-retry')){await ccResultSave(result);host.querySelector('[data-cc-result-status]').textContent='本轮汇总已保存。';b.remove();}}catch(error){host.querySelector('[data-cc-result-status]').textContent=error.message;}};draw();
 }
-async function ccResultShowLatest(){const course={...learningLesson},snap=await learningSnapshot(),result=ccResultRecent(snap,course.id);if(result)return ccResultOpen(result,course);return ccResultRecover(course,snap);}
+async function ccResultShowLatest(){
+ const course={...learningLesson},snap=await learningSnapshot();
+ const rounds=snap.learningMaterials.filter(m=>!m.deleted&&ccResultValid(m.chapterResult)&&m.chapterResult.courseId===course.id)
+  .map(m=>m.chapterResult).sort((a,b)=>b.at-a.at);
+ if(!rounds.length)return ccResultRecover(course,snap);
+ const first=rounds.findLastIndex(round=>round.dictation&&(!round.roundKind||round.roundKind==='chapter'));
+ const h=learningEsc;
+ learningModal('检测记录','<p>'+h(course.title)+'</p><div class="cc-pick-rows">'+rounds.map((round,i)=>{
+  const name=i===first?'首轮章节听写':round.roundKind==='picked'?'自选练习':round.roundKind==='retry'?'重听':round.dictation?'章节听写':'章节检测';
+  return '<p><button type="button" data-cc-history="'+i+'">'+h(name+' · '+new Date(round.at).toLocaleString('zh-CN')+' · '+round.items.length+' 项')+'</button></p>';
+ }).join('')+'</div>');
+ for(const button of learningDialog.querySelectorAll('[data-cc-history]')){
+  button.onclick=()=>ccResultOpen(rounds[Number(button.dataset.ccHistory)],course).catch(learningError);
+ }
+}
 async function ccResultRecover(course,snap){
  const words=await allEntries(),queue=courseCheckGroups(lessonV2Export(snap,course),course,snap,words,'course','','all').flatMap(g=>g.items.map(r=>({...r,group:g.title}))),ops=rrOperations(snap).filter(op=>op.type==='attempt'&&op.source==='consolidation');const latest=new Map();for(const op of ops)latest.set(op.target,op);const selected=queue.map(r=>({r,op:latest.get(r.reviewWord?'word:'+r.reviewWord.syncId:'material:'+r.id)})).filter(x=>x.op&&x.op.signature===rrSignature({word:x.r.lao,meaning:x.r.zh}));
  learningModal('以往章节检测记录','<p>此前版本未保存整轮汇总，不能确定哪些记录来自同一轮。这里能找回本章 '+selected.length+' 项最近的检测评级；不会把它们冒充为刚完成的整轮结果。</p><button data-cc-recovered>查看已找回的评级</button><button data-cc-reschedule>把这些已测词句加入复习安排</button><p id="ccRecoveryStatus" role="status"></p>');
@@ -12358,5 +12431,111 @@ learningEditor=async function(id=null){
 };
 </script>
 <style data-simple-material-edit>#smeMaterialForm textarea,#smeGlossForm textarea{white-space:pre-wrap}#smeMaterialForm button,#smeGlossForm button{min-height:42px;padding:9px 14px;font-size:14px;margin:5px 6px 5px 0}.wsl-word-actions{display:flex;flex-wrap:wrap;gap:6px}.wsl-word-actions button{min-height:40px;padding:8px 12px;font-size:14px}.wsl-card .tag-hint{white-space:pre-wrap}</style>
+<script data-chapter-dictation>
+/* The saved chapter summaries are the source of the daily dictation schedule. */
+const dictationDailyLimit = 5;
+const dictationRatings = {green:'写对', yellow:'拿不准', red:'写错', skipped:'未评级'};
+
+function dictationItemKey(row) {
+ return JSON.stringify([row.target, row.lao, row.zh]);
+}
+
+function dictationSchedule(snap, now=Date.now()) {
+ const today = ccSpacingDay(now, 0);
+ const states = new Map(), reviewedToday = new Set();
+ const rounds = snap.learningMaterials.filter(row => !row.deleted && row.chapterResult?.dictation && ccResultValid(row.chapterResult))
+  .map(row => row.chapterResult).sort((a,b) => a.at-b.at);
+ for (const round of rounds) {
+  const seen = new Set();
+  for (const row of round.items) {
+   const key = dictationItemKey(row);
+   if (seen.has(key)) continue;
+   seen.add(key);
+   const day = ccSpacingDay(round.at, 0);
+   const old = states.get(key);
+   if (round.roundKind === 'old') {
+    if (day === today) reviewedToday.add(key);
+    if (!old || row.rating === 'skipped' || day <= old.lastDay) continue;
+    const streak = row.rating === 'green' ? old.streak + 1 : 0;
+    const delay = row.rating === 'green' ? [3,7,14,30][Math.min(streak-1,3)] : 1;
+    states.set(key,{...old,streak,lastDay:day,due:ccSpacingDay(day,delay),lastCheck:row.rating});
+   } else if (row.rating !== 'skipped' && (row.itemKind==='word'||row.target.startsWith('word:'))) {
+    if (!old) {
+     states.set(key,{row,courseId:round.courseId,first:row.rating,lastDay:day,firstDay:day,
+      due:ccSpacingDay(day,row.rating==='green'?3:1),streak:0,practiceCount:1,firstCorrect:row.rating==='green'?1:null});
+    } else if (day === old.firstDay) {
+     old.practiceCount++;
+     if (old.firstCorrect===null && row.rating==='green') old.firstCorrect=old.practiceCount;
+    }
+   }
+  }
+ }
+ const due = [...states.values()].filter(state=>state.due<=today&&!reviewedToday.has(dictationItemKey(state.row)));
+ due.sort((a,b)=>a.due-b.due || Number(a.first==='green')-Number(b.first==='green'));
+ return {states,due,remaining:Math.max(0,dictationDailyLimit-reviewedToday.size),done:reviewedToday.size};
+}
+
+function dictationHomeHtml(snap) {
+ const {due,remaining,done}=dictationSchedule(snap);
+ const count=Math.min(due.length,remaining);
+ const hasHistory=snap.learningMaterials.some(row=>!row.deleted&&row.chapterResult?.roundKind==='old');
+ const message=count?'今天可以抽查 '+count+' 个旧词。':done?'今天的旧词抽查已结束。':'今天没有到期的旧词。完成听写后，旧词会按间隔出现在这里。';
+ return '<section class="sc-box dictation-home"><h3>旧词抽查</h3><p>'+message+'</p>'+
+  (count?'<button type="button" class="primary" data-dictation-old>开始听写</button>':'')+
+  (hasHistory?'<button type="button" data-dictation-old-history>最近一次抽查结果</button>':'')+'</section>';
+}
+
+function dictationRefreshHome(snap) {
+ const card=document.querySelector('.study-center .dictation-home');
+ if(card)card.outerHTML=dictationHomeHtml(snap);
+}
+
+async function dictationOpenOld() {
+ if(learningHasWork())throw Error('请先结束编辑或录音');
+ const owner=workspaceName('dictation'),{snap,words}=await ccReadCourse();
+ if(owner!==workspaceName('dictation'))return;
+ const {due,remaining}=dictationSchedule(snap);
+ const courses=new Map(learningCourses(snap).map(course=>[course.id,course]));
+ const groups=new Map(),queue=[];
+ for(const state of due){
+  if(queue.length>=remaining)break;
+  const course=courses.get(state.courseId);
+  if(!course)continue;
+  if(!groups.has(course.id)){
+   const rows=courseCheckQueue(courseCheckGroups(lessonV2Export(snap,course),course,snap,words,'course','','words'));
+   groups.set(course.id,new Map(rows.map(row=>[courseCheckItemKey(row),row])));
+  }
+  const row=groups.get(course.id).get(courseCheckItemKey(state.row));
+  if(row)queue.push({...row,group:course.title});
+ }
+ if(!queue.length){learningModal('旧词抽查','<p>今天没有可以抽查的旧词。</p>');return;}
+ const course={id:'dictation-old',title:'旧词抽查'};
+ const checkpointKey=ccCheckpointKey(course,'daily',String(ccSpacingDay(Date.now(),0)));
+ let resume;
+ try {
+  const saved=JSON.parse(localStorage.getItem(checkpointKey));
+  if(saved?.version===1&&saved.roundKind==='old'&&saved.index<queue.length&&saved.index>=0&&
+     saved.attempts?.length===queue.length&&Array.isArray(saved.ratings)&&
+     JSON.stringify(saved.queue.map(courseCheckItemKey))===JSON.stringify(queue.map(courseCheckItemKey)))resume=saved;
+ } catch (_) {}
+ courseCheckSession(queue,course,'audio',snap,
+  {checkpointKey,resume,dictation:true,roundKind:'old',scopeLabel:'旧词抽查',reviewMode:'none'});
+}
+
+document.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-dictation-old],[data-dictation-old-history]');
+ if(!button||button.disabled)return;
+ button.disabled=true;
+ try{
+  if(button.hasAttribute('data-dictation-old-history')){
+   const {snap}=await ccReadCourse();
+   const result=ccResultRecent(snap,'dictation-old');
+   if(result)await ccResultOpen(result,{id:'dictation-old',title:'旧词抽查'});
+  }else await dictationOpenOld();
+ }catch(error){learningError(error);}
+ finally{button.disabled=false;}
+});
+
+</script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f835c6048b47e1d9">
+  <meta name="lao-app-build" content="e664cf7419b7b932">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -407,6 +407,7 @@
 </style>
 
 
+
 <style data-word-card-colors>
 .learn-card[data-word-color=yellow]{background:#fff8e7;border-color:#e5d4a6}
 .learn-card[data-word-color=pink]{background:#fff0f3;border-color:#e9c5cf}
@@ -429,8 +430,12 @@
 .word-color-picker [role=status]{font-size:13px;color:#536e63}
 .word-color-hint{margin:8px 0 0;color:#536e63;font-size:12px;line-height:1.5}
 .learn-card[data-word-color-target]{position:relative}
-.learn-card:has(>.word-color-card-button)>.learn-card-main{padding-inline-end:40px}
-#learningPanel .word-color-card-button{position:absolute;inset:5px 5px auto auto;z-index:1;display:grid;place-items:center;width:36px;height:36px;min-height:36px;padding:0;border:0;border-radius:10px;background:transparent}
+#learningPanel .word-color-card-button{position:absolute;inset:5px 5px auto auto;z-index:1;display:none;place-items:center;width:36px;height:36px;min-height:36px;padding:0;border:0;border-radius:10px;background:transparent}
+#learningContent:has([data-word-color-mode][aria-pressed=true]) .word-color-card-button{display:grid}
+#learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card:has(>.word-color-card-button)>.learn-card-main{padding-inline-end:40px!important}
+#learningPanel .word-color-mode{min-height:40px;padding:6px 12px;white-space:nowrap;font-size:13px;color:#46665c;background:#f0f6f2;border:1px solid #dce8e1;border-radius:9px}
+#learningPanel .word-color-mode[aria-pressed=true]{background:#e2f1e8;border-color:#7fb29d;color:#126e60}
+.word-color-toolbar{display:flex;justify-content:flex-end;margin:8px 0}
 #learningPanel .word-color-card-button:hover,#learningPanel .word-color-card-button:focus-visible{background:#e3efe8}
 .word-color-card-button .word-color-dot{background:conic-gradient(#ffe5a1 0 33%,#f5bcca 33% 66%,#b8dcca 66%);border-color:#8cae9e}
 [data-word-color=yellow] .word-color-card-button .word-color-dot{background:#ffe5a1;border-color:#c7a659}
@@ -2923,6 +2928,7 @@ async function renderLearning(){
   if(learningSettings)html+='<details><summary>本课音频情况</summary><p>只检查当前账号本机已保存音频，不请求生成。</p><button data-learn="audio-audit">检查已有／缺少音频</button><div id="learningAudioAudit"></div></details>';
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
+ if(learningRoute==='lesson'&&typeof wordColorChapterToolbar==='function')html=wordColorChapterToolbar(html,learningLesson.id);
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
  if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);$('#learningStatus').textContent='';}
 }
@@ -12574,12 +12580,29 @@ document.addEventListener('click',async event=>{
 </script>
 
 
+
 <script data-word-card-colors>
 /* Word-card marks are presentation preferences. Ratings remain in chapter summaries. */
 const wordColorOptions = {
  auto:'自动', plain:'原色', yellow:'淡黄', pink:'淡粉', mint:'薄荷绿', lilac:'淡紫'
 };
 let wordColorView = null;
+let wordColorEditingChapter = '';
+
+function wordColorModeButton(active){
+ return '<button type="button" class="word-color-mode" data-word-color-mode aria-pressed="'+active+'">'+
+  (active?'完成调色':'调整颜色')+'</button>';
+}
+
+function wordColorChapterToolbar(html,chapterId){
+ if(!html.includes('data-word-color-open'))return html;
+ const chapter=workspaceName('word-color')+'|'+chapterId;
+ if(wordColorEditingChapter!==chapter)wordColorEditingChapter='';
+ const controls='<div class="page-player-controls">';
+ const button=wordColorModeButton(wordColorEditingChapter===chapter);
+ return html.includes(controls)?html.replace(controls,controls+button):
+  '<div class="word-color-toolbar">'+button+'</div>'+html;
+}
 
 function wordColorKey(id, lao, zh) {
  return JSON.stringify([id, lao, zh]);
@@ -12720,6 +12743,14 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
 }
 
 document.addEventListener('click',event=>{
+ const mode=event.target.closest('[data-word-color-mode]');
+ if(mode){
+  const active=mode.getAttribute('aria-pressed')!=='true';
+  wordColorEditingChapter=active?workspaceName('word-color')+'|'+learningLesson.id:'';
+  mode.setAttribute('aria-pressed',String(active));
+  mode.textContent=active?'完成调色':'调整颜色';
+  return;
+ }
  const button=event.target.closest('[data-word-color-open]');
  if(!button)return;
  event.preventDefault();

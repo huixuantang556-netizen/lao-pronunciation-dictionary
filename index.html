@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="e664cf7419b7b932">
+  <meta name="lao-app-build" content="04c906947416e00e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -408,6 +408,7 @@
 
 
 
+
 <style data-word-card-colors>
 .learn-card[data-word-color=yellow]{background:#fff8e7;border-color:#e5d4a6}
 .learn-card[data-word-color=pink]{background:#fff0f3;border-color:#e9c5cf}
@@ -443,6 +444,28 @@
 [data-word-color=mint] .word-color-card-button .word-color-dot{background:#b8dcca}
 [data-word-color=lilac] .word-color-card-button .word-color-dot{background:#ddc9f3}
 .word-color-heading{font-size:1.6rem;color:#126e60;margin:0 0 12px}
+#learningPanel #learningContent .lesson-chapter-heading:has(.cc-chapter-actions [data-word-color-mode]){
+ flex-wrap:wrap;column-gap:20px;row-gap:10px
+}
+#learningPanel .cc-chapter-actions:has(.word-color-mode){
+ display:inline-flex;flex-wrap:wrap;justify-content:flex-start;gap:4px;padding:4px;
+ border:1px solid #dce8e1;border-radius:14px;background:#f5f8f5
+}
+#learningPanel .cc-chapter-actions:has(.word-color-mode) button{
+ margin:0!important;min-height:40px;padding:7px 12px!important;
+ border-radius:9px;font-size:13px!important;white-space:nowrap
+}
+#learningPanel .cc-chapter-actions .word-color-mode:not([aria-pressed=true]){
+ background:transparent;border-color:transparent
+}
+#learningPanel .cc-chapter-actions .word-color-mode:hover{background:#eaf2ed}
+@media(max-width:600px){
+ #learningPanel #learningContent .lesson-chapter-heading:has(.cc-chapter-actions [data-word-color-mode]){
+  align-items:flex-start;flex-direction:column
+ }
+ #learningPanel .cc-chapter-actions:has(.word-color-mode){margin-left:0;max-width:100%;box-sizing:border-box}
+ #learningPanel .cc-chapter-actions:has(.word-color-mode) button{padding-inline:9px!important}
+}
 </style>
 </head>
 <body>
@@ -11889,7 +11912,7 @@ async function ccResultRecover(course,snap){
  $('[data-cc-reschedule]').disabled=!selected.length;$('[data-cc-reschedule]').onclick=async()=>{try{const fresh=await learningSnapshot(),plan=ccRecoveryMemberships(selected,fresh);if(plan.ops.length)await rrSave(plan.ops,fresh);$('#ccRecoveryStatus').textContent='已补入／核对 '+plan.ops.length+' 项；已有评级和复习时间保留，已暂停 '+plan.paused+' 项不自动恢复。';$('[data-cc-reschedule]').disabled=true;}catch(e){$('#ccRecoveryStatus').textContent=e.message;}};
 }
 const ccResultsRenderLearning=renderLearning;
-renderLearning=async function(...args){const result=await ccResultsRenderLearning(...args);if(typeof learningRoute==='undefined'||learningRoute!=='lesson')return result;const anchor=document.querySelector('[data-course-test="course"]');if(anchor&&!document.querySelector('[data-cc-result-open]')){const b=document.createElement('button');b.type='button';b.dataset.ccResultOpen='';b.textContent='检测记录';b.className='cc-result-open';b.onclick=()=>ccResultShowLatest().catch(learningError);const group=document.createElement('div');group.className='cc-chapter-actions';anchor.before(group);group.append(anchor,b);}return result;};
+renderLearning=async function(...args){const result=await ccResultsRenderLearning(...args);if(typeof learningRoute==='undefined'||learningRoute!=='lesson')return result;const anchor=document.querySelector('[data-course-test="course"]');if(anchor&&!document.querySelector('[data-cc-result-open]')){const b=document.createElement('button');b.type='button';b.dataset.ccResultOpen='';b.textContent='检测记录';b.className='cc-result-open';b.onclick=()=>ccResultShowLatest().catch(learningError);const group=document.createElement('div');group.className='cc-chapter-actions';const color=document.querySelector('#learningContent [data-word-color-mode]');anchor.before(group);group.append(anchor,b);if(color)group.append(color);}return result;};
 function ccDailySummaryHtml(queue,history){const h=learningEsc,labels={red:'陌生',yellow:'模糊',green:'熟悉',skipped:'未评级／暂停'},latest=new Map();for(const [i,row]of queue.entries()){const k=reviewTarget(row.item)+'|'+row.direction,rating=history[i]?.rating,old=latest.get(k);if(rating||!old)latest.set(k,{word:row.item.word,meaning:row.item.meaning,rating:rating||'skipped'});}const items=[...latest.values()];return '<section class="cc-daily-result"><p>本轮 '+items.length+' 项 · '+history.filter(r=>r.rating).length+' 次回忆（分类按每项本轮最后一次评级）</p>'+Object.entries(labels).map(([rating,label])=>{const rows=items.filter(r=>r.rating===rating);return '<details><summary>'+label+' · '+rows.length+' 项</summary>'+rows.map(r=>'<p><strong lang="lo">'+h(r.word)+'</strong> · '+h(r.meaning||'')+'</p>').join('')+'</details>';}).join('')+'</section>';}
 
 // Adaptive rehearsal is separate from the due-date check. It cannot advance a long-term stage.
@@ -12581,6 +12604,7 @@ document.addEventListener('click',async event=>{
 
 
 
+
 <script data-word-card-colors>
 /* Word-card marks are presentation preferences. Ratings remain in chapter summaries. */
 const wordColorOptions = {
@@ -12598,9 +12622,9 @@ function wordColorChapterToolbar(html,chapterId){
  if(!html.includes('data-word-color-open'))return html;
  const chapter=workspaceName('word-color')+'|'+chapterId;
  if(wordColorEditingChapter!==chapter)wordColorEditingChapter='';
- const controls='<div class="page-player-controls">';
  const button=wordColorModeButton(wordColorEditingChapter===chapter);
- return html.includes(controls)?html.replace(controls,controls+button):
+ const chapterTest=/<button\b[^>]*data-course-test="course"[^>]*>[\s\S]*?<\/button>/;
+ return chapterTest.test(html)?html.replace(chapterTest,test=>test+button):
   '<div class="word-color-toolbar">'+button+'</div>'+html;
 }
 

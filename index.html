@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="80e13c3d68218d76">
+  <meta name="lao-app-build" content="3214f442ca170d2e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -404,6 +404,29 @@
 .cc-pick-rows input[type=checkbox],#ccPickWeak{width:auto;margin:0;accent-color:#087e6e}
 .cc-pick-rows small{color:#536e63}
 .dictation-home{margin:14px 0}
+</style>
+
+<style data-word-card-colors>
+.learn-card[data-word-color=yellow]{background:#fff8e7;border-color:#e5d4a6}
+.learn-card[data-word-color=pink]{background:#fff0f3;border-color:#e9c5cf}
+.learn-card[data-word-color=mint]{background:#edf8f1;border-color:#badbcc}
+.learn-card[data-word-color=lilac]{background:#f5f0fc;border-color:#d9cbe9}
+.word-color-picker{position:relative;flex:0 0 auto}
+.word-color-picker summary{display:flex;align-items:center;gap:7px;min-height:40px;padding:0 10px;cursor:pointer;list-style:none;color:#46665c;font-size:14px}
+.word-color-picker summary::-webkit-details-marker{display:none}
+.word-color-picker[open]{flex-basis:100%;padding:0 0 8px}
+.word-color-options{display:flex;flex-wrap:wrap;gap:6px}
+.word-color-options button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:6px 10px;font-size:13px}
+.word-color-options button[aria-pressed=true]{border-color:#087e6e;background:#eaf5ef}
+.word-color-dot{display:inline-block;width:12px;height:12px;flex:0 0 12px;border-radius:50%;border:1px solid #9bb4a7;background:#fff}
+.word-color-dot[data-swatch=auto]{background:conic-gradient(#ffe5a1 0 33%,#f5bcca 33% 66%,#b8dcca 66%)}
+.word-color-dot[data-swatch=yellow]{background:#ffe5a1;border-color:#d4ba76}
+.word-color-dot[data-swatch=pink]{background:#f5bcca;border-color:#cf9baa}
+.word-color-dot[data-swatch=mint]{background:#b8dcca}
+.word-color-dot[data-swatch=lilac]{background:#ddc9f3;border-color:#b6a0cf}
+.word-color-picker [role=status]:empty{display:none}
+.word-color-picker [role=status]{font-size:13px;color:#536e63}
+.word-color-hint{margin:8px 0 0;color:#536e63;font-size:12px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -2826,7 +2849,7 @@ function learningStudyCardHtml(m,w,options={}){
  const h=learningEsc,id=h(m.id),multi=!!options.multi,focused=!!(w?.needsExtraPractice||m.focused),icon=name=>typeof lessonIcon==='function'?lessonIcon(name):({play:'▶',mic:'🎙',more:'⋯'}[name]);
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'" data-audio-review="'+learningAudioReviewState(m,w?.word||m.textLao).needsReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(learningAudioReviewState(m,w?.word||m.textLao).needsReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+learningAudioReviewState(m,w?.word||m.textLao).needsReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(learningAudioReviewState(m,w?.word||m.textLao).needsReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty){
  const h=learningEsc,items=rows.map(m=>{const w=m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null;return {id:m.id,word:w?.word||m.textLao,meaning:w?.meaning||m.translationZh||''};}).filter(w=>w.word?.trim());
@@ -2853,6 +2876,7 @@ async function renderLearning(){
  if(activeView==='learning')await learningSeedLessonOne();
  const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};if(token!==learningRenderToken||activeView!=='learning'||learningRoute!==route||learningLesson.id!==courseId)return;
  const courses=learningCourses(snap),current=courses.find(c=>c.id===learningLesson.id);
+ if(typeof wordColorPrepare==='function'&&learningRoute==='lesson')wordColorPrepare(snap);
  if(learningRoute==='lesson'&&!current)learningRoute=learningLesson.library==='communication'?'communication':'teaching';
  learningLesson=current||courses.find(c=>(c.library==='communication')===(learningLesson.library==='communication'))||courses[0]||learningFirstLesson;
  learningPanel.className='panel'+(activeView==='learning'?'':' hidden')+(learningSettings?' learn-settings':'');
@@ -11763,7 +11787,7 @@ function ccResultBuild(queue,course,direction,ratings,attempts,at=Date.now()){
 function ccResultCounts(result){return Object.fromEntries(['green','yellow','red','skipped'].map(k=>[k,result.items.filter(r=>r.rating===k).length]));}
 function ccResultRecent(snap,courseId){return snap.learningMaterials.filter(m=>!m.deleted&&ccResultValid(m.chapterResult)&&m.chapterResult.courseId===courseId).sort((a,b)=>b.chapterResult.at-a.chapterResult.at)[0]?.chapterResult||null;}
 async function ccResultSave(result){if(!ccResultValid(result))throw Error('本轮结果格式无效');const snap=await learningSnapshot(),id='chapter-result:'+String(result.items[0].attempt||crypto.randomUUID()).replace(/^review-event:/,''),old=snap.learningMaterials.find(m=>m.id===id);if(old?.chapterResult&&JSON.stringify(old.chapterResult.items)===JSON.stringify(result.items)&&old.chapterResult.reviewMode===result.reviewMode)return old.chapterResult;
- const row={...learningBlank(id,'knowledge','章节检测结果'),chapterResult:result,updatedAt:result.at};if(new Blob([JSON.stringify(row)]).size>230000)throw Error('本轮结果过大，原逐题学习记录仍保留');await learningWrite({learningMaterials:[row]},snap,{quickProgress:true});return result;}
+ const row={...learningBlank(id,'knowledge','章节检测结果'),chapterResult:result,updatedAt:result.at};if(new Blob([JSON.stringify(row)]).size>230000)throw Error('本轮结果过大，原逐题学习记录仍保留');await learningWrite({learningMaterials:[row]},snap,{quickProgress:true});if(typeof wordColorRefresh==='function'&&result.direction==='audio')wordColorRefresh({...snap,learningMaterials:[...snap.learningMaterials.filter(m=>m.id!==id),row]});return result;}
 function ccResultDate(at){if(!Number.isFinite(at))return '未安排';const today=ccSpacingDay(Date.now(),0);return (at<ccSpacingDay(Date.now(),1)?'今天 '+new Date(at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):at<ccSpacingDay(Date.now(),2)?'明天':new Date(at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'}));}
 // Explicit opt-in at completion; test-only rounds never create review memberships or attempts.
 async function ccEnrollResult(result,mode,now=Date.now()){
@@ -12536,6 +12560,140 @@ document.addEventListener('click',async event=>{
  finally{button.disabled=false;}
 });
 
+</script>
+
+<script data-word-card-colors>
+/* Word-card marks are presentation preferences. Ratings remain in chapter summaries. */
+const wordColorOptions = {
+ auto:'自动', plain:'原色', yellow:'淡黄', pink:'淡粉', mint:'薄荷绿', lilac:'淡紫'
+};
+let wordColorView = null;
+
+function wordColorKey(id, lao, zh) {
+ return JSON.stringify([id, lao, zh]);
+}
+
+function wordColorIndex(snap) {
+ const manual=new Map(), progress=new Map();
+ const rounds=[];
+ for(const row of snap.learningMaterials){
+  if(row.deleted)continue;
+  if(Object.hasOwn(wordColorOptions,row.wordCardColor))manual.set(row.id,row.wordCardColor);
+  if(row.chapterResult?.direction==='audio'&&ccResultValid(row.chapterResult))rounds.push(row.chapterResult);
+ }
+ rounds.sort((a,b)=>a.at-b.at);
+ for(const round of rounds){
+  const seen=new Set();
+  for(const item of round.items){
+   if(item.rating==='skipped')continue;
+   for(const id of new Set([item.target,'material:'+item.id])){
+    const key=wordColorKey(id,item.lao,item.zh);
+    if(seen.has(key))continue;
+    seen.add(key);
+    const state=progress.get(key)||{wrong:0,correct:0,needsPractice:false};
+    state.correct=item.rating==='green'?state.correct+1:0;
+    state.wrong=state.correct>=2?0:state.wrong+Number(item.rating==='red');
+    state.needsPractice=state.correct<2&&(state.needsPractice||item.rating!=='green');
+    progress.set(key,state);
+   }
+  }
+ }
+ return {manual,progress};
+}
+
+function wordColorChoice(index,target,id,lao,zh){
+ const manual=index.manual.get('word-card-color:'+target)||'auto';
+ const state=index.progress.get(wordColorKey(target,lao,zh))||
+  index.progress.get(wordColorKey('material:'+id,lao,zh));
+ const automatic=state?.wrong>=2?'pink':state?.needsPractice?'yellow':'plain';
+ return {manual,automatic,tone:manual==='auto'?automatic:manual};
+}
+
+function wordColorTarget(m,w){
+ if(w?.syncId)return 'word:'+w.syncId;
+ if(m.contentType==='word'||m.analysisUnitType==='word')return 'material:'+m.id;
+ return '';
+}
+
+function wordColorPrepare(snap){
+ wordColorView=wordColorIndex(snap);
+}
+
+function wordColorCardAttributes(m,w,options){
+ const target=wordColorTarget(m,w);
+ if(!target||!wordColorView)return '';
+ const h=learningEsc,lao=options.text??w?.word??m.textLao,zh=options.meaning??w?.meaning??m.translationZh??'';
+ const {tone}=wordColorChoice(wordColorView,target,m.id,lao,zh);
+ return ' data-word-color-target="'+h(target)+'" data-word-color="'+h(tone)+'" data-word-color-lao="'+h(lao)+'" data-word-color-zh="'+h(zh)+'"';
+}
+
+function wordColorRefresh(snap){
+ wordColorPrepare(snap);
+ for(const card of document.querySelectorAll('[data-word-color-target]')){
+  const data=card.dataset;
+  data.wordColor=wordColorChoice(wordColorView,data.wordColorTarget,data.cardId,data.wordColorLao,data.wordColorZh).tone;
+ }
+}
+
+const wordColorValidate=learningValidateRecord;
+learningValidateRecord=function(kind,row){
+ if(row?.wordCardColor!==undefined&&
+    (kind!=='learningMaterials'||row.contentType!=='knowledge'||
+     !/^word-card-color:(word|material):.+/.test(row.id)||!Object.hasOwn(wordColorOptions,row.wordCardColor))){
+  throw Error('词卡颜色格式无效');
+ }
+ return wordColorValidate(kind,row);
+};
+
+const wordColorPreviousDetail=learningOpenDetail;
+learningOpenDetail=async function(id,...args){
+ const result=await wordColorPreviousDetail(id,...args);
+ if(learningDetail!==id)return result;
+ const detail=learningDialog.querySelector('.learn-detail');
+ const actions=detail?.querySelector('.ss-main-actions');
+ if(!actions)return result;
+ const {m,w}=await learningResolve(id);
+ if(learningDetail!==id||!actions.isConnected)return result;
+ const target=wordColorTarget(m,w);
+ if(!target)return result;
+ const picker=document.createElement('details');
+ picker.className='word-color-picker';
+ picker.innerHTML='<summary><span class="word-color-dot" aria-hidden="true"></span>词卡颜色</summary><div class="word-color-options" role="group" aria-label="词卡颜色">'+
+  Object.entries(wordColorOptions).map(([value,label])=>'<button type="button" data-word-color-choice="'+value+'"><span class="word-color-dot" data-swatch="'+value+'" aria-hidden="true"></span>'+label+'</button>').join('')+
+  '</div><p class="word-color-hint">自动标记：拿不准或写错用淡黄，累计写错两次用淡粉。连续两次写对后恢复原色。</p><p role="status"></p>';
+ actions.append(picker);
+ const owner=workspaceName('word-color'),buttons=[...picker.querySelectorAll('button')],status=picker.querySelector('[role=status]');
+ const draw=()=>{
+  if(!wordColorView)return;
+  const choice=wordColorChoice(wordColorView,target,m.id,w?.word||m.textLao,w?.meaning||m.translationZh||'');
+  picker.querySelector('summary .word-color-dot').dataset.swatch=choice.tone;
+  picker.querySelector('summary').title=choice.manual==='auto'?'自动 · '+wordColorOptions[choice.automatic]:wordColorOptions[choice.manual];
+  for(const button of buttons)button.setAttribute('aria-pressed',String(button.dataset.wordColorChoice===choice.manual));
+ };
+ draw();
+ picker.addEventListener('toggle',async()=>{
+  if(!picker.open)return;
+  try{
+   const {snap}=await ccReadCourse();
+   if(picker.isConnected&&owner===workspaceName('word-color')){wordColorPrepare(snap);draw();}
+  }catch(error){status.textContent=error.message;}
+ });
+ for(const button of buttons)button.onclick=async()=>{
+  if(learningHasWork()||owner!==workspaceName('word-color'))return;
+  for(const option of buttons)option.disabled=true;
+  try{
+   const snap=await learningSnapshot();
+   if(owner!==workspaceName('word-color'))return;
+   const row={...learningBlank('word-card-color:'+target,'knowledge','词卡颜色'),wordCardColor:button.dataset.wordColorChoice};
+   await learningWrite({learningMaterials:[row]},snap,{quickProgress:true});
+   if(owner!==workspaceName('word-color'))return;
+   wordColorRefresh({...snap,learningMaterials:[...snap.learningMaterials.filter(old=>old.id!==row.id),row]});
+   if(picker.isConnected){draw();status.textContent='已保存';picker.open=false;}
+  }catch(error){status.textContent=error.message;}
+  finally{for(const option of buttons)option.disabled=false;}
+ };
+ return result;
+};
 </script>
 </body>
 </html>

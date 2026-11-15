@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="5ce23748ccacb395">
+  <meta name="lao-app-build" content="0718f3fdce737f0f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -436,7 +436,6 @@
 #learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card:has(>.word-color-card-button)>.learn-card-main{padding-inline-end:40px!important}
 #learningPanel .word-color-mode{min-height:40px;padding:6px 12px;white-space:nowrap;font-size:13px;color:#46665c;background:#f0f6f2;border:1px solid #dce8e1;border-radius:9px}
 #learningPanel .word-color-mode[aria-pressed=true]{background:#e2f1e8;border-color:#7fb29d;color:#126e60}
-.word-color-toolbar{display:flex;justify-content:flex-end;margin:8px 0}
 #learningPanel .word-color-card-button:hover,#learningPanel .word-color-card-button:focus-visible{background:#e3efe8}
 .word-color-card-button .word-color-dot{background:conic-gradient(#ffe5a1 0 33%,#f5bcca 33% 66%,#b8dcca 66%);border-color:#8cae9e}
 [data-word-color=yellow] .word-color-card-button .word-color-dot{background:#ffe5a1;border-color:#c7a659}
@@ -444,28 +443,7 @@
 [data-word-color=mint] .word-color-card-button .word-color-dot{background:#b8dcca}
 [data-word-color=lilac] .word-color-card-button .word-color-dot{background:#ddc9f3}
 .word-color-heading{font-size:1.6rem;color:#126e60;margin:0 0 12px}
-#learningPanel #learningContent .lesson-chapter-heading:has(.cc-chapter-actions [data-word-color-mode]){
- flex-wrap:wrap;column-gap:20px;row-gap:10px
-}
-#learningPanel .cc-chapter-actions:has(.word-color-mode){
- display:inline-flex;flex-wrap:wrap;justify-content:flex-start;gap:4px;padding:4px;
- border:1px solid #dce8e1;border-radius:14px;background:#f5f8f5
-}
-#learningPanel .cc-chapter-actions:has(.word-color-mode) button{
- margin:0!important;min-height:40px;padding:7px 12px!important;
- border-radius:9px;font-size:13px!important;white-space:nowrap
-}
-#learningPanel .cc-chapter-actions .word-color-mode:not([aria-pressed=true]){
- background:transparent;border-color:transparent
-}
-#learningPanel .cc-chapter-actions .word-color-mode:hover{background:#eaf2ed}
-@media(max-width:600px){
- #learningPanel #learningContent .lesson-chapter-heading:has(.cc-chapter-actions [data-word-color-mode]){
-  align-items:flex-start;flex-direction:column
- }
- #learningPanel .cc-chapter-actions:has(.word-color-mode){margin-left:0;max-width:100%;box-sizing:border-box}
- #learningPanel .cc-chapter-actions:has(.word-color-mode) button{padding-inline:9px!important}
-}
+#learningPanel .cf-mask-menu .word-color-mode{margin-top:4px;border-top:1px solid #dce8e1}
 </style>
 </head>
 <body>
@@ -3049,8 +3027,16 @@ async function learningWrite(rows,expected=null,options={}){
  if(expected?.detailReadOnly)throw Error('详情预览只用于阅读，请重新打开编辑操作以读取最新资料');
  for(const kind of Object.keys(rows))for(const row of rows[kind])learningValidateRecord(kind,row);
  const d=await openDB(),names=Object.keys(rows),quick=typeof qaStage==='function'&&(options.quickAudio&&Boolean(cloudWorkspace)||options.quickProgress&&qaProgressEnabled()),t=d.transaction(quick?[...names,'cloud_meta']:names,'readwrite'),done=transactionDone(t);let failure;
- const write=()=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,...(options.quickProgress?{progress:true}:{}),before:expected?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
- if(expected){let left=names.length;for(const s of names){const q=t.objectStore(s).getAll();q.onsuccess=()=>{if(!cloudSame(q.result,expected[s])){failure=new Error('另一个页面修改了学习材料，请重新打开后再保存。');t.abort();return;}if(--left===0)write();};}}else write();
+ const write=(previous=expected)=>{try{for(const s of names)for(const r of rows[s])t.objectStore(s).put(r);if(quick)qaStage(t.objectStore('cloud_meta'),qaRecordLearning(rows).map(r=>({...r,...(options.quickProgress?{progress:true}:{}),before:previous?.[r.kind]?.find(x=>x.id===r.id)||null})));}catch(e){failure=e;t.abort();}};
+ if(expected){let left=names.length;for(const s of names){const q=t.objectStore(s).getAll();q.onsuccess=()=>{if(!cloudSame(q.result,expected[s])){failure=new Error('另一个页面修改了学习材料，请重新打开后再保存。');t.abort();return;}if(--left===0)write();};}}else if(quick&&options.readPrevious){
+  const previous=Object.fromEntries(names.map(name=>[name,[]]));
+  let remaining=names.reduce((total,name)=>total+rows[name].length,0);
+  if(!remaining)write(previous);
+  for(const name of names)for(const row of rows[name]){
+   const q=t.objectStore(name).get(row.id);
+   q.onsuccess=()=>{if(q.result)previous[name].push(q.result);if(--remaining===0)write(previous);};
+  }
+ }else write();
  try{await done;}catch(e){throw failure||e;}if(quick)qaKick();
 }
 function learningFindWord(ref,words){return words.find(x=>syncKeys(x).includes(ref));}
@@ -3168,7 +3154,7 @@ async function renderLearning(){
   if(learningSettings)html+='<details><summary>本课音频情况</summary><p>只检查当前账号本机已保存音频，不请求生成。</p><button data-learn="audio-audit">检查已有／缺少音频</button><div id="learningAudioAudit"></div></details>';
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
- if(learningRoute==='lesson'&&typeof wordColorChapterToolbar==='function')html=wordColorChapterToolbar(html,learningLesson.id);
+ if(learningRoute==='lesson'&&typeof wordColorEditingChapter!=='undefined'&&wordColorEditingChapter!==workspaceName('word-color')+'|'+learningLesson.id)wordColorEditingChapter='';
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
  if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);if(route==='lesson')rememberCurrentPage();$('#learningStatus').textContent='';}
 }
@@ -4447,7 +4433,7 @@ async function lessonPageListen(page,bar){
  finally{if(timer)clearTimeout(timer);if(lessonPageRead===controller)lessonPageRead=null;}
  if(!data||token!==lessonPageRun)return;
  const {words,snap,cache}=data;
- const playlist=[],missing=[],singles=words.map(w=>lessonPageAsset(w,snap,cache));
+ const playlist=[],missing=[],singles=words.map(w=>lessonPageAsset(w,snap,cache)||(typeof window!=='undefined'&&!w.m.audioNeedsReview?window.laoPublicQueueAudio?.(w):null));
  for(let i=0;i<words.length;){
   let segment=null;
   const single=singles[i];
@@ -4471,7 +4457,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
  const current=()=>token===lessonPageRun&&bar.isConnected!==false;
  if(!current())return;lessonPageBar=bar;let ready=false,pendingIndex=0;
  lessonPageCardJump=(id,button)=>{if(!current()||!bar.parentElement?.contains(button))return false;const word=items.findIndex(w=>w.id===id);if(word<0)return false;const index=playlist.findIndex(p=>word===p.at&&p.count>=1);if(index<0)return false;if(ready)void play(index);else pendingIndex=index;return true;};
- const incremental=typeof learningMobileChapter==='function'&&learningMobileChapter();
+ const incremental=playlist.some(part=>part.loadAudio)||typeof learningMobileChapter==='function'&&learningMobileChapter();
  let durations;
  if(incremental){
   durations=playlist.map(part=>{
@@ -4493,23 +4479,39 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
  const format=seconds=>Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0');
  let controls=bar.querySelector('.page-progress');
  if(!controls){controls=document.createElement('div');controls.className='page-progress';controls.innerHTML='<button type="button" data-queue-prev aria-label="上一词／段" title="上一词／段">‹</button><label class="page-total-progress">列表总进度<input type="range" min="0" max="10000" value="0" data-queue-seek aria-label="列表总音频进度"></label><span data-queue-time></span><button type="button" data-queue-next aria-label="下一词／段" title="下一词／段">›</button>';bar.append(controls);}
- const seek=controls.querySelector('[data-queue-seek]'),clock=controls.querySelector('[data-queue-time]');let position=0,finished=false;
+ const seek=controls.querySelector('[data-queue-seek]'),clock=controls.querySelector('[data-queue-time]');let position=0,finished=false,partRun=0;
  controls.querySelector('[data-queue-prev]').onclick=()=>lessonPageJump?.(Math.max(0,position-1));
  controls.querySelector('[data-queue-next]').onclick=()=>lessonPageJump?.(position+1);
  lessonPageJump=index=>{if(token!==lessonPageRun)return;lessonPageAudio?.pause();void play(index);};
  controls.hidden=false;seek.max='10000';seek.disabled=!timelineReady;
  seek.oninput=()=>{if(!current()||!timelineReady)return;const time=Math.max(0,Math.min(duration-.001,duration*Number(seek.value)/10000));let index=starts.length-1;while(index>0&&starts[index]>time)index--;const offset=time-starts[index],a=lessonPageAudio,paused=!!a?.paused&&!finished;if(index===position&&a&&!finished){a.queueOffset=offset;try{a.currentTime=(playlist[index].start||0)+offset;}catch(_){}clock.textContent=format(time)+' / '+format(duration);}else void play(index,offset,paused);};
  async function play(index,offset=0,paused=false){
-  if(token!==lessonPageRun)return;
+  if(!current())return;
+  const run=++partRun;
+  lessonPageRead?.abort();lessonPageRead=null;
   if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){lessonPageClearMarked();status.textContent='本页播放完成';finished=true;if(timelineReady){seek.value='10000';clock.textContent=format(duration)+' / '+format(duration);}return;}index=0;}
   finished=false;position=index;
-  const part=playlist[index];lessonPageMark(part,items,bar);
+  let part=playlist[index];lessonPageMark(part,items,bar);
+  if(part.loadAudio){
+   lessonPageAudio?.pause();
+   const controller=lessonPageRead=new AbortController();
+   status.textContent='正在加载第 '+(part.at+1)+' 项公共音频…';
+   try{
+    const blob=await part.loadAudio(controller.signal);
+    if(!current()||run!==partRun)return;
+    if(!blob)throw Error('这条公共录音暂不可用');
+    part={...part,blob};
+   }catch(error){
+    if(current()&&run===partRun){lessonPageStop();status.textContent=error.message+'。请重试，或用下一词单独播放。';}
+    return;
+   }finally{if(lessonPageRead===controller)lessonPageRead=null;}
+  }
   const a=lessonPageAudio||(lessonPageAudio=new Audio());
   a.onended=a.ontimeupdate=a.onloadedmetadata=a.onerror=a.onplaying=null;
   a.pause();
   const previousURL=lessonPageURL;
   const url=lessonPageURL=URL.createObjectURL(part.blob);
-  const currentPart=()=>current()&&lessonPageAudio===a&&lessonPageURL===url;
+  const currentPart=()=>current()&&run===partRun&&lessonPageAudio===a&&lessonPageURL===url;
   a.preload='auto';a.src=url;
   if(previousURL)URL.revokeObjectURL(previousURL);
   a.queueOffset=offset;a.playbackRate=Number(bar.querySelector('[data-page-speed]')?.value)||1;let advanced=false;
@@ -10271,7 +10273,7 @@ const cfValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row.favoriteFolder!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||row.id!==row.favoriteFolder.id||!cfFolderValid(row.favoriteFolder)))throw Error('收藏文件夹格式无效');if(row.favorite?.folder!==undefined&&(typeof row.favorite.folder!=='string'||row.favorite.folder.length>100))throw Error('收藏分类格式无效');return cfValidate(kind,row);};
 async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.length>60)throw Error('文件夹名称需为 1–60 个字');learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot();if(workspace!==fvWorkspace())throw Error('账号已变化');const id='folder:'+crypto.randomUUID(),row={...learningBlank(id,'knowledge','收藏文件夹'),favoriteFolder:{id,name},updatedAt:Date.now()};await learningWrite({learningMaterials:[row]},snap);await fvRefresh();return id;}finally{learningBusy=false;}}
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
-function cfMaskButtons(){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button></div></details>';}
+function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
 const cfTapeAttributes=new WeakMap();
 function cfRefreshTape(node,scope,language){
@@ -10407,7 +10409,7 @@ function cfDictionaryRecordHtml(target){const h=learningEsc,icon=typeof lessonIc
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate],[data-dict-record]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(b.disabled||e.detail>1)return;b.disabled=true;void (b.dataset.dictRecord?cfRecord(b.dataset.dictRecord,{button:b,quick:true}):b.dataset.cfRecord?cfRecord(b.dataset.cfRecord,{button:b}):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
 function cfDecorate(){
  if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
- for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
+ for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons(typeof wordColorMenuButton==='function'?wordColorMenuButton(bar):''));if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
  for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
@@ -11772,7 +11774,7 @@ const lnExports=new WeakMap();
 function lnContentChanged(changes){
  if(!lnData||lnData.owner!==workspaceName('navigation-text-v1')||lnData.revision!==dfRevision-1||!changes?.length)return;
  if(changes.every(c=>c.store==='learningAudio')){lnData={...lnData,revision:dfRevision};return;}
- if(!changes.every(c=>c.store==='learningMaterials'&&c.op==='put'&&c.row.favorite))return;
+ if(!changes.every(c=>c.store==='learningMaterials'&&c.op==='put'&&(c.row.favorite||c.row.wordCardColor!==undefined)))return;
  const rows=new Map(lnData.snap.learningMaterials.map(m=>[m.id,m]));for(const c of changes)rows.set(c.row.id,c.row);
  lnData={...lnData,revision:dfRevision,snap:{...lnData.snap,learningMaterials:[...rows.values()]}};
 }
@@ -13237,14 +13239,11 @@ function wordColorModeButton(active){
   (active?'完成调色':'调整颜色')+'</button>';
 }
 
-function wordColorChapterToolbar(html,chapterId){
- if(!html.includes('data-word-color-open'))return html;
- const chapter=workspaceName('word-color')+'|'+chapterId;
- if(wordColorEditingChapter!==chapter)wordColorEditingChapter='';
- const button=wordColorModeButton(wordColorEditingChapter===chapter);
- const chapterTest=/<button\b[^>]*data-course-test="course"[^>]*>[\s\S]*?<\/button>/;
- return chapterTest.test(html)?html.replace(chapterTest,test=>test+button):
-  '<div class="word-color-toolbar">'+button+'</div>'+html;
+function wordColorMenuButton(bar){
+ const content=bar.closest('#learningContent');
+ if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-open]'))return '';
+ const chapter=workspaceName('word-color')+'|'+learningLesson.id;
+ return wordColorModeButton(wordColorEditingChapter===chapter);
 }
 
 function wordColorKey(id, lao, zh) {
@@ -13280,7 +13279,7 @@ function wordColorIndex(snap) {
 }
 
 function wordColorChoice(index,target,id,lao,zh){
- const manual=index.manual.get('word-card-color:'+target)||'auto';
+ const manual=wordColorPending.get(workspaceName('word-color')+'|'+target)??index.manual.get('word-card-color:'+target)??'auto';
  const state=index.progress.get(wordColorKey(target,lao,zh))||
   index.progress.get(wordColorKey('material:'+id,lao,zh));
  const automatic=state?.wrong>=2?'pink':state?.needsPractice?'yellow':'plain';
@@ -13305,11 +13304,11 @@ function wordColorCardAttributes(m,w,options){
  return ' data-word-color-target="'+h(target)+'" data-word-color="'+h(tone)+'" data-word-color-lao="'+h(lao)+'" data-word-color-zh="'+h(zh)+'"';
 }
 
-function wordColorRefresh(snap){
- wordColorPrepare(snap);
+const wordColorPending=new Map();
+function wordColorPaint(target){
  for(const card of document.querySelectorAll('[data-word-color-target]')){
   const data=card.dataset;
-  data.wordColor=wordColorChoice(wordColorView,data.wordColorTarget,data.cardId,data.wordColorLao,data.wordColorZh).tone;
+  if(data.wordColorTarget===target)data.wordColor=wordColorChoice(wordColorView,target,data.cardId,data.wordColorLao,data.wordColorZh).tone;
  }
 }
 
@@ -13361,26 +13360,31 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
   for(const button of buttons)button.setAttribute('aria-pressed',String(button.dataset.wordColorChoice===choice.manual));
  };
  draw();
- picker.addEventListener('toggle',async()=>{
-  if(!picker.open)return;
-  try{
-   const {snap}=await ccReadCourse();
-   if(picker.isConnected&&owner===workspaceName('word-color')){wordColorPrepare(snap);draw();}
-  }catch(error){status.textContent=error.message;}
- });
+ if(!wordColorView){
+  void lnGetData().then(({snap})=>{
+   if(owner===workspaceName('word-color')){if(!wordColorView)wordColorPrepare(snap);draw();}
+  }).catch(error=>{status.textContent=error.message;});
+ }
+ const pendingKey=owner+'|'+target;
  for(const button of buttons)button.onclick=async()=>{
-  if(learningHasWork()||owner!==workspaceName('word-color'))return;
+  if(!wordColorView||wordColorPending.has(pendingKey)||learningHasWork()||owner!==workspaceName('word-color'))return;
+  const row={...learningBlank('word-card-color:'+target,'knowledge','词卡颜色'),wordCardColor:button.dataset.wordColorChoice};
+  wordColorPending.set(pendingKey,row.wordCardColor);
+  wordColorPaint(target);draw();
   for(const option of buttons)option.disabled=true;
+  status.textContent='正在保存…';
   try{
-   const snap=await learningSnapshot();
+   await learningWrite({learningMaterials:[row]},null,{quickProgress:true,readPrevious:true});
    if(owner!==workspaceName('word-color'))return;
-   const row={...learningBlank('word-card-color:'+target,'knowledge','词卡颜色'),wordCardColor:button.dataset.wordColorChoice};
-   await learningWrite({learningMaterials:[row]},snap,{quickProgress:true});
-   if(owner!==workspaceName('word-color'))return;
-   wordColorRefresh({...snap,learningMaterials:[...snap.learningMaterials.filter(old=>old.id!==row.id),row]});
-   if(picker.isConnected){draw();status.textContent='已保存';if(!expanded)picker.open=false;}
-  }catch(error){status.textContent=error.message;}
-  finally{for(const option of buttons)option.disabled=false;}
+   wordColorView.manual.set(row.id,row.wordCardColor);
+   status.textContent='已保存';
+   if(!expanded)picker.open=false;
+  }catch(error){status.textContent='颜色未保存。'+error.message;}
+  finally{
+   wordColorPending.delete(pendingKey);
+   if(owner===workspaceName('word-color')){wordColorPaint(target);draw();}
+   for(const option of buttons)option.disabled=false;
+  }
  };
  return picker;
 }
@@ -13390,8 +13394,12 @@ document.addEventListener('click',event=>{
  if(mode){
   const active=mode.getAttribute('aria-pressed')!=='true';
   wordColorEditingChapter=active?workspaceName('word-color')+'|'+learningLesson.id:'';
-  mode.setAttribute('aria-pressed',String(active));
-  mode.textContent=active?'完成调色':'调整颜色';
+  for(const control of document.querySelectorAll('[data-word-color-mode]')){
+   control.setAttribute('aria-pressed',String(active));
+   control.textContent=active?'完成调色':'调整颜色';
+  }
+  const menu=mode.closest('.cf-mask-controls');
+  if(menu)menu.open=false;
   return;
  }
  const button=event.target.closest('[data-word-color-open]');

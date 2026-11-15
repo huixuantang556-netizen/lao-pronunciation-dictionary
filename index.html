@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="4704b378249020cd">
+  <meta name="lao-app-build" content="ad69c451beb7abc1">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3200,10 +3200,10 @@ async function learningReviewChangedAudio(m){
  const h=learningEsc,id=h(m.id),refs=m.audioSources||[];learningDetail=m.id;learningDraft=null;
  learningModal('文字已修改 · 核对原录音','<p>录音没有丢失。请先试听，只有读音仍适用时才确认；文字确实变了可重新录制。</p><p lang="lo">当前：'+h(m.textLao)+'</p>'+refs.map((a,i)=>'<section><p>原录音文字：<span lang="lo">'+h(a.recordedText||a.text||'未记录')+'</span></p><button data-learn="audio" data-id="'+id+'" data-index="'+i+'">▶ 试听这份旧录音</button>'+(a.needsReview?'<button data-learn="v2-confirm-audio" data-id="'+id+'" data-index="'+i+'">这份录音仍适用</button>':'')+'</section>').join('')+'<button data-learn="record-card-reference" data-id="'+id+'">🎙 重新录制当前文字</button>');
 }
-async function learningPlay(id,source='reference',index=null){
+async function learningPlay(id,source='reference',index=null,resolved=null){
  const chapterTap=index===null&&source==='reference'&&typeof sfRead==='function'&&typeof activeView!=='undefined'&&activeView==='learning'&&learningRoute==='lesson'&&window.matchMedia?.('(max-width:640px)').matches;
  if(chapterTap)rememberCurrentPage();
- const {m,w,snap}=await (chapterTap?sfRead(id):learningResolve(id)),text=w?.word||m.textLao,refs=m.audioSources||[];
+ const {m,w,snap}=await (resolved||(chapterTap?sfRead(id):learningResolve(id))),text=w?.word||m.textLao,refs=m.audioSources||[];
  // An explicit audio-row choice must be resolved before any word-level fallback.
  if(index!==null){
   if(!Number.isInteger(index)||index<0||!refs[index])throw Error('音频列表已变化，请重新打开详情后选择。');
@@ -3215,9 +3215,9 @@ async function learningPlay(id,source='reference',index=null){
   await learningPlayBlob(asset.blob,selected.start||0,selected.end??null);return;
  }
  if(index===null&&source==='reference'&&typeof sharedWordReference==='function'){const clip=sharedWordReference({...m,textLao:text},snap);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
- if(index===null&&source==='reference'&&(m.audioNeedsReview||refs.some(a=>a.needsReview))){const key=s=>String(s||'').normalize('NFC').replace(/\s+/gu,''),current=refs.findLastIndex(a=>learningIsReference(a)&&!a.needsReview&&key(a.recordedText||a.text)===key(text));if(current>=0)return learningPlay(id,source,current);await learningReviewChangedAudio({...m,textLao:text});return 'review';}
- if(index===null&&source==='reference'){const clip=recordedReference({...m,textLao:text},snap)||(w?await recordedReferenceForWord(w):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
- if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred);return;}}
+ if(index===null&&source==='reference'&&(m.audioNeedsReview||refs.some(a=>a.needsReview))){const key=s=>String(s||'').normalize('NFC').replace(/\s+/gu,''),current=refs.findLastIndex(a=>learningIsReference(a)&&!a.needsReview&&key(a.recordedText||a.text)===key(text));if(current>=0)return learningPlay(id,source,current,{m,w,snap});await learningReviewChangedAudio({...m,textLao:text});return 'review';}
+ if(index===null&&source==='reference'){const clip=recordedReference({...m,textLao:text},snap)||(w?(chapterTap?recordedReferenceForWordSnapshot(w,snap):await recordedReferenceForWord(w)):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
+ if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred,{m,w,snap});return;}}
  if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
  if(index===null&&source==='reference'){const manual=refs.filter(a=>a.role==='reference').at(-1);if(manual){const asset=snap.learningAudio.find(a=>a.id===manual.assetId);if(!asset)throw new Error('参考发音尚未同步。');await learningPlayBlob(asset.blob,manual.start||0,manual.end??null);return;}}
@@ -3363,7 +3363,7 @@ async function learningAction(e){
   if(a==='detail'||a==='follow'){await learningOpenDetail(id);if(a==='follow')$('#learningRecord').focus();return;}
   if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
-  if(a==='play'||a==='play-card'){const result=await learningPlay(id);$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
+  if(a==='play'||a==='play-card'){$('#learningStatus').textContent='正在读取本机发音…';const result=await learningPlay(id);$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
   if(a==='gemini'){const {m,w}=await learningResolve(id);await learningDefaultSpeech(m,w?.word||m.textLao);return;}
   if(a==='own'){await learningPlay(id,'user');return;}
   if(a==='audio'){await learningPlay(id,'reference',Number(b.dataset.index));return;}
@@ -4357,13 +4357,18 @@ async function lessonPagePlaybackData(page,current){
  const readings=[lessonPageText(words),words.map(word=>word.word).join('\n')].map(text=>'\n'+text+'\n');
  const wanted=key=>texts.has(key)||typeof key==='string'&&key.length>0&&readings.some(text=>text.includes('\n'+key+'\n'));
  const cache=await withDefaultAudioStore('readonly',store=>{
-  const matches=new Map(),cursor=store.openKeyCursor();
-  cursor.onsuccess=()=>{
-   const row=cursor.result;
-   if(!row||!current())return;
-   let text;try{text=JSON.parse(row.key)[1];}catch(_){}
-   if(wanted(text)){const query=store.get(row.key);query.onsuccess=()=>{if(query.result)matches.set(text,query.result);};}
-   row.continue();
+  const matches=new Map(),keys=store.getAllKeys();
+  keys.onsuccess=()=>{
+   if(!current())return;
+   const selected=new Map();
+   for(const key of keys.result){
+    let text;try{text=JSON.parse(key)[1];}catch(_){continue;}
+    if(wanted(text))selected.set(text,key);
+   }
+   for(const [text,key] of selected){
+    const query=store.get(key);
+    query.onsuccess=()=>{if(query.result)matches.set(text,query.result);};
+   }
   };
   return matches;
  });
@@ -4377,7 +4382,14 @@ async function lessonPageListen(page,bar){
  stopPracticeAudio();const token=lessonPageRun;lessonPageBar=bar;
  const status=bar.querySelector('[data-page-status]');status.textContent='正在准备本页音频…';
  if(typeof rememberCurrentPage==='function')rememberCurrentPage();
- const data=await lessonPagePlaybackData(page,()=>token===lessonPageRun&&bar.isConnected!==false);
+ let timer,expired=false,data;
+ try{
+  const reading=lessonPagePlaybackData(page,()=>!expired&&token===lessonPageRun&&bar.isConnected!==false);
+  data=typeof setTimeout==='function'?await Promise.race([reading,new Promise((_,reject)=>{
+   timer=setTimeout(()=>{expired=true;reject(Error('本页音频读取超时，可再次点击播放重试。'));},15000);
+  })]):await reading;
+ }catch(error){if(token!==lessonPageRun)return;lessonPageStop();throw error;}
+ finally{if(timer)clearTimeout(timer);}
  if(!data||token!==lessonPageRun)return;
  const {words,snap,cache}=data;
  const playlist=[],missing=[],singles=words.map(w=>lessonPageAsset(w,snap,cache));
@@ -10264,7 +10276,7 @@ async function cfRecord(target,{autoStart=true,button=null,quick=false}={}){
   learningDetail=target;learningDraft=null;learningPendingRecording=null;
   const card=button?.closest('.learn-card,.entry'),text=card?.querySelector('strong,.word')?.textContent||'本条参考发音',h=learningEsc;
   learningModal('录制参考发音','<section data-quick-reference><p lang="lo">'+h(text)+'</p><p class="tag-hint">首次使用请允许麦克风。按钮显示“停止录音”时正在录音；停止后可试听和保存。旧录音保留。</p><button id="learningReferenceRecord" data-learn="record-reference" class="primary">🎙 开始录音</button><button id="learningRecord" hidden></button><div id="learningRecordingDraft"></div></section>');
-  try{if(autoStart)await learningStartRecording('reference');}catch(error){$('#learningDialogStatus').textContent=error.message;throw error;}
+  try{if(autoStart)await learningStartRecording('reference');}catch(error){$('#learningDialogStatus').textContent=error.name==='NotAllowedError'?'麦克风权限未开放。请在网站设置允许麦克风，再点开始录音。听已有录音请点词卡上的三角形。':error.message;}
   return;
  }
  const resolved=await learningReadResolved(target);if(resolved.m.deleted)throw Error('词条已移除');

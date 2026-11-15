@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="cbd147fedcc0bd8d">
+  <meta name="lao-app-build" content="5ce23748ccacb395">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1090,17 +1090,21 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function blobToDataURL(blob) { return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(reader.error); reader.readAsDataURL(blob); }); }
     function dataURLToBlob(dataURL) { const [header,base64] = dataURL.split(','); if (!header?.startsWith('data:') || !base64) throw new Error('录音数据格式不正确'); const mime=(header.match(/^data:([^;]+)/)||[])[1]||'audio/webm'; const binary=atob(base64), bytes=new Uint8Array(binary.length); for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i); return new Blob([bytes],{type:mime}); }
 
-    function withDefaultAudioStore(mode, work) {
+    function withDefaultAudioStore(mode, work, signal) {
       return new Promise((resolve,reject)=>{
+        if(signal?.aborted){reject(new DOMException('音频读取已取消','AbortError'));return;}
         const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);
         open.onupgradeneeded=()=>open.result.createObjectStore('audio');
         open.onerror=()=>reject(open.error);
         open.onsuccess=()=>{
           const db=open.result;let result,tx;
-          try{tx=db.transaction('audio',mode);result=work(tx.objectStore('audio'));}
-          catch(error){if(tx)tx.abort();db.close();reject(error);return;}
-          tx.oncomplete=()=>{db.close();resolve(result);};
-          tx.onabort=()=>{db.close();reject(tx.error||new Error('默认音频保存失败，请重试导入。'));};
+          const cancel=()=>{try{tx.abort();}catch(_){}};
+          const close=()=>{signal?.removeEventListener('abort',cancel);db.close();};
+          if(signal?.aborted){close();reject(new DOMException('音频读取已取消','AbortError'));return;}
+          try{tx=db.transaction('audio',mode);signal?.addEventListener('abort',cancel,{once:true});result=work(tx.objectStore('audio'));}
+          catch(error){if(tx)tx.abort();close();reject(error);return;}
+          tx.oncomplete=()=>{close();resolve(result);};
+          tx.onabort=()=>{close();reject(tx.error||new DOMException('默认音频操作已中断','AbortError'));};
           tx.onerror=()=>{};
         };
       });
@@ -3269,7 +3273,7 @@ async function learningPlayResolved(id,source,index,{m,w,snap},current=()=>true,
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
  if(index===null&&source==='reference'){const manual=refs.filter(a=>a.role==='reference').at(-1);if(manual){const asset=snap.learningAudio.find(a=>a.id===manual.assetId);if(!asset)throw new Error('参考发音尚未同步。');await learningPlayBlob(asset.blob,manual.start||0,manual.end??null);return;}}
  let checkedLocal=false;
- if(index===null&&source==='reference'&&w){const own=chapterTap?audioBlobFor(w):null;if(own){await learningPlayBlob(own);return;}if(!chapterTap&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}const reading=learningCachedSpeech(w.word),cached=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(cached){await learningPlayBlob(cached);return;}checkedLocal=chapterTap;}
+ if(index===null&&source==='reference'&&w){const own=chapterTap?audioBlobFor(w):null;if(own){await learningPlayBlob(own);return;}if(!chapterTap&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}const reading=learningCachedSpeech(w.word,signal),cached=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(cached){await learningPlayBlob(cached);return;}checkedLocal=chapterTap;}
  if(index===null&&source==='user'&&w&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}
  let ref=index!==null?refs[index]:source==='user'?refs.filter(learningIsFollow).at(-1):refs.filter(learningIsReference).at(-1);
  if(ref?.source==='gemini'){await playEntrySpeech({word:ref.text},'default');return;}
@@ -3277,7 +3281,7 @@ async function learningPlayResolved(id,source,index,{m,w,snap},current=()=>true,
  if(source==='user'){if(w&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}throw new Error('还没有跟读录音。');}
  await learningDefaultSpeech(m,text,current,signal,checkedLocal);
 }
-async function learningDefaultSpeech(m,text,current=()=>true,signal,checkedLocal=false){const reading=checkedLocal?null:learningCachedSpeech(text),saved=signal&&reading?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(saved){await learningPlayBlob(saved);return;}const blob=await defaultSpeech(text);if(!current())return;await learningPlayBlob(blob);if(!current())return;if(m.contentType!=='word'&&await codaCachedSpeech(text)){const snap=await learningSnapshot(),current=snap.learningMaterials.find(x=>x.id===m.id)||m;if(!current.audioSources.some(a=>a.source==='gemini'&&a.text===text))await learningWrite({learningMaterials:[{...current,audioSources:[...current.audioSources,{source:'gemini',text}],updatedAt:Date.now()}]},snap);}}
+async function learningDefaultSpeech(m,text,current=()=>true,signal,checkedLocal=false){const reading=checkedLocal?null:learningCachedSpeech(text,signal),saved=signal&&reading?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(saved){await learningPlayBlob(saved);return;}const blob=await defaultSpeech(text);if(!current())return;await learningPlayBlob(blob);if(!current())return;if(m.contentType!=='word'&&await codaCachedSpeech(text)){const snap=await learningSnapshot(),current=snap.learningMaterials.find(x=>x.id===m.id)||m;if(!current.audioSources.some(a=>a.source==='gemini'&&a.text===text))await learningWrite({learningMaterials:[{...current,audioSources:[...current.audioSources,{source:'gemini',text}],updatedAt:Date.now()}]},snap);}}
 async function learningRelatedHtml(word){const rows=await learningRows('learningMaterials'),keys=syncKeys(word);const related=rows.filter(m=>!m.deleted&&!m.analysisOwner&&m.contentType==='sentence'&&m.linkedWordSyncIds.some(id=>keys.includes(id))).filter((m,i,a)=>a.findIndex(x=>x.textLao===m.textLao&&x.translationZh===m.translationZh)===i).slice(0,5);return related.length?'<section class="learn-related"><h3>相关例句</h3>'+related.map(m=>'<button data-learn="detail" data-id="'+learningEsc(m.id)+'"><span lang="lo">'+learningEsc(m.textLao)+'</span><small>'+learningEsc(m.translationZh)+'</small></button>').join('')+'</section>':'';}
 async function learningDefaultAudioKeys(){return withDefaultAudioStore('readonly',store=>{const keys=[],cursor=store.openKeyCursor();cursor.onsuccess=()=>{const row=cursor.result;if(row){keys.push(row.key);row.continue();}};return keys;});}
 async function learningWordAudioManagerHtml(m,w,snap){
@@ -4281,6 +4285,7 @@ const batchLaunch=document.createElement('button');batchLaunch.type='button';bat
 const lessonPages=new Map();
 let lessonPageBar=null;
 document.addEventListener('change',e=>{if(e.target.matches('[data-page-speed]')&&lessonPageAudio&&e.target.closest('[data-page-key]')===lessonPageBar)lessonPageAudio.playbackRate=Number(e.target.value)||1;});
+let lessonPageRead=null;
 let lessonPageRun=0,lessonPageAudio=null,lessonPageURL=null,lessonPageJump=null,lessonPageCardJump=null;
 let lessonPageDetailBar=null;
 function lessonPageBeginDetail(){if(lessonPageBar)lessonPageDetailBar=lessonPageBar;}
@@ -4323,7 +4328,7 @@ async function lessonQueueDurations(playlist,current){
  const durations=new Array(playlist.length);let index=0;
  await Promise.all(Array.from({length:Math.min(typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches?1:4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
-function lessonPageStop(){lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+function lessonPageStop(){lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course,grouped=false){
  let blocks=section.blocks;
@@ -4381,7 +4386,7 @@ function lessonPageAsset(w,snap,cache){
  if(cache.has(w.word))return {blob:cache.get(w.word)};
  return assetFor(refs.filter(a=>learningIsReference(a)&&!a.needsReview).at(-1));
 }
-async function lessonPagePlaybackData(page,current){
+async function lessonPagePlaybackData(page,current,signal){
  if(typeof lnGetData!=='function'||typeof dgGetRows!=='function'||typeof withDefaultAudioStore!=='function'){
   const words=await lessonPageResolve(page.words),snap=await learningSnapshot(),cache=new Map();
   for(const row of await cloudCacheRows())try{cache.set(JSON.parse(row.key)[1],row.blob);}catch(_){}
@@ -4419,7 +4424,7 @@ async function lessonPagePlaybackData(page,current){
    }
   };
   return matches;
- });
+ },signal);
  if(!current())return null;
  const ids=refs.map(ref=>ref.assetId).filter(Boolean),learningAudio=[];
  const unique=[...new Set(ids)];
@@ -4432,13 +4437,14 @@ async function lessonPageListen(page,bar){
  const status=bar.querySelector('[data-page-status]');status.textContent='正在准备本页音频…';
  if(typeof rememberCurrentPage==='function')rememberCurrentPage();
  let timer,expired=false,data;
+ const controller=typeof AbortController==='function'?new AbortController():null;lessonPageRead=controller;
  try{
-  const reading=lessonPagePlaybackData(page,()=>!expired&&token===lessonPageRun&&bar.isConnected!==false);
+  const reading=lessonPagePlaybackData(page,()=>!expired&&token===lessonPageRun&&bar.isConnected!==false,controller?.signal);
   data=typeof setTimeout==='function'?await Promise.race([reading,new Promise((_,reject)=>{
-   timer=setTimeout(()=>{expired=true;reject(Error('本页音频读取超时，可再次点击播放重试。'));},15000);
+   timer=setTimeout(()=>{expired=true;reject(Error('本页音频读取超时，可再次点击播放重试。'));controller?.abort();},15000);
   })]):await reading;
  }catch(error){if(token!==lessonPageRun)return;lessonPageStop();throw error;}
- finally{if(timer)clearTimeout(timer);}
+ finally{if(timer)clearTimeout(timer);if(lessonPageRead===controller)lessonPageRead=null;}
  if(!data||token!==lessonPageRun)return;
  const {words,snap,cache}=data;
  const playlist=[],missing=[],singles=words.map(w=>lessonPageAsset(w,snap,cache));
@@ -11230,6 +11236,7 @@ async function qaFlushPending(uid,api,status){
  status('本机更新上传完成：'+done+' 项。'+(left?'仍有 '+left+' 项需要完整核对，尚未上传，原资料保留。':'没有待传更新。')+' 本入口不接收其他设备资料。',{done:jobs.length,total:jobs.length});return {done,blocked};
 }
 async function qaDrain(){
+ if(typeof learningMobileChapter==='function'&&learningMobileChapter()){qaKick(15000);return;}
  if(qaRunning||qaManualPending()||!qaAnyEnabled()||navigator.onLine===false){if(qaManualPending())qaKick(3000);return;}
  const bridge=window.laoQuickAudioBridge;if(!bridge||bridge.uid()!==cloudWorkspace)return;if(bridge.busy()){qaKick(3000);return;}
  if(!navigator.locks){qaMessage('本机已保存 · 此浏览器不支持安全的跨页面自动同步，请使用手动同步');return;}
@@ -11558,7 +11565,10 @@ function dgPrefetch(data,id){
  const work=()=>{let next=0;const run=async()=>{while(next<targets.length){const target=targets[next++];try{await dgReadDetail(target);}catch(_){}}};void Promise.all([run(),run()]);};if(typeof requestIdleCallback==='function')requestIdleCallback(work,{timeout:1200});else setTimeout(work,50);
 }
 // Build the disposable persistent index while idle, not at every word click.
-const dgWarm=()=>dgGetGraph().catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dgWarm,{timeout:2500});else setTimeout(dgWarm,1000);
+const dgWarm=()=>dgGetGraph().catch(()=>{});
+if(!window.matchMedia?.('(max-width:640px)').matches){
+ if(typeof requestIdleCallback==='function')requestIdleCallback(dgWarm,{timeout:2500});else setTimeout(dgWarm,1000);
+}
 </script>
 <script data-shared-words>
 /* One reference recording per lexical word; textbook occurrences remain references. */
@@ -11934,7 +11944,7 @@ function sfPreserveProgressReads(oldStamp,newStamp){
 }
 
 const sfPreviousCachedSpeech=learningCachedSpeech;
-learningCachedSpeech=async function(text){
+learningCachedSpeech=async function(text,signal){
  if(typeof withDefaultAudioStore!=='function')return sfPreviousCachedSpeech(text);
  const owner=workspaceName('saved-default-key-index'),endpoint=ttsSettings.endpoint||'';
  const out=await withDefaultAudioStore('readonly',store=>{
@@ -11954,7 +11964,7 @@ learningCachedSpeech=async function(text){
    const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.index):undefined;
    if(key===undefined){scan();return;}const q=store.get(key);q.onsuccess=()=>{if(q.result)result.blob=q.result;else{sfSpeechKeys=null;scan();}};
   };return result;
- });return out.blob;
+ },signal);return out.blob;
 };
 const sfChapterIndexes=new WeakMap();
 function sfChapterIndex(snap,words){
@@ -12209,6 +12219,7 @@ let qpReceivePromise=null;
 function qpReceive(){if(qpReceivePromise)return qpReceivePromise;qpReceivePromise=qpReceiveRun().finally(()=>{qpReceivePromise=null;});return qpReceivePromise;}
 async function qpReceiveRun(){
  if(qpRunning)return;
+ if(typeof learningMobileChapter==='function'&&learningMobileChapter()){qpKick();return;}
  const bridge=window.laoQuickAudioBridge,uid=cloudWorkspace;
  if(!qaProgressEnabled()||!uid||bridge?.uid()!==uid||navigator.onLine===false||document.visibilityState==='hidden'){qpKick();return;}
  if(bridge.busy()||window.laoQuickSyncBusy||learningSyncRunning||learningHasWork()||recorder){qpKick(3000);return;}

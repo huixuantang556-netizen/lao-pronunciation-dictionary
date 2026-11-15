@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="4cacaa523004d141">
+  <meta name="lao-app-build" content="f0491d5c57a37e32">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -444,6 +444,10 @@
 [data-word-color=lilac] .word-color-card-button .word-color-dot{background:#ddc9f3}
 .word-color-heading{font-size:1.6rem;color:#126e60;margin:0 0 12px}
 #learningPanel .cf-mask-menu .word-color-mode{margin-top:4px;border-top:1px solid #dce8e1}
+
+.word-color-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 0 2px}
+.word-color-tools button{min-height:40px;background:var(--soft);color:#46665c}
+.word-color-tools [role=status]{font-size:13px;color:#536e63}
 </style>
 </head>
 <body>
@@ -10450,6 +10454,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record]
 function cfDecorate(){
  if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
  for(const bar of document.querySelectorAll('[data-page-key]')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons(typeof wordColorMenuButton==='function'?wordColorMenuButton(bar):''));if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
+ if(typeof wordColorMountClear==='function')wordColorMountClear();
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
  for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
@@ -13275,6 +13280,7 @@ const wordColorOptions = {
 };
 let wordColorView = null;
 let wordColorEditingChapter = '';
+let wordColorClearing = false;
 
 function wordColorModeButton(active){
  return '<button type="button" class="word-color-mode" data-word-color-mode aria-pressed="'+active+'">'+
@@ -13350,7 +13356,67 @@ const wordColorPending=new Map();
 function wordColorPaint(target){
  for(const card of document.querySelectorAll('[data-word-color-target]')){
   const data=card.dataset;
-  if(data.wordColorTarget===target)data.wordColor=wordColorChoice(wordColorView,target,data.cardId,data.wordColorLao,data.wordColorZh).tone;
+  if(!target||data.wordColorTarget===target)data.wordColor=wordColorChoice(wordColorView,data.wordColorTarget,data.cardId,data.wordColorLao,data.wordColorZh).tone;
+ }
+}
+
+function wordColorClearTargets(index){
+ const targets=new Set();
+ for(const [id,color] of index.manual){
+  if(/^word-card-color:(word|material):.+/.test(id)&&color!=='auto'&&color!=='plain')targets.add(id.slice('word-card-color:'.length));
+ }
+ for(const [key,state] of index.progress){
+  if(!state.needsPractice&&state.wrong<2)continue;
+  const [target]=JSON.parse(key);
+  if(!/^(word|material):.+/.test(target))continue;
+  const color=index.manual.get('word-card-color:'+target);
+  if(!color||color==='auto')targets.add(target);
+ }
+ return targets;
+}
+
+function wordColorMountClear(){
+ const content=document.querySelector?.('#learningContent');
+ if(!content)return;
+ let toolbar=content.querySelector('[data-word-color-tools]');
+ const mode=content.querySelector('[data-word-color-mode][aria-pressed=true]');
+ if(!mode){
+  toolbar?.remove();
+  return;
+ }
+ if(!toolbar){
+  mode.closest('[data-page-key]')?.insertAdjacentHTML('beforeend',
+   '<div class="word-color-tools" data-word-color-tools><button type="button" data-word-color-clear>清除全部颜色</button><span role="status"></span></div>');
+  toolbar=content.querySelector('[data-word-color-tools]');
+ }
+ if(toolbar)toolbar.querySelector('button').disabled=wordColorClearing;
+}
+
+async function wordColorClear(button){
+ if(wordColorClearing||wordColorPending.size||learningHasWork())return;
+ const owner=workspaceName('word-color'),status=button.nextElementSibling;
+ if(!confirm('将所有章节中已标色的词卡恢复原色，听写记录仍然保留。清除全部颜色？'))return;
+ wordColorClearing=true;
+ button.disabled=true;
+ status.textContent='正在清除…';
+ try{
+  const snap=await learningSnapshot();
+  if(owner!==workspaceName('word-color'))return;
+  const targets=wordColorClearTargets(wordColorIndex(snap));
+  const rows=[...targets].map(target=>({
+   ...learningBlank('word-card-color:'+target,'knowledge','词卡颜色'),wordCardColor:'plain'
+  }));
+  if(rows.length)await learningWrite({learningMaterials:rows},null,{quickProgress:true,readPrevious:true});
+  if(owner!==workspaceName('word-color'))return;
+  for(const row of rows)wordColorView?.manual.set(row.id,'plain');
+  if(wordColorView)wordColorPaint();
+  status.textContent=rows.length?'已恢复原色':'没有需要清除的颜色';
+ }catch(error){
+  status.textContent='颜色未清除。'+error.message;
+ }finally{
+  wordColorClearing=false;
+  button.disabled=false;
+  wordColorMountClear();
  }
 }
 
@@ -13409,7 +13475,7 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
  }
  const pendingKey=owner+'|'+target;
  for(const button of buttons)button.onclick=async()=>{
-  if(!wordColorView||wordColorPending.has(pendingKey)||learningHasWork()||owner!==workspaceName('word-color'))return;
+  if(wordColorClearing||!wordColorView||wordColorPending.has(pendingKey)||learningHasWork()||owner!==workspaceName('word-color'))return;
   const row={...learningBlank('word-card-color:'+target,'knowledge','词卡颜色'),wordCardColor:button.dataset.wordColorChoice};
   wordColorPending.set(pendingKey,row.wordCardColor);
   wordColorPaint(target);draw();
@@ -13433,6 +13499,8 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
 
 document.addEventListener('click',event=>{
  const mode=event.target.closest('[data-word-color-mode]');
+ const clear=event.target.closest('[data-word-color-clear]');
+ if(clear){void wordColorClear(clear);return;}
  if(mode){
   const active=mode.getAttribute('aria-pressed')!=='true';
   wordColorEditingChapter=active?workspaceName('word-color')+'|'+learningLesson.id:'';
@@ -13442,6 +13510,7 @@ document.addEventListener('click',event=>{
   }
   const menu=mode.closest('.cf-mask-controls');
   if(menu)menu.open=false;
+  wordColorMountClear();
   return;
  }
  const button=event.target.closest('[data-word-color-open]');

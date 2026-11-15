@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ee8952f57f61cb82">
+  <meta name="lao-app-build" content="313dab2ce6c661b6">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -713,7 +713,7 @@ async function importCodaClassroom(){
       if(saved.view==='learning'&&typeof learningRestorePosition==='function')await learningRestorePosition(saved.learning);
       if(navigationTouched)return;
       await showView(saved.view);
-      requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study')window.scrollTo({top:Number.isFinite(saved.y)?Math.max(0,saved.y):0,behavior:'instant'});});
+      requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study'){const top=Number.isFinite(saved.y)?Math.max(0,saved.y):0;if(saved.view==='learning'&&typeof mobileChapterRestoreScroll==='function')mobileChapterRestoreScroll(top);window.scrollTo({top,behavior:'instant'});}});
       return true;
     }
     window.addEventListener('pagehide',()=>{rememberCurrentPage();if(typeof persistPractice==='function')persistPractice();});
@@ -982,7 +982,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function loadDictionaryFields() { try { const saved=JSON.parse(localStorage.getItem('lao-dictionary-display-fields')); if(Array.isArray(saved)){const fields=saved.filter(field=>field in dictionaryFieldLabels);if(fields.length)return new Set(fields);} }catch(_){} return new Set(Object.keys(dictionaryFieldLabels)); }
     function saveDictionaryFields() { try{localStorage.setItem('lao-dictionary-display-fields',JSON.stringify([...selectedDictionaryFields]));}catch(_){} }
     function renderDictionaryFields() { $('#dictionaryFields').innerHTML=Object.entries(dictionaryFieldLabels).map(([field,label])=>`<button type="button" class="tag-choice" data-dictionary-field="${field}" aria-pressed="${selectedDictionaryFields.has(field)}">${label}</button>`).join(''); }
-    async function render({includePractice=true}={}) { const [items,sentenceRows]=await Promise.all([allEntries(),typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))).sort((a,b)=>searchPriority(a,q)-searchPriority(b,q)), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); }
+    async function render({includePractice=true}={}) { const [items,sentenceRows]=await Promise.all([allEntries(),typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); if(q){const priorities=new Map(filtered.map(item=>[item,searchPriority(item,q)]));filtered.sort((a,b)=>priorities.get(a)-priorities.get(b));}const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); }
     function searchPriority(item, query) { if(!query)return 0; const includes=field=>(item[field]||'').toLowerCase().includes(query); if(['word','meaning'].some(includes))return 0; if(['ipa','category'].some(includes))return 1; return 2; }
     async function pasteIntoField(targetId, statusId, replaceAll=false) {
       const field=$('#'+targetId),status=$('#'+statusId),before=field.value,start=field.selectionStart??before.length,end=field.selectionEnd??before.length;
@@ -2919,7 +2919,7 @@ async function learningUnlink(id){const snap=await learningSnapshot(),place=snap
 function learningPlacementFor(id,section,position,lesson){return {id:lesson.id+':'+id,materialId:id,materialType:'teaching',textbookId:lesson.textbookId,chapterId:lesson.chapterId,lessonId:lesson.id,section,position,updatedAt:Date.now()};}
 function learningPlacement(id,section,position){return learningPlacementFor(id,section,position,learningLesson);}
 function learningError(e){$('#learningStatus').textContent=e.message||String(e);}
-const learningPanel=document.createElement('section');learningPanel.id='learningPanel';learningPanel.className='panel hidden';learningPanel.innerHTML='<div id="learningContent"></div><p id="learningStatus" role="status"></p>';
+const learningPanel=document.createElement('section');learningPanel.id='learningPanel';learningPanel.className='panel hidden';learningPanel.innerHTML='<div id="learningLoading" role="status" hidden>正在打开本机课程…</div><div id="learningContent"></div><p id="learningStatus" role="status"></p>';
 $('.grid').append(learningPanel);
 const learningNav=document.createElement('button');learningNav.type='button';learningNav.dataset.view='learning';learningNav.textContent='老挝语学习';$('#viewNav [data-view="dictionary"]').after(learningNav);
 const learningDialog=document.createElement('dialog');learningDialog.id='learningDialog';document.body.append(learningDialog);
@@ -2954,14 +2954,19 @@ function learningAudioReviewState(m,text=m.textLao){
 }
 function learningStudyCardHtml(m,w,options={}){
  const h=learningEsc,id=h(m.id),multi=!!options.multi,focused=!!(w?.needsExtraPractice||m.focused),icon=name=>typeof lessonIcon==='function'?lessonIcon(name):({play:'▶',mic:'🎙',more:'⋯'}[name]);
+ const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+learningAudioReviewState(m,w?.word||m.textLao).needsReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):'')+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(learningAudioReviewState(m,w?.word||m.textLao).needsReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):'')+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
 }
-function learningLegacySectionHtml(rows,words,title,key,empty){
- const h=learningEsc,items=rows.map(m=>{const w=m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null;return {id:m.id,word:w?.word||m.textLao,meaning:w?.meaning||m.translationZh||''};}).filter(w=>w.word?.trim());
+function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
+ const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
+ const linkedWord=m=>m.contentType==='word'?linked.get(m.linkedWordSyncIds[0]):null;
+ const items=rows.map(m=>{const w=linkedWord(m);return {id:m.id,word:w?.word||m.textLao,meaning:w?.meaning||m.translationZh||''};}).filter(w=>w.word?.trim());
  const toolbar=!learningMulti&&typeof lessonPageToolbarFor==='function'?lessonPageToolbarFor(items,title,'legacy:'+learningLesson.id+':'+key):'';
- return toolbar+'<section class="v2-section legacy-section" aria-label="'+h(title)+'"><div class="learn-block-heading"><h3>'+h(title)+'</h3><small>'+rows.length+' 项</small></div><div class="learn-card-grid">'+(rows.map(m=>{const w=m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],words):null;return learningStudyCardHtml(m,w,{multi:learningMulti,group:learningTab==='reading_drill'?m.unitType:'all',meaning:m.contentType==='word'&&!w?'原词条已删除或尚未同步':w?.meaning||m.translationZh||''});}).join('')||'<p class="learn-empty">'+h(empty)+'</p>')+'</div></section>';
+ const render=m=>{const w=linkedWord(m);return learningStudyCardHtml(m,w,{multi:learningMulti,group:learningTab==='reading_drill'?m.unitType:'all',meaning:m.contentType==='word'&&!w?'原词条已删除或尚未同步':w?.meaning||m.translationZh||''});};
+ const cards=mobilePlan?mobileChapterCards(mobilePlan,rows,render,m=>m.id):rows.map(render).join('');
+ return toolbar+'<section class="v2-section legacy-section" aria-label="'+h(title)+'"><div class="learn-block-heading"><h3>'+h(title)+'</h3><small>'+rows.length+' 项</small></div><div class="learn-card-grid">'+(cards||'<p class="learn-empty">'+h(empty)+'</p>')+'</div></section>';
 }
 async function learningOpenReference(view){if(!['alphabet','pronunciation'].includes(view))throw Error('未知参考表');if(learningHasWork()||recorder)throw Error('请先保存或取消编辑并结束录音，再打开参考表');stopPracticeAudio();if(view==='pronunciation')pronunciationRoute='home';await showView(view);}
 function learningPathCard(route,title,label,description,path){const h=learningEsc;return '<button type="button" data-learn="'+h(route)+'"><span class="learn-path-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="'+path+'"/></svg></span><span class="learn-path-body"><small>'+h(label)+'</small><h3>'+h(title)+'</h3><p>'+h(description)+'</p></span><span class="learn-path-arrow" aria-hidden="true">›</span></button>';}
@@ -2970,7 +2975,7 @@ function learningPagePosition(){
 }
 async function learningRestorePosition(saved){
  if(!saved||saved.route!=='lesson'||typeof saved.courseId!=='string')return;
- const course=learningCourses(await learningSnapshot()).find(c=>c.id===saved.courseId);if(!course)return;
+ const course=learningCourses(typeof dfReadTextSnapshot==='function'?await dfReadTextSnapshot():await learningSnapshot()).find(c=>c.id===saved.courseId);if(!course)return;
  learningLesson=course;learningRoute='lesson';learningTab=['knowledge','word','reading_drill','sentence'].includes(saved.tab)?saved.tab:'knowledge';
  if(saved.group&&['words','dialogue','original'].includes(saved.group.kind))learningGroupState.set(course.id,{kind:saved.group.kind,category:typeof saved.group.category==='string'?saved.group.category:''});
  if(typeof lbSelectCourse==='function')lbSelectCourse(course);
@@ -2980,6 +2985,7 @@ async function learningRestorePosition(saved){
 }
 async function renderLearning(){
  const token=++learningRenderToken,route=learningRoute,courseId=learningLesson.id;
+ const mobilePlan=route==='lesson'&&typeof mobileChapterPlan==='function'?mobileChapterPlan():null;
  if(activeView==='learning')await learningSeedLessonOne();
  const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};if(token!==learningRenderToken||activeView!=='learning'||learningRoute!==route||learningLesson.id!==courseId)return;
  const courses=learningCourses(snap),current=courses.find(c=>c.id===learningLesson.id);
@@ -2993,7 +2999,7 @@ async function renderLearning(){
  else if(learningRoute==='communication'&&typeof lessonV2CommunicationHtml==='function')html=lessonV2CommunicationHtml(snap);
  else if(learningRoute==='communication')html=nav+'<h2>交流型材料</h2><p class="tag-hint">场景课程后续开放；教材中适用的词句将可以直接引用到这些场景。</p><div class="learn-chips">'+['购物','餐厅','交通','学校','家庭','医院','驾校','日常交流'].map(s=>'<span>'+s+'</span>').join('')+'</div>';
  else if(learningRoute==='teaching')html=nav+'<h2>'+h(typeof lbCurrentName==='function'?lbCurrentName('teaching',snap)||'教学型材料':'教学型材料')+'</h2><button data-learn="course-new">＋ 新建章节／课程</button>'+learningCatalog(snap);
- else if(learningLesson.schemaVersion===2&&typeof lessonV2Render==='function')html=await lessonV2Render(snap,words,{token});
+ else if(learningLesson.schemaVersion===2&&typeof lessonV2Render==='function')html=await lessonV2Render(snap,words,{token,mobilePlan});
  else {
   if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}
   html='<h2>'+h(learningLesson.title)+'</h2><p class="learn-course-description">'+h(learningLesson.description||'')+'</p><button data-learn="course-edit">修改课程名称／简介</button><nav class="learn-tabs v2-section-tabs" aria-label="本课小节">'+[['knowledge','知识点'],['word','词汇'],['reading_drill','朗读练习'],['sentence','句子与短语']].map(([k,v])=>'<button data-learn="tab" data-key="'+k+'" aria-current="'+(k===learningTab?'page':'false')+'">'+v+'</button>').join('')+'</nav>';
@@ -3014,14 +3020,14 @@ async function renderLearning(){
    else if(learningSettings)html+='<div class="learn-toolbar"><p>'+(learningTab==='reading_drill'?'保留教材拼读组合，支持原音与跟读。':'保存教材句子和短语，关联需要复习的词。')+'</p><button data-learn="import">＋ 添加／批量导入</button></div>';
    html+='<div class="learn-multi-toolbar"><button data-learn="multi">'+(learningMulti?'完成多选':'多选')+'</button>'+(learningMulti?'<button data-learn="select-all">全选</button><button data-learn="select-none">取消勾选</button><button data-learn="delete-selected" '+(!learningSelected.size?'disabled':'')+'>删除所选（'+learningSelected.size+'）</button><small>仅移出本课；拖动卡片上的 ⠿ 排序，自动保存。朗读在原分组内排序。</small>':'')+'</div>';
    if(learningTab==='reading_drill')for(const [k,t] of [['two','双音节朗读练习'],['multi','多音节朗读练习']])html+=learningLegacySectionHtml(rows.filter(m=>m.unitType===k),words,t,k,'尚未录入，可添加文字及教材原音。');
-   else html+=learningLegacySectionHtml(rows,words,learningTab==='word'?'教材词汇':'句子与短语',learningTab,learningTab==='word'?'先核对词库，已有词直接关联，缺少的词才会新增。':'尚未录入。支持单条或多行粘贴。');
+   else html+=learningLegacySectionHtml(rows,words,learningTab==='word'?'教材词汇':'句子与短语',learningTab,learningTab==='word'?'先核对词库，已有词直接关联，缺少的词才会新增。':'尚未录入。支持单条或多行粘贴。',learningTab==='word'?mobilePlan:null);
   }
   if(learningSettings)html+='<details><summary>本课音频情况</summary><p>只检查当前账号本机已保存音频，不请求生成。</p><button data-learn="audio-audit">检查已有／缺少音频</button><div id="learningAudioAudit"></div></details>';
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
  if(learningRoute==='lesson'&&typeof wordColorChapterToolbar==='function')html=wordColorChapterToolbar(html,learningLesson.id);
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
- if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);$('#learningStatus').textContent='';}
+ if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);$('#learningStatus').textContent='';}
 }
 async function learningSetup(){
  const words=await allEntries();learningDraft={kind:'setup'};
@@ -3848,12 +3854,14 @@ function lessonV2Export(snap,course,options={}){
 async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop==='function'){lessonPageStop();lessonPages.clear();}const h=learningEsc,c=learningLesson,d=lessonV2Export(snap,c),key=c.packageKey,chart=await readAlphabetOverrides(),byId=new Map(snap.learningMaterials.map(m=>[m.id,m]));const rec=(kind,id)=>byId.get(lessonV2Id(key,kind,id));
  if(context.token!==undefined&&(context.token!==learningRenderToken||activeView!=='learning'||learningRoute!=='lesson'||learningLesson.id!==c.id))return '';
  if(typeof nlMatches==='function'&&nlMatches(c))d.sections.unshift({id:'interactive-large-numbers',title:'大数读法实验室',numberLab:true,topics:[],roles:[],blocks:[]});
- const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?learningFindWord(m.linkedWordSyncIds[0],words):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||''});};
+ const wordsByRef=new Map();
+ for(const word of words)for(const ref of syncKeys(word))if(!wordsByRef.has(ref))wordsByRef.set(ref,word);
+ const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?wordsByRef.get(m.linkedWordSyncIds[0]):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||''});};
  const block=b=>{const m=rec('block',b.id),x=b.content;let body='';if(!lessonV2Displays[b.contentType]?.includes(b.displayType))body='<p>该内容类型暂未支持专用展示</p><pre>'+h(JSON.stringify(x,null,2))+'</pre>';
  else if(b.contentType==='knowledge')body='<p class="learn-note">'+h(x.body)+'</p><div class="learn-glyphs">'+(m.alphabetKeys||[]).map(k=>{const [r,c]=k.split(':').map(Number),f=chart[k]??window.learningAlphabetRows()[r]?.[2][c];return f?'<button class="learn-glyph" lang="lo" data-learn="glyph" data-form="'+h(f)+'" data-alphabet-key="'+h(k)+'">'+h(f.replaceAll('x','◌'))+'</button>':'';}).join('')+'</div>'+((m.unresolvedAlphabet||[]).length?'<p>待关联字母：'+h(m.unresolvedAlphabet.join('、'))+'</p>':'');
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
- else body=(b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+x.items.map(r=>card(r,b.contentType)).join('')+'</div>';
+ else body=(b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+(context.mobilePlan&&b.contentType==='word-ref'?mobileChapterCards(context.mobilePlan,x.items,r=>card(r,b.contentType),r=>lessonV2Id(key,'item',r.itemId)):x.items.map(r=>card(r,b.contentType)).join(''))+'</div>';
  return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>':'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
@@ -4096,6 +4104,7 @@ const lessonPageMarked=new Map();
 function lessonPageClearMarked(){for(const [card,previous] of lessonPageMarked){card.classList.remove('page-audio-current','page-audio-missing');if(previous===null)card.removeAttribute('aria-current');else card.setAttribute('aria-current',previous);}lessonPageMarked.clear();}
 function lessonPageLocateMissing(word,bar){
  lessonPageClearMarked();
+ if(typeof mobileChapterFind==='function')mobileChapterFind([word.id],bar.parentElement);
  for(const b of bar.parentElement?.querySelectorAll?.('.learn-card [data-learn="play-card"][data-id]')||[]){if(b.dataset.id!==word.id)continue;const card=b.closest('.learn-card');if(!card)continue;lessonPageMarked.set(card,card.getAttribute('aria-current'));card.classList.add('page-audio-current','page-audio-missing');card.setAttribute('aria-current','true');card.scrollIntoView?.({behavior:'smooth',block:'center'});b.focus?.({preventScroll:true});return true;}
  return false;
 }
@@ -6678,7 +6687,15 @@ function dictionarySentenceProjection(snap){
   return {id:'dictionary-sentence:'+m.id,_sentenceId:m.id,word:m.textLao,ipa:'',meaning:meanings.filter(t=>!meanings.some(other=>other!==t&&other.includes(t))).join('／')||m.translationZh||'',note:[...new Set([...rows.map(r=>r.note),...titles].filter(Boolean))].join('\n'),category:[...new Set(['句子',...(rows.some(r=>r.contentType==='dialogue')?['对话']:[]),...rows.flatMap(r=>r.tags||[]),...places.flatMap(p=>p.tags||[])])].join(','),updatedAt:Math.max(m.updatedAt||0,...rows.map(r=>r.updatedAt||0))};
  });
 }
-async function dictionarySentenceRows(){return dictionarySentenceProjection(await dfReadTextSnapshot());}
+let dictionarySentenceCache=null;
+async function dictionarySentenceRows(){
+ dfCheckStamp();
+ const revision=dfRevision;
+ if(dictionarySentenceCache?.revision===revision)return dictionarySentenceCache.rows;
+ const rows=dfReadTextSnapshot().then(dictionarySentenceProjection);
+ dictionarySentenceCache={revision,rows};
+ try{return await rows;}catch(error){if(dictionarySentenceCache?.rows===rows)dictionarySentenceCache=null;throw error;}
+}
 function dictionarySentenceCard(x){
  const h=escapeHtml,id=h(x._sentenceId),show=field=>selectedDictionaryFields.has(field);
  return '<article class="entry dictionary-sentence"><div>'+(show('word')?'<button type="button" class="dictionary-sentence-text" data-dict-sentence="'+id+'" data-dict-sentence-action="play" title="单击点读，双击查看句子详情"><span class="word" lang="lo">'+h(x.word)+'</span></button>':'')+(show('meaning')?'<div class="meaning">'+h(x.meaning)+'</div>':'')+(show('note')&&x.note?'<div class="entry-note">'+h(x.note)+'</div>':'')+tagsFor(x).map(t=>'<span class="tag">'+h(t)+'</span>').join('')+'<p class="dictionary-sentence-status tag-hint" role="status"></p></div><div class="actions"><button type="button" class="dict-play" data-dict-sentence="'+id+'" data-dict-sentence-action="play" aria-label="播放已有参考音" title="播放已有参考音">'+(typeof lessonIcon==='function'?lessonIcon('play'):'▶')+'</button>'+(typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml(x._sentenceId):'')+'<button type="button" class="dict-detail" data-dict-sentence="'+id+'" data-dict-sentence-action="detail">详情</button></div></article>';
@@ -8299,7 +8316,7 @@ async function scOpenCourse(id,{test=false}={}){
  const location=scLocal().recent.find(x=>x.courseId===id);learningResetMulti();stopPracticeAudio();learningSettings=false;learningLesson=course;learningRoute='lesson';learningTab='knowledge';lessonV2Mode='order';lessonV2Filter='all';learningGroupState.delete(id);lessonV2Sections.delete(id);scRestore(course,snap,location);await showView('learning');
  if(activeView!=='learning'||learningLesson.id!==id)return;
  if(test){if(course.schemaVersion!==2)throw Error('此旧课程暂不支持整章检测，可使用原有练习入口');await courseCheckOpen('course');return;}
- if(location?.materialId){const button=[...learningPanel.querySelectorAll('[data-id]')].find(b=>b.dataset.id===location.materialId);button?.closest('.learn-card')?.scrollIntoView?.({block:'center',behavior:'smooth'});}
+ if(location?.materialId){if(typeof mobileChapterFind==='function')mobileChapterFind([location.materialId],learningPanel);const button=[...learningPanel.querySelectorAll('[data-id]')].find(b=>b.dataset.id===location.materialId);button?.closest('.learn-card')?.scrollIntoView?.({block:'center',behavior:'smooth'});}
 }
 async function scOpen(){scGuard();await showView('study');}
 async function scOpenLearningHome(){scGuard();learningResetMulti();learningSettings=false;learningRoute='home';await showView('learning');}
@@ -9846,7 +9863,7 @@ function fvResolve(ref,snap,words){
 function fvGuard(){if(typeof rpGuard==='function')rpGuard();else scGuard();if(fvBusy)throw Error('正在保存收藏，请稍候');}
 let fvBusy=false,fvCache=null,fvReadRun=0,fvReadPending=null;
 const fvWorkspace=()=>workspaceName('favorites-v1');
-async function fvRefresh(){const key=fvWorkspace(),run=++fvReadRun;const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]);if(key!==fvWorkspace()||run!==fvReadRun)return;fvCache={key,snap,words,model:fvModel(snap,words)};fvPaint();}
+async function fvRefresh(){const key=fvWorkspace(),run=++fvReadRun;const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};if(key!==fvWorkspace()||run!==fvReadRun)return;fvCache={key,snap,words,model:fvModel(snap,words)};fvPaint();}
 async function fvToggle(ref,desired){
  fvGuard();const workspace=fvWorkspace();fvReadRun++;fvBusy=true;learningBusy=true;
  try{const {snap,words}=typeof lnGetData==='function'?await lnGetData():{snap:await learningSnapshot(),words:await allEntries()};if(workspace!==fvWorkspace())throw Error('账号空间已变化，请重新操作');const item=fvResolve(ref,snap,words),model=fvModel(snap,words),key=fvKey(item),active=typeof desired==='boolean'?desired:!model.get(key)?.active,latest=[...model.values()].reduce((n,v)=>Math.max(n,v.at),0),at=Math.max(Date.now(),latest+1),op={version:1,key,item,active,at};if(typeof desired==='boolean'&&!!model.get(key)?.active===desired){fvCache={key:workspace,snap,words,model};fvPaint();return active;}if(!fvValid(op))throw Error('收藏内容过大，无法安全备份与同步；请先缩短该条内容');
@@ -9901,7 +9918,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-fv-toggle]
 function fvEntries(){for(const parent of [typeof appMorePanel!=='undefined'?appMorePanel:null,document.querySelector('#apLearning')]){if(!parent||parent.querySelector('[data-fv-open]'))continue;const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.textContent='♡ 收藏夹';if(parent.id==='apLearning'){b.className='ap-link-row ap-favorites-entry';b.innerHTML='<span><strong>收藏夹</strong><small>查看收藏的词句与文件夹</small></span><span aria-hidden="true">›</span>';parent.querySelector('[data-ap-action="goals"]')?.after(b);}else parent.append(b);}const nav=document.querySelector('#viewNav');if(nav&&!nav.querySelector('[data-fv-open]')){const b=document.createElement('button');b.type='button';b.dataset.fvOpen='';b.className='fv-nav';b.textContent='♡ 收藏夹';nav.append(b);}if(!document.querySelector('#fvNotice')){const n=document.createElement('p');n.id='fvNotice';n.className='fv-notice';n.setAttribute('role','status');document.querySelector('main')?.append(n);}}
 const fvOriginalCloudSync=learningCloudSync;
 learningCloudSync=async function(...args){const result=await fvOriginalCloudSync(...args);try{await fvRefresh();fvQueue();}catch(error){args[2]?.('资料同步已完成，但收藏入口暂未刷新：'+error.message);}return result;};
-fvEntries();fvQueue();fvReadPending=fvRefresh().catch(error=>console.warn('收藏读取失败：',error.message)).finally(()=>{fvReadPending=null;});
+fvEntries();fvQueue();fvReadPending=Promise.resolve(globalThis.laoLocalStartup).then(fvRefresh).catch(error=>console.warn('收藏读取失败：',error.message)).finally(()=>{fvReadPending=null;});
 if(typeof MutationObserver!=='undefined')new MutationObserver(fvQueue).observe(document.body,{childList:true,subtree:true});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!fvBusy&&!learningHasWork())void fvRefresh().then(fvQueue).catch(()=>{});});
 </script>
@@ -9939,13 +9956,21 @@ function cfRefreshTape(node,scope,language){
   cfTapeAttributes.delete(node);
  }
 }
-function cfMaskRefresh(scope){
+function cfMaskRefresh(scope,changedLanguage,roots){
  const selectors={lo:'[lang="lo"],.cf-table-lo',zh:'.cf-table-zh,.cf-meaning,.learn-card-main>span,.learn-meaning'};
- for(const [language,selector] of Object.entries(selectors))for(const n of scope.querySelectorAll(selector)){
+ for(const [language,selector] of Object.entries(selectors)){
+  if(changedLanguage&&language!==changedLanguage)continue;
+  const active=scope.classList.contains('cf-hide-'+language);
+  const match=active?selector:'[data-cf-tape-language='+language+']';
+  const nodes=roots?roots.flatMap(root=>Array.from(root.querySelectorAll(match))):scope.querySelectorAll(match);
+  for(const n of nodes){
   if(n.closest('.lesson-page-player')||!n.textContent.trim())continue;
-  n.dataset.cfTapeLanguage=language;
+  if(active&&n.dataset.cfTapeLanguage!==language)n.dataset.cfTapeLanguage=language;
   cfRefreshTape(n,scope,language);
+  if(!active)delete n.dataset.cfTapeLanguage;
+  }
  }
+ if(roots)return;
  for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset'){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
 }
 function cfMaskDefaults(scope,force=false){
@@ -9954,7 +9979,7 @@ function cfMaskDefaults(scope,force=false){
  for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;
  if(typeof appPreference==='function'&&appPreference('selfTestEnabled'))scope.classList.add(appPreference('selfTestHideLao')?'cf-hide-lo':'cf-hide-zh');
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;cfMaskRefresh(scope);b.closest('details').open=false;});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);const changed=mode==='reset'?undefined:mode;for(const n of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||n.dataset.cfTapeLanguage===changed)delete n.dataset.cfRevealed;cfMaskRefresh(scope,changed);b.closest('details').open=false;});
 function cfToggleTape(event){
  const node=event.target.closest('.cf-tape-toggle');
  if(!node||event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
@@ -10051,7 +10076,27 @@ function cfDecorate(){
  for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
 }
-let cfQueued=false;if(typeof MutationObserver!=='undefined')new MutationObserver(()=>{if(cfQueued)return;cfQueued=true;queueMicrotask(()=>{cfQueued=false;cfDecorate();});}).observe(document.body,{childList:true,subtree:true});cfDecorate();
+function cfHasNewContent(records){
+ const selector='.cf-self-test,[data-fv-list],[data-page-key],.pa-segment-rules,[lang=lo],.cf-meaning,.learn-card-main,.learn-meaning,.v2-table-scroll';
+ return records.some(record=>Array.from(record.addedNodes).some(node=>
+  node.nodeType===1&&(node.matches(selector)||node.querySelector(selector))));
+}
+if(typeof MutationObserver!=='undefined'){
+ new MutationObserver(records=>{
+  if(!cfHasNewContent(records))return;
+  const added=records.flatMap(record=>Array.from(record.addedNodes)).filter(node=>node.nodeType===1);
+  const grouped=new Map();
+  for(const node of added){
+   const scope=node.matches('.learn-card')&&cfMaskScope(node);
+   if(!scope||!scope.dataset.cfMaskWorkspace){cfDecorate();return;}
+   if(!grouped.has(scope))grouped.set(scope,[]);
+   grouped.get(scope).push(node);
+  }
+  for(const [scope,nodes] of grouped)cfMaskRefresh(scope,undefined,nodes);
+ })
+  .observe(document.body,{childList:true,subtree:true});
+}
+cfDecorate();
 </script>
 <style data-learning-bundle="study-comfort">
 .cf-mask-controls,.cf-word-controls,.page-progress{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin:.8rem 0}
@@ -11418,16 +11463,36 @@ const lnPreviousRender=renderLearning;
 renderLearning=async function(...args){
  const run=++lnRun,key=lnRenderKey(),content=document.querySelector('#learningContent');
  if(learningRoute!=='lesson')content?.classList?.remove('mle-lesson');
- if(content&&content.dataset.navigationPage!==key){content.setAttribute('data-navigation-pending','true');content.setAttribute('aria-busy','true');}
- try{return await lnPreviousRender(...args);}
- finally{if(run===lnRun&&content){content.removeAttribute('data-navigation-pending');content.removeAttribute('aria-busy');content.dataset.navigationPage=lnRenderKey();}}
+ const loading=document.getElementById?.('learningLoading');
+ const changed=content&&content.dataset.navigationPage!==key;
+ if(changed){
+  content.setAttribute('data-navigation-pending','true');content.setAttribute('aria-busy','true');content.inert=true;
+  if(loading){loading.hidden=false;loading.textContent='正在读取本机课程…';}
+ }
+ let completed=false;
+ try{const result=await lnPreviousRender(...args);completed=true;return result;}
+ catch(error){
+  if(run!==lnRun) return;
+  if(loading&&activeView==='learning'){
+   loading.hidden=false;loading.textContent='课程读取中断。';
+   const retry=document.createElement('button');retry.type='button';retry.textContent='重试';
+   retry.onclick=()=>void renderLearning(...args).catch(learningError);
+   loading.append(retry);
+   console.warn('Course view read failed',error);return;
+  }
+  throw error;
+ }
+ finally{if(run===lnRun&&content){
+  content.removeAttribute('data-navigation-pending');content.removeAttribute('aria-busy');content.inert=Boolean(changed&&!completed&&loading&&activeView==='learning');
+  if(completed){content.dataset.navigationPage=lnRenderKey();if(loading)loading.hidden=true;}
+ }}
 };
 // Distinct capture targets prevent the generic course entry handler from consuming the study tab.
 document.addEventListener('click',event=>{
  const button=event.target.closest?.('#viewNav [data-study-open]');if(!button)return;
  event.preventDefault();event.stopImmediatePropagation();void scOpen().catch(learningError);
 },true);
-document.addEventListener('pointerover',event=>{if(event.target.closest?.('#viewNav,[data-learning-group],[data-learning-category]'))void lnGetData().catch(()=>{});},{passive:true});
+document.addEventListener('pointerover',event=>{if(event.pointerType!=='touch'&&event.target.closest?.('#viewNav,[data-learning-group],[data-learning-category]'))void lnGetData().catch(()=>{});},{passive:true});
 </script>
 <style data-navigation-fast="navigation-fast.css">
 /* Mobile compaction is mobile-only. Desktop retains its original wide layout. */
@@ -11438,7 +11503,7 @@ document.addEventListener('pointerover',event=>{if(event.target.closest?.('#view
 #learningPanel #learningContent .lesson-chapter-test:focus-visible{outline:2px solid #087f70;outline-offset:3px}
 #learningPanel #learningContent .learn-course-tools:empty{display:none}
 @media(max-width:640px){#learningPanel #learningContent .lesson-chapter-test{min-height:44px;padding:8px 12px;border-radius:11px;font-size:12px}}
-#learningContent[data-navigation-pending]{visibility:hidden;min-height:240px;pointer-events:none}
+#learningLoading:not([hidden]){display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink);font-size:14px}#learningContent[data-navigation-pending]{pointer-events:none}
 @media(min-width:641px){
  /* Cosmetic changes only: no widths, grid columns, ordering or node movement. */
  #learningPanel .learn-quick-nav>button,#learningPanel .learn-quick-nav .lc-picker-button{background:#f2f6f2;border-color:#e1e9e2;border-radius:11px;box-shadow:none;font-size:14px}
@@ -11633,7 +11698,10 @@ function ltDecorate(){
 const ltRender=renderLearning;renderLearning=async function(...args){await ltRender(...args);ltDecorate();};
 const ltAction=lessonV2Action;lessonV2Action=async function(action,button){const result=await ltAction(action,button);if(action==='v2-section'&&button.hasAttribute('data-subsection-step'))document.querySelector('#learningContent .v2-section-tabs')?.scrollIntoView({block:'start',behavior:'instant'});return result;};
 const ltStyle=document.createElement('style');ltStyle.textContent='#learningPanel .learning-subsection-nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin:24px 0 4px;padding-top:16px;border-top:1px solid #e1e9e3}#learningPanel .learning-subsection-nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;min-width:0;min-height:52px;padding:9px 12px;border:0;border-radius:10px;background:#f0f5f1;color:#326957;text-align:left;font-size:13px;line-height:1.5}#learningPanel .learning-subsection-nav button:last-child{align-items:flex-end;text-align:right}#learningPanel .learning-subsection-nav button small{max-width:100%;font-size:11px;font-weight:400;color:#738a7d;white-space:normal;overflow-wrap:anywhere}#learningPanel .learning-subsection-nav button:disabled{opacity:.45;background:transparent;cursor:default}#learningPanel .subsection-position{font-size:11px;color:#8a9b91;white-space:nowrap}#learningPanel .learn-block-heading{scroll-margin-top:18px}@media(max-width:640px){#learningPanel .learning-subsection-nav{gap:8px;margin-top:20px}#learningPanel .learning-subsection-nav button{padding:9px 10px;font-size:12px}#learningPanel .learning-subsection-nav button small{font-size:10px}}';document.head.append(ltStyle);
-ltDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(ltDecorate).observe(document.body,{childList:true,subtree:true,characterData:true});
+ltDecorate();if(typeof MutationObserver!=='undefined'){
+ const observer=new MutationObserver(records=>{if(records.some(record=>Array.from(record.addedNodes).some(node=>node.nodeType===1)))ltDecorate();});
+ for(const id of ['#learningContent','#learningDialog']){const host=document.querySelector(id);if(host)observer.observe(host,{childList:true,subtree:true});}
+}
 </script>
 <script data-maintenance="progress-receive.js">
 /* Receive progress only. Never fetch audio, replace an active round, or replay pending uploads. */
@@ -11813,7 +11881,8 @@ const lpFreeHost=$('#rpLegacy'),lpFreeSettings=lpFreeHost?.querySelector('.study
   document.documentElement.style.setProperty('--mp-nav-height',Math.min(110,height)+'px');document.documentElement.style.setProperty('--mp-viewport-height',(window.visualViewport?.height||innerHeight)+'px');
  }
  const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
- new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
+ const observer=new MutationObserver(schedule);
+ for(const id of ['#practicePanel','#learningDialog']){const host=document.querySelector(id);if(host)observer.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class','open']});}
  addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);media.addEventListener?.('change',schedule);schedule();
 })();
 </script>
@@ -12105,7 +12174,9 @@ async function laStartAuto(play,isCurrent){
   // Let the renderer bind controls and release its save guard before starting audio.
   const ticket=laAutoRun;setTimeout(()=>{if(valid()&&ticket===laAutoRun)void laStartAuto(play,valid);},120);
  }
- const schedule=()=>{if(!frame)frame=requestAnimationFrame(check);};new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','hidden']});
+ const schedule=()=>{if(!frame)frame=requestAnimationFrame(check);};
+ const observer=new MutationObserver(schedule);
+ for(const id of ['#practicePanel','#learningDialog']){const host=document.querySelector(id);if(host)observer.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:['class','hidden','open']});}
  document.addEventListener('pointerdown',()=>laCancelAuto(),true);document.addEventListener('keydown',()=>laCancelAuto(),true);document.addEventListener('visibilitychange',()=>{if(document.hidden)laCancelAuto();});window.addEventListener('pagehide',laCancelAuto);schedule();
 })();
 
@@ -12889,6 +12960,116 @@ document.addEventListener('click',event=>{
  const panel=learningDialog.querySelector('[data-word-color-panel]');
  panel.append(wordColorPicker({target:data.wordColorTarget,id:data.cardId,lao:data.wordColorLao,zh:data.wordColorZh},true));
 },true);
+</script>
+<style data-mobile-chapter-cards>
+.mobile-chapter-more{grid-column:1/-1;min-height:44px;justify-self:stretch;margin:4px 0 12px;background:var(--soft)}
+</style>
+<script data-mobile-chapter-cards>
+const mobileChapterPending = new WeakMap();
+let mobileChapterObserver, mobileChapterWarmTimer, mobileChapterFrame;
+const mobileChapterVisible=new Set();
+const mobileChapterBatchSize = 12;
+
+function mobileChapterPlan() {
+ const enabled=typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches&&!learningSettings&&!learningMulti;
+ return enabled?{first:mobileChapterBatchSize,groups:[]}:null;
+}
+
+function mobileChapterCards(plan,rows,render,idFor) {
+ if(!plan||!rows.length)return rows.map(render).join('');
+ const count=Math.min(plan.first,rows.length);
+ plan.first-=count;
+ const first=rows.slice(0,count).map(render).join('');
+ if(count===rows.length)return first;
+ const group=plan.groups.push({rows,render,idFor,next:count})-1;
+ return first+'<button type="button" class="mobile-chapter-more" data-mobile-chapter-more="'+group+'">继续显示词卡</button>';
+}
+
+function mobileChapterReveal(button,through=0) {
+ const group=mobileChapterPending.get(button);
+ if(!group||!button.isConnected)return;
+ const {rows,render,next}=group;
+ const end=Math.min(rows.length,Math.max(next+mobileChapterBatchSize,through));
+ const markup=rows.slice(next,end).map(render).join('');
+ button.insertAdjacentHTML('beforebegin',markup);
+ group.next=end;
+ if(end===rows.length){
+  mobileChapterObserver?.unobserve(button);
+  mobileChapterPending.delete(button);
+  const focused=button.ownerDocument.activeElement===button;
+  const previous=button.previousElementSibling;
+  button.remove();
+  if(focused)previous?.querySelector('.learn-card-main')?.focus({preventScroll:true});
+ }else if(mobileChapterObserver){
+  mobileChapterObserver.unobserve(button);
+  mobileChapterObserver.observe(button);
+ }
+}
+
+function mobileChapterDrain() {
+ mobileChapterFrame=0;
+ const button=mobileChapterVisible.values().next().value;
+ if(!button)return;
+ mobileChapterVisible.delete(button);
+ if(!button.closest('[inert],.hidden'))mobileChapterReveal(button);
+ if(mobileChapterVisible.size)mobileChapterFrame=requestAnimationFrame(mobileChapterDrain);
+}
+
+function mobileChapterMount(content,plan) {
+ mobileChapterObserver?.disconnect();
+ mobileChapterVisible.clear();
+ if(mobileChapterFrame)cancelAnimationFrame(mobileChapterFrame);
+ mobileChapterFrame=0;
+ clearTimeout(mobileChapterWarmTimer);
+ if(!plan?.groups.length)return;
+ if(typeof IntersectionObserver==='function'){
+  mobileChapterObserver=new IntersectionObserver(entries=>{
+   for(const entry of entries){if(entry.isIntersecting)mobileChapterVisible.add(entry.target);else mobileChapterVisible.delete(entry.target);}
+   if(!mobileChapterFrame&&mobileChapterVisible.size)mobileChapterFrame=requestAnimationFrame(mobileChapterDrain);
+  },{rootMargin:'180px 0px'});
+ }
+ for(const button of content.querySelectorAll('[data-mobile-chapter-more]')){
+  const group=plan.groups[Number(button.dataset.mobileChapterMore)];
+  if(!group)continue;
+  mobileChapterPending.set(button,group);
+  mobileChapterObserver?.observe(button);
+ }
+}
+
+function mobileChapterFind(ids,root) {
+ if(!root?.querySelectorAll||!ids.length)return;
+ const targets=new Set(ids);
+ if(Array.from(root.querySelectorAll('[data-card-id]')).some(card=>targets.has(card.dataset.cardId)))return;
+ for(const button of root.querySelectorAll('[data-mobile-chapter-more]')){
+  const group=mobileChapterPending.get(button);
+  if(!group)continue;
+  const index=group.rows.findIndex((row,i)=>i>=group.next&&targets.has(group.idFor(row)));
+  if(index>=0){mobileChapterReveal(button,index+1);return;}
+ }
+}
+
+function mobileChapterRestoreScroll(top) {
+ const content=document.querySelector('#learningContent');
+ if(!content||top<=0)return;
+ for(const button of content.querySelectorAll('[data-mobile-chapter-more]')){
+  if(document.documentElement.scrollHeight>=top+window.innerHeight)break;
+  const group=mobileChapterPending.get(button);
+  if(group)mobileChapterReveal(button,group.rows.length);
+ }
+}
+
+document.addEventListener('click',event=>{
+ const button=event.target.closest?.('[data-mobile-chapter-more]');
+ if(button){mobileChapterReveal(button);return;}
+ if(!window.matchMedia?.('(max-width:640px)').matches||typeof sfRead!=='function')return;
+ const play=event.target.closest?.('#learningContent .learn-card [data-learn=play],#learningContent .learn-card [data-learn=play-card]');
+ const card=play?.closest('.learn-card'),next=card?.nextElementSibling;
+ if(!next?.matches('.learn-card[data-card-id]'))return;
+ clearTimeout(mobileChapterWarmTimer);
+ mobileChapterWarmTimer=setTimeout(()=>{
+  if(activeView==='learning'&&next.isConnected&&!document.hidden&&!learningHasWork())void sfRead(next.dataset.cardId).catch(()=>{});
+ },400);
+});
 </script>
 </body>
 </html>

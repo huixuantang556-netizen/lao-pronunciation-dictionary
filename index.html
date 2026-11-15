@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="a8fd93ce2d1e9585">
+  <meta name="lao-app-build" content="a0dbdea20861324d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4271,7 +4271,7 @@ async function lessonBlobDuration(blob,current){
 }
 async function lessonQueueDurations(playlist,current){
  const durations=new Array(playlist.length);let index=0;
- await Promise.all(Array.from({length:Math.min(4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
+ await Promise.all(Array.from({length:Math.min(typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches?1:4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
 function lessonPageStop(){lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
@@ -4309,8 +4309,8 @@ function lessonIcon(type){
  const paths={play:'<path d="m8 5 11 7-11 7Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',audio:'<path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/>'};
  return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[type]+'</svg>';
 }
-async function lessonPageResolve(words){
- const snap=await learningSnapshot(),entries=await allEntries();
+async function lessonPageResolve(words,data){
+ const {snap,entries}=data||{snap:await learningSnapshot(),entries:await allEntries()};
  return words.map(w=>{const m=snap.learningMaterials.find(m=>m.id===w.id);if(!m)throw Error('本页内容已变化，请重新打开页面');const entry=m.contentType==='word'?learningFindWord(m.linkedWordSyncIds[0],entries):null;if(m.contentType==='word'&&!entry)throw Error('词条关联缺失，请先修复');return {...w,word:entry?.word||m.textLao,meaning:entry?.meaning||m.translationZh||w.meaning||'',m,entry};});
 }
 function lessonPageAsset(w,snap,cache){
@@ -4331,12 +4331,53 @@ function lessonPageAsset(w,snap,cache){
  if(cache.has(w.word))return {blob:cache.get(w.word)};
  return assetFor(refs.filter(a=>learningIsReference(a)&&!a.needsReview).at(-1));
 }
+async function lessonPagePlaybackData(page,current){
+ if(typeof lnGetData!=='function'||typeof dgGetRows!=='function'||typeof withDefaultAudioStore!=='function'){
+  const words=await lessonPageResolve(page.words),snap=await learningSnapshot(),cache=new Map();
+  for(const row of await cloudCacheRows())try{cache.set(JSON.parse(row.key)[1],row.blob);}catch(_){}
+  return {words,snap,cache};
+ }
+ const {snap,words:entries}=await lnGetData();
+ if(!current())return null;
+ const words=await lessonPageResolve(page.words,{snap,entries});
+ const linked=new Set(words.flatMap(word=>word.entry?syncKeys(word.entry):[]));
+ const blocks=new Set(words.map(word=>word.blockId).filter(Boolean));
+ const relevant=new Set(words.map(word=>word.m));
+ for(const material of snap.learningMaterials){
+  if(blocks.has(material.id)||(material.linkedWordSyncIds||[]).some(ref=>linked.has(ref)))relevant.add(material);
+ }
+ if(typeof swHub==='function')for(const word of words){
+  const hub=swHub({...word.m,textLao:word.word},snap);
+  if(hub)relevant.add(hub);
+ }
+ const refs=[...relevant].flatMap(material=>material.audioSources||[]);
+ const texts=new Set([...words.map(word=>word.word),...refs.filter(ref=>ref.source==='gemini').map(ref=>ref.text)]);
+ const readings=[lessonPageText(words),words.map(word=>word.word).join('\n')].map(text=>'\n'+text+'\n');
+ const wanted=key=>texts.has(key)||typeof key==='string'&&key.length>0&&readings.some(text=>text.includes('\n'+key+'\n'));
+ const cache=await withDefaultAudioStore('readonly',store=>{
+  const matches=new Map(),cursor=store.openKeyCursor();
+  cursor.onsuccess=()=>{
+   const row=cursor.result;
+   if(!row||!current())return;
+   let text;try{text=JSON.parse(row.key)[1];}catch(_){}
+   if(wanted(text)){const query=store.get(row.key);query.onsuccess=()=>{if(query.result)matches.set(text,query.result);};}
+   row.continue();
+  };
+  return matches;
+ });
+ if(!current())return null;
+ const ids=refs.map(ref=>ref.assetId).filter(Boolean),learningAudio=[];
+ const unique=[...new Set(ids)];
+ for(let offset=0;offset<unique.length&&current();offset+=8)learningAudio.push(...await dgGetRows('learningAudio',unique.slice(offset,offset+8)));
+ return current()?{words,snap:{...snap,learningAudio},cache}:null;
+}
 async function lessonPageListen(page,bar){
  stopPracticeAudio();const token=lessonPageRun;lessonPageBar=bar;
  const status=bar.querySelector('[data-page-status]');status.textContent='正在准备本页音频…';
- const words=await lessonPageResolve(page.words),snap=await learningSnapshot(),cache=new Map();
- for(const r of await cloudCacheRows()){try{cache.set(JSON.parse(r.key)[1],r.blob);}catch(_){}}
- if(token!==lessonPageRun)return;
+ if(typeof rememberCurrentPage==='function')rememberCurrentPage();
+ const data=await lessonPagePlaybackData(page,()=>token===lessonPageRun&&bar.isConnected!==false);
+ if(!data||token!==lessonPageRun)return;
+ const {words,snap,cache}=data;
  const playlist=[],missing=[],singles=words.map(w=>lessonPageAsset(w,snap,cache));
  for(let i=0;i<words.length;){
   let segment=null;
@@ -4548,6 +4589,12 @@ document.addEventListener('click',async e=>{
  e.preventDefault();button.disabled=true;
  try{await lessonDialogueAction(button.dataset.dialogueAction,button);}catch(error){const status=button.closest('[data-dialogue-player]')?.querySelector('[data-page-status]');if(status)status.textContent=error.message;}
  finally{button.disabled=false;}
+});
+document.addEventListener('click',event=>{
+ const menu=event.target.closest?.('.page-player-controls>details');
+ const summary=event.target.closest?.('.page-player-controls>details>summary');
+ if(menu&&!summary)return;
+ for(const open of (document.querySelectorAll?.('.page-player-controls>details[open]')||[]))if(open!==menu)open.open=false;
 });
 </script>
 <script data-learning-bundle="course-editor">
@@ -11759,8 +11806,10 @@ document.addEventListener('pointerover',event=>{if(event.pointerType!=='touch'&&
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>[data-page-action] svg{width:18px;height:18px}
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details{grid-column:span 3;min-width:0;position:static;margin:0}
  #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>summary{height:44px;min-height:44px;padding:10px 6px;font-size:11px;gap:4px}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]{grid-column:1/-1;order:3}
- #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]>summary{justify-content:flex-start;background:#f1f6f2}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls{position:relative}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]>summary{background:#f1f6f2}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details>div{position:absolute;inset:calc(100% + 4px) 0 auto;width:100%;max-width:100%;z-index:102;margin:0;box-shadow:0 10px 28px #143d3420}
+ #learningPanel #learningContent .lesson-page-player:not(.page-player-floating) .page-player-controls>details[open]>summary::after{transform:rotate(225deg)}
 }
 </style>
 <script data-interaction-fast>

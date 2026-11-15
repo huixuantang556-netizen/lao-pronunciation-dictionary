@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="e4bc05e0c1d19e63">
+  <meta name="lao-app-build" content="cbd147fedcc0bd8d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3204,14 +3204,16 @@ async function learningPlayBlob(blob,start=0,end=null){
  stopPracticeAudio();const generation=playbackGeneration;practiceAudioUrl=URL.createObjectURL(blob);const a=practiceAudio=new Audio();a.laoClipEnd=end;
  const loading=new AbortController();a.laoCancelLoad=()=>loading.abort();
  try{
-  const metadata=new Promise((resolve,reject)=>{a.onloadedmetadata=resolve;a.onerror=()=>reject(Error('这段音频无法解码，请换用 MP3、M4A 或 WAV。'));});
-  a.preload='metadata';a.src=practiceAudioUrl;
-  if(a.readyState<1)await learningAudioDeadline(metadata,'读取音频超时，请再点一次播放。',loading.signal);
-  if(generation!==playbackGeneration)return;
-  a.onloadedmetadata=null;a.onerror=null;
-  if(start>=a.duration)throw Error('片段开始时间超出音轨长度。');
-  if(start)a.currentTime=start;
-  if(end!==null)a.ontimeupdate=()=>{if(a.currentTime>=end&&practiceAudio===a)stopPracticeAudio();};
+  if(start||end!==null){
+   const metadata=new Promise((resolve,reject)=>{a.onloadedmetadata=resolve;a.onerror=()=>reject(Error('这段音频无法解码，请换用 MP3、M4A 或 WAV。'));});
+   a.preload='metadata';a.src=practiceAudioUrl;
+   if(!(a.readyState>=1))await learningAudioDeadline(metadata,'读取音频超时，请再点一次播放。',loading.signal);
+   if(generation!==playbackGeneration)return;
+   a.onloadedmetadata=null;a.onerror=null;
+   if(start>=a.duration)throw Error('片段开始时间超出音轨长度。');
+   if(start)a.currentTime=start;
+   if(end!==null)a.ontimeupdate=()=>{if(a.currentTime>=end&&practiceAudio===a)stopPracticeAudio();};
+  }else a.src=practiceAudioUrl;
   a.onended=()=>{if(practiceAudio===a)stopPracticeAudio();};
   await learningAudioDeadline(a.play(),'音频启动超时，请再点一次播放。',loading.signal);
  }catch(error){
@@ -3266,15 +3268,16 @@ async function learningPlayResolved(id,source,index,{m,w,snap},current=()=>true,
  if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
  if(index===null&&source==='reference'){const manual=refs.filter(a=>a.role==='reference').at(-1);if(manual){const asset=snap.learningAudio.find(a=>a.id===manual.assetId);if(!asset)throw new Error('参考发音尚未同步。');await learningPlayBlob(asset.blob,manual.start||0,manual.end??null);return;}}
- if(index===null&&source==='reference'&&w){if(hasAudio(w)){await playEntrySpeech(w,'personal');return;}const reading=learningCachedSpeech(w.word),cached=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(cached){await learningPlayBlob(cached);return;}}
+ let checkedLocal=false;
+ if(index===null&&source==='reference'&&w){const own=chapterTap?audioBlobFor(w):null;if(own){await learningPlayBlob(own);return;}if(!chapterTap&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}const reading=learningCachedSpeech(w.word),cached=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(cached){await learningPlayBlob(cached);return;}checkedLocal=chapterTap;}
  if(index===null&&source==='user'&&w&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}
  let ref=index!==null?refs[index]:source==='user'?refs.filter(learningIsFollow).at(-1):refs.filter(learningIsReference).at(-1);
  if(ref?.source==='gemini'){await playEntrySpeech({word:ref.text},'default');return;}
  if(ref){const asset=snap.learningAudio.find(a=>a.id===ref.assetId);if(!asset?.blob)throw new Error('这段音频尚未同步到本机。');await learningPlayBlob(asset.blob,ref.start||0,ref.end??null);return;}
  if(source==='user'){if(w&&hasAudio(w)){await playEntrySpeech(w,'personal');return;}throw new Error('还没有跟读录音。');}
- await learningDefaultSpeech(m,text,current,signal);
+ await learningDefaultSpeech(m,text,current,signal,checkedLocal);
 }
-async function learningDefaultSpeech(m,text,current=()=>true,signal){const reading=learningCachedSpeech(text),saved=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(saved){await learningPlayBlob(saved);return;}const blob=await defaultSpeech(text);if(!current())return;await learningPlayBlob(blob);if(!current())return;if(m.contentType!=='word'&&await codaCachedSpeech(text)){const snap=await learningSnapshot(),current=snap.learningMaterials.find(x=>x.id===m.id)||m;if(!current.audioSources.some(a=>a.source==='gemini'&&a.text===text))await learningWrite({learningMaterials:[{...current,audioSources:[...current.audioSources,{source:'gemini',text}],updatedAt:Date.now()}]},snap);}}
+async function learningDefaultSpeech(m,text,current=()=>true,signal,checkedLocal=false){const reading=checkedLocal?null:learningCachedSpeech(text),saved=signal&&reading?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;if(!current())return;if(saved){await learningPlayBlob(saved);return;}const blob=await defaultSpeech(text);if(!current())return;await learningPlayBlob(blob);if(!current())return;if(m.contentType!=='word'&&await codaCachedSpeech(text)){const snap=await learningSnapshot(),current=snap.learningMaterials.find(x=>x.id===m.id)||m;if(!current.audioSources.some(a=>a.source==='gemini'&&a.text===text))await learningWrite({learningMaterials:[{...current,audioSources:[...current.audioSources,{source:'gemini',text}],updatedAt:Date.now()}]},snap);}}
 async function learningRelatedHtml(word){const rows=await learningRows('learningMaterials'),keys=syncKeys(word);const related=rows.filter(m=>!m.deleted&&!m.analysisOwner&&m.contentType==='sentence'&&m.linkedWordSyncIds.some(id=>keys.includes(id))).filter((m,i,a)=>a.findIndex(x=>x.textLao===m.textLao&&x.translationZh===m.translationZh)===i).slice(0,5);return related.length?'<section class="learn-related"><h3>相关例句</h3>'+related.map(m=>'<button data-learn="detail" data-id="'+learningEsc(m.id)+'"><span lang="lo">'+learningEsc(m.textLao)+'</span><small>'+learningEsc(m.translationZh)+'</small></button>').join('')+'</section>':'';}
 async function learningDefaultAudioKeys(){return withDefaultAudioStore('readonly',store=>{const keys=[],cursor=store.openKeyCursor();cursor.onsuccess=()=>{const row=cursor.result;if(row){keys.push(row.key);row.continue();}};return keys;});}
 async function learningWordAudioManagerHtml(m,w,snap){
@@ -11936,32 +11939,53 @@ learningCachedSpeech=async function(text){
  const owner=workspaceName('saved-default-key-index'),endpoint=ttsSettings.endpoint||'';
  const out=await withDefaultAudioStore('readonly',store=>{
   const result={blob:null},exact=store.get(JSON.stringify([endpoint,text]));
-  const choose=keys=>{const candidates=keys.filter(key=>{try{return JSON.parse(key)[1]===text;}catch(_){return false;}});return (!endpoint&&candidates.find(k=>{try{return JSON.parse(k)[0]==='imported-default';}catch(_){return false;}}))||candidates[0];};
-  const scan=()=>{const keys=store.getAllKeys();keys.onsuccess=()=>{sfSpeechKeys={owner,at:Date.now(),keys:keys.result};const key=choose(keys.result);if(key!==undefined){const q=store.get(key);q.onsuccess=()=>result.blob=q.result||null;}};};
+  const choose=index=>{const match=index.get(text);return (!endpoint&&match?.imported)||match?.first;};
+  const scan=()=>{const keys=store.getAllKeys();keys.onsuccess=()=>{
+   const index=new Map();
+   for(const key of keys.result)try{
+    const [source,word]=JSON.parse(key),match=index.get(word)||{first:key};
+    if(source==='imported-default'&&!match.imported)match.imported=key;
+    index.set(word,match);
+   }catch(_){}
+   sfSpeechKeys={owner,at:Date.now(),index};const key=choose(index);
+   if(key!==undefined){const q=store.get(key);q.onsuccess=()=>result.blob=q.result||null;}
+  };};
   exact.onsuccess=()=>{if(exact.result){result.blob=exact.result;return;}
-   const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.keys):undefined;
+   const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.index):undefined;
    if(key===undefined){scan();return;}const q=store.get(key);q.onsuccess=()=>{if(q.result)result.blob=q.result;else{sfSpeechKeys=null;scan();}};
   };return result;
  });return out.blob;
 };
+const sfChapterIndexes=new WeakMap();
+function sfChapterIndex(snap,words){
+ let index=sfChapterIndexes.get(snap);
+ if(index)return index;
+ index={words:new Map(),materials:new Map(),linked:new Map()};
+ for(const word of words)for(const ref of syncKeys(word))if(!index.words.has(ref))index.words.set(ref,word);
+ for(const row of snap.learningMaterials){
+  if(row.deleted)continue;
+  index.materials.set(row.id,row);
+  if(row.contentType==='word')for(const ref of row.linkedWordSyncIds||[]){
+   if(!index.linked.has(ref))index.linked.set(ref,[]);
+   index.linked.get(ref).push(row);
+  }
+ }
+ sfChapterIndexes.set(snap,index);
+ return index;
+}
 async function sfChapterAudio(id){
  const {snap,words}=await lnGetData();
- const wordRef=id.startsWith('word:')?id.slice(5):'';
- let m=snap.learningMaterials.find(row=>row.id===id&&!row.deleted);
- const ref=wordRef||(m?.contentType==='word'?m.linkedWordSyncIds?.[0]:'');
- const entry=ref&&words.find(word=>syncKeys(word).includes(ref));
- const w=entry?(await dgGetRows('entries',[entry.id]))[0]:null;
+ const {words:byRef,materials,linked}=sfChapterIndex(snap,words);
+ let m=materials.get(id);
+ const ref=id.startsWith('word:')?id.slice(5):(m?.contentType==='word'?m.linkedWordSyncIds?.[0]:null);
+ const w=byRef.get(ref)||null;
  if(!m&&w)m=learningWordMaterial(w);
  if(!m)throw Error('词句已移除或尚未同步');
- const aliases=new Set(w?syncKeys(w):[]);
- const text=w?.word||m.textLao;
- const hub=typeof swHub==='function'?swHub({...m,textLao:text},snap):null;
- const related=snap.learningMaterials.filter(row=>!row.deleted&&(row.id===m.id||row.id===hub?.id||
-   row.id===m.sharedWordTarget||row.id===m.sharedSpeechTarget||
-   row.contentType==='word'&&(row.linkedWordSyncIds||[]).some(key=>aliases.has(key))));
- if(!related.includes(m)&&!related.some(row=>row.id===m.id))related.unshift(m);
- const ids=[...new Set(related.flatMap(row=>(row.audioSources||[]).map(ref=>ref.assetId)).filter(Boolean))],learningAudio=[];
- for(let at=0;at<ids.length;at+=8)learningAudio.push(...await dgGetRows('learningAudio',ids.slice(at,at+8)));
+ const hub=typeof swHub==='function'?swHub({...m,textLao:w?.word||m.textLao},snap):null;
+ const related=[...new Set([m,hub,materials.get(m.sharedWordTarget),materials.get(m.sharedSpeechTarget),
+  ...(w?syncKeys(w).flatMap(key=>linked.get(key)||[]):[])].filter(Boolean))];
+ const ids=related.flatMap(row=>(row.audioSources||[]).map(ref=>ref.assetId));
+ const learningAudio=await dgGetRows('learningAudio',ids);
  return {m,w,words:w?[w]:[],snap:{learningMaterials:related,learningPlacements:[],learningAudio}};
 }
 async function sfRead(id){

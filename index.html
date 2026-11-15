@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="3603095a7cb8ae1b">
+  <meta name="lao-app-build" content="4704b378249020cd">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -704,7 +704,7 @@ async function importCodaClassroom(){
     }
     let navigationTouched=false,chapterPositionTimer;
     const currentPageKey=()=>workspaceName('lao-current-page-v1');
-    const installedApp=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
+    const installedApp=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone), (max-width:640px)').matches;
     function rememberCurrentPage(){
       try{
         const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;
@@ -3201,7 +3201,9 @@ async function learningReviewChangedAudio(m){
  learningModal('文字已修改 · 核对原录音','<p>录音没有丢失。请先试听，只有读音仍适用时才确认；文字确实变了可重新录制。</p><p lang="lo">当前：'+h(m.textLao)+'</p>'+refs.map((a,i)=>'<section><p>原录音文字：<span lang="lo">'+h(a.recordedText||a.text||'未记录')+'</span></p><button data-learn="audio" data-id="'+id+'" data-index="'+i+'">▶ 试听这份旧录音</button>'+(a.needsReview?'<button data-learn="v2-confirm-audio" data-id="'+id+'" data-index="'+i+'">这份录音仍适用</button>':'')+'</section>').join('')+'<button data-learn="record-card-reference" data-id="'+id+'">🎙 重新录制当前文字</button>');
 }
 async function learningPlay(id,source='reference',index=null){
- const {m,w,snap}=await learningResolve(id),text=w?.word||m.textLao,refs=m.audioSources||[];
+ const chapterTap=index===null&&source==='reference'&&typeof sfRead==='function'&&typeof activeView!=='undefined'&&activeView==='learning'&&learningRoute==='lesson'&&window.matchMedia?.('(max-width:640px)').matches;
+ if(chapterTap)rememberCurrentPage();
+ const {m,w,snap}=await (chapterTap?sfRead(id):learningResolve(id)),text=w?.word||m.textLao,refs=m.audioSources||[];
  // An explicit audio-row choice must be resolved before any word-level fallback.
  if(index!==null){
   if(!Number.isInteger(index)||index<0||!refs[index])throw Error('音频列表已变化，请重新打开详情后选择。');
@@ -11838,9 +11840,34 @@ learningCachedSpeech=async function(text){
   };return result;
  });return out.blob;
 };
+async function sfChapterAudio(id){
+ const {snap,words}=await lnGetData();
+ const wordRef=id.startsWith('word:')?id.slice(5):'';
+ let m=snap.learningMaterials.find(row=>row.id===id&&!row.deleted);
+ const ref=wordRef||(m?.contentType==='word'?m.linkedWordSyncIds?.[0]:'');
+ const entry=ref&&words.find(word=>syncKeys(word).includes(ref));
+ const w=entry?(await dgGetRows('entries',[entry.id]))[0]:null;
+ if(!m&&w)m=learningWordMaterial(w);
+ if(!m)throw Error('词句已移除或尚未同步');
+ const aliases=new Set(w?syncKeys(w):[]);
+ const text=w?.word||m.textLao;
+ const hub=typeof swHub==='function'?swHub({...m,textLao:text},snap):null;
+ const related=snap.learningMaterials.filter(row=>!row.deleted&&(row.id===m.id||row.id===hub?.id||
+   row.id===m.sharedWordTarget||row.id===m.sharedSpeechTarget||
+   row.contentType==='word'&&(row.linkedWordSyncIds||[]).some(key=>aliases.has(key))));
+ if(!related.includes(m)&&!related.some(row=>row.id===m.id))related.unshift(m);
+ const ids=[...new Set(related.flatMap(row=>(row.audioSources||[]).map(ref=>ref.assetId)).filter(Boolean))],learningAudio=[];
+ for(let at=0;at<ids.length;at+=8)learningAudio.push(...await dgGetRows('learningAudio',ids.slice(at,at+8)));
+ return {m,w,words:w?[w]:[],snap:{learningMaterials:related,learningPlacements:[],learningAudio}};
+}
 async function sfRead(id){
  dfCheckStamp();const stamp=dfStamp,key=workspaceName('saved-audio')+'|'+stamp+'|'+id;if(sfReads.has(key))return sfReads.get(key);
  const task=(async()=>{
+  if(typeof activeView!=='undefined'&&activeView==='learning'&&learningRoute==='lesson'&&window.matchMedia?.('(max-width:640px)').matches){
+   const result=await sfChapterAudio(id);
+   if(stamp!==dfStamp){sfReads.delete(key);return sfRead(id);}
+   return result;
+  }
   const g=await dgGetGraph(),ref=id.startsWith('word:')?id.slice(5):'',rows=await dgGetRows('learningMaterials',[id,ref&&g.canonical.get(ref)]);
   let m=rows.find(m=>m.id===id)||rows[0],w;
   const wordRef=ref||m?.contentType==='word'&&m.linkedWordSyncIds?.[0];
@@ -13232,7 +13259,7 @@ document.addEventListener('click',event=>{
 </style>
 <script data-mobile-chapter-cards>
 const mobileChapterPending = new WeakMap();
-let mobileChapterObserver, mobileChapterWarmTimer, mobileChapterFrame;
+let mobileChapterObserver, mobileChapterFrame;
 const mobileChapterVisible=new Set();
 const mobileChapterBatchSize = 12;
 
@@ -13286,7 +13313,6 @@ function mobileChapterMount(content,plan) {
  mobileChapterVisible.clear();
  if(mobileChapterFrame)cancelAnimationFrame(mobileChapterFrame);
  mobileChapterFrame=0;
- clearTimeout(mobileChapterWarmTimer);
  if(!plan?.groups.length)return;
  if(typeof IntersectionObserver==='function'){
   mobileChapterObserver=new IntersectionObserver(entries=>{
@@ -13327,14 +13353,8 @@ function mobileChapterRestoreScroll(top) {
 document.addEventListener('click',event=>{
  const button=event.target.closest?.('[data-mobile-chapter-more]');
  if(button){mobileChapterReveal(button);return;}
- if(!window.matchMedia?.('(max-width:640px)').matches||typeof sfRead!=='function')return;
  const play=event.target.closest?.('#learningContent .learn-card [data-learn=play],#learningContent .learn-card [data-learn=play-card]');
- const card=play?.closest('.learn-card'),next=card?.nextElementSibling;
- if(!next?.matches('.learn-card[data-card-id]'))return;
- clearTimeout(mobileChapterWarmTimer);
- mobileChapterWarmTimer=setTimeout(()=>{
-  if(activeView==='learning'&&next.isConnected&&!document.hidden&&!learningHasWork())void sfRead(next.dataset.cardId).catch(()=>{});
- },400);
+ if(play&&typeof rememberCurrentPage==='function')rememberCurrentPage();
 });
 </script>
 </body>

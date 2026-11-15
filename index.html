@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c47c855ae0569521">
+  <meta name="lao-app-build" content="ee8952f57f61cb82">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -872,12 +872,54 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function request(req) { return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('数据库操作失败'));}); }
     function transactionDone(transaction) { return new Promise((resolve,reject)=>{transaction.oncomplete=()=>resolve();transaction.onerror=()=>reject(transaction.error||new Error('数据库事务失败'));transaction.onabort=()=>reject(transaction.error||new Error('数据库事务被中断'));}); }
     function shouldReconnect(error) { return error?.name==='InvalidStateError'||error?.name==='AbortError'||/connection is closing|database.*closing|transaction.*closing/i.test(error?.message||''); }
+    function localReadCanRetry(error) {
+      return ['AbortError','InvalidStateError','TransactionInactiveError','TimeoutError'].includes(error?.name)||
+        /without an in-progress transaction|connection is closing/i.test(error?.message||'');
+    }
+    async function localRead(stores, enqueue) {
+      for(let attempt=0;attempt<2;attempt++){
+        try{
+          return await new Promise((resolve,reject)=>{
+            let tx,settled=false;
+            const finish=(error,value)=>{
+              if(settled)return;
+              settled=true;
+              clearTimeout(timer);
+              if(error)reject(error);else resolve(value);
+            };
+            const timer=setTimeout(()=>{
+              finish(new DOMException('读取本机资料超时','TimeoutError'));
+              try{tx?.abort();}catch(_){}
+            },8000);
+            openDB().then(database=>{
+              if(settled)return;
+              tx=database.transaction(stores,'readonly');
+              const results={};
+              tx.oncomplete=()=>finish(null,results);
+              tx.onabort=()=>finish(tx.error||new DOMException('读取本机资料被中断','AbortError'));
+              tx.onerror=event=>finish(event.target?.error||tx.error||Error('读取本机资料失败'));
+              for(const name of stores){
+                const query=enqueue(tx.objectStore(name),name);
+                query.onsuccess=()=>{results[name]=query.result;};
+              }
+            }).catch(error=>{
+              finish(error);
+              try{tx?.abort();}catch(_){}
+            });
+          });
+        }catch(error){
+          if(attempt||!localReadCanRetry(error))throw error;
+          if(error.name==='InvalidStateError'||/connection is closing/i.test(error.message))resetDBConnection();
+          await new Promise(resolve=>setTimeout(resolve,120));
+        }
+      }
+    }
     async function withStore(mode, operation, attempt=0) { let transaction; try { const database=await openDB(); transaction=database.transaction(storeName,mode); const result=await operation(transaction.objectStore(storeName)); await transactionDone(transaction); return result; } catch(error) { if(attempt<1&&shouldReconnect(error)){resetDBConnection();return withStore(mode,operation,attempt+1);} throw error; } }
     const getEntry=id=>withStore('readonly',store=>request(store.get(id)));
     const addEntry=item=>withStore('readwrite',store=>request(store.add(item)));
     const putEntry=item=>withStore('readwrite',store=>request(store.put(item)));
     const deleteEntry=id=>withStore('readwrite',store=>request(store.delete(id)));
-    async function allEntries() { const read=async()=>(await withStore('readonly',store=>request(store.getAll()))).sort((a,b)=>b.updatedAt-a.updatedAt),scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));return scope?(scope.entries||(scope.entries=read())):read(); }
+    async function allEntries() { const read=async()=>(await localRead([storeName],store=>store.getAll()))[storeName].sort((a,b)=>b.updatedAt-a.updatedAt),scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));return scope?(scope.entries||(scope.entries=read())):read(); }
     function audioDataBuffer(value) { if(value instanceof ArrayBuffer)return value; if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength); return null; }
     function audioBlobFor(item) { if(typeof item?.audioDataUrl==='string'&&item.audioDataUrl){try{return dataURLToBlob(item.audioDataUrl);}catch(_){return null;}} const buffer=audioDataBuffer(item?.audioData); if(buffer)return new Blob([buffer],{type:item.audioType||'audio/webm'}); return item?.audio instanceof Blob?item.audio:null; }
     function hasAudio(item) { return Boolean(audioBlobFor(item)); }
@@ -3344,7 +3386,7 @@ async function learningAudioAudit(){
 async function learningSeedLessonOne(){
  const learningLesson=learningFirstLesson,learningPlacement=(id,section,position)=>learningPlacementFor(id,section,position,learningFirstLesson);
  // A completed intake needs one indexed read, not a read/write scan of all recordings on every tab click.
- const seedDb=await openDB(),seeded=await new Promise((resolve,reject)=>{const t=seedDb.transaction('learningPlacements','readonly'),q=t.objectStore('learningPlacements').get(learningPlacement('knowledge:lesson1','knowledge',0).id);t.oncomplete=()=>resolve(q.result?.intakeVersion===1);t.onabort=()=>reject(t.error);});if(seeded)return;
+ const {learningPlacements:marker}=await localRead(['learningPlacements'],store=>store.get(learningPlacement('knowledge:lesson1','knowledge',0).id));if(marker?.intakeVersion===1)return;
  const d=await openDB(),t=d.transaction(['entries',...learningStores],'readwrite'),done=transactionDone(t),rows={};let left=4,issue;
  for(const kind of ['entries',...learningStores]){const q=t.objectStore(kind).getAll();q.onsuccess=()=>{rows[kind]=q.result;if(--left)return;try{
   const marker=rows.learningPlacements.find(p=>p.materialId==='knowledge:lesson1');if(marker?.intakeVersion===1)return;
@@ -8266,9 +8308,26 @@ function scCourseLabel(c){return [c.textbookName,c.chapterName,c.title].filter(B
 function scCourseCard(c,plan,location){const h=learningEsc;return '<article class="sc-course"><div><small>'+h([c.textbookName,c.chapterName].filter(Boolean).join(' · '))+'</small><h3>'+h(c.title)+'</h3>'+(location?'<p>'+h(location.label)+' · '+h(scDate(location.at))+'</p>':'')+'</div><div class="sc-actions"><button type="button" data-sc-action="resume" data-id="'+h(c.id)+'">'+(location?'继续学习':'打开章节')+'</button><button type="button" data-sc-action="pin" data-id="'+h(c.id)+'" aria-pressed="'+plan.pinned.includes(c.id)+'">'+(plan.pinned.includes(c.id)?'取消固定':'固定章节')+'</button></div></article>';}
 let scRenderRun=0;
 async function scRender(){
- const run=++scRenderRun;++learningRenderToken;await learningSeedLessonOne();
- const snap=typeof dfReadTextSnapshot==='function'?await dfReadTextSnapshot():await learningSnapshot();
+ const run=++scRenderRun;++learningRenderToken;
  const current=()=>run===scRenderRun&&activeView==='learning'&&learningRoute==='study';
+ const host=$('#learningContent'),status=$('#learningStatus');
+ if(!host.querySelector('.study-center')){
+  host.innerHTML='<section class="study-center"><h2>学习中心</h2><p role="status">正在读取本机学习资料…</p></section>';
+ }
+ status.textContent='';
+ let snap;
+ try{
+  await learningSeedLessonOne();
+  if(!current())return;
+  snap=typeof dfReadTextSnapshot==='function'?await dfReadTextSnapshot():await learningSnapshot();
+ }catch(error){
+  if(!current())return;
+  console.warn('Study center local read failed',error);
+  host.innerHTML='<section class="study-center"><h2>学习中心</h2><p role="status">本机资料读取中断，请重试。</p><button type="button" data-sc-retry>重试读取</button></section>';
+  const retry=host.querySelector('[data-sc-retry]');
+  if(retry)retry.onclick=()=>{host.innerHTML='';void scRender().catch(learningError);};
+  return;
+ }
  if(!current())return;
  const reviewHtml=typeof rrHomeSectionHtml==='function'?'<section class="pr-summary sc-box rr-summary" aria-busy="true"><h3>每日滚动复习</h3><p role="status">正在读取本机复习记录…</p></section>':'';
  const courses=learningOrderedCourses(snap),books=scBooks(courses),plan=scPlan(snap),local=scLocal(),last=local.recent.find(l=>courses.some(c=>c.id===l.courseId)),latest=last&&courses.find(c=>c.id===last.courseId),goal=scGoalCourse(plan,courses,local),book=books.find(b=>b.key===plan.goal?.bookKey),h=learningEsc;
@@ -8787,7 +8846,7 @@ async function rrAttempt(item,direction,rating,id,source='review',cursor=null,op
 pendingReviewRecord=async function(row,course,direction,rating,id){const item=row.reviewWord?{...row.reviewWord}:{_practiceMaterialId:row.id,word:row.lao,meaning:row.zh};await rrAttempt(item,direction!=='zh'?'wordToMeaning':'meaningToSpeech',rating,'rolling-review:'+id,'consolidation');};
 function rrHomeSectionHtml(m){return '<section class="pr-summary sc-box rr-summary">'+(typeof lgHomeHtml==='function'?lgHomeHtml(m):'<div><p class="sc-eyebrow">先回忆，再看答案 · 各能力独立排期</p><h3>每日滚动复习</h3><div class="rr-today-stats">'+rrTodayStats(m)+'</div><small>待新学 '+m.fresh.length+' · 已到期 '+m.due.length+' · 已暂停 '+m.rows.filter(r=>r.status==='paused').length+'（按方向计项）</small></div><div class="rr-actions"><button class="primary" data-pending-review>今日学习 →</button><button data-rr-picker>添加词句</button><button data-rr-manage>清单与目标</button></div>')+'</section>';}
 prMount=async function({initial=false}={}){
- const center=$('#learningContent')?.querySelector('.study-center');if(!center||learningRoute!=='study'||initial&&center.querySelector('.rr-summary'))return;const {model:m}=await rrRead();if(!center.isConnected||learningRoute!=='study')return;
+ const center=$('#learningContent')?.querySelector('.study-center');if(!center||!center.querySelector('.sc-overview')||learningRoute!=='study'||initial&&center.querySelector('.rr-summary'))return;const {model:m}=await rrRead();if(!center.isConnected||learningRoute!=='study')return;
  const section=document.createElement('section');section.className='pr-summary sc-box rr-summary';section.innerHTML=rrHomeSectionHtml(m).replace(/^<section[^>]*>|<\/section>$/g,'');
  const old=center.querySelector('.pr-summary');if(old)old.replaceWith(section);else center.querySelector('.sc-overview')?.after(section);
 };
@@ -10980,7 +11039,8 @@ openDB=async function(...args){
  }});dfDbProxies.set(db,proxy);return proxy;
 };
 async function dfReadTextSnapshot(){
- const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction(['learningMaterials','learningPlacements'],'readonly'),snap={learningAudio:[],detailReadOnly:true};for(const name of ['learningMaterials','learningPlacements']){const q=t.objectStore(name).getAll();q.onsuccess=()=>snap[name]=q.result;}t.oncomplete=()=>resolve(snap);t.onabort=()=>reject(t.error||Error('详情文字读取失败'));});
+ const rows=await localRead(['learningMaterials','learningPlacements'],store=>store.getAll());
+ return {...rows,learningAudio:[],detailReadOnly:true};
 }
 async function dfGetData(){
  dfCheckStamp();if(dfData&&Date.now()-dfData.at<120000)return dfData;if(dfLoading)return dfLoading;
@@ -11018,9 +11078,12 @@ learningOpenDetail=function(id){
 if(typeof ssCancelDetail==='function'){const cancel=ssCancelDetail;ssCancelDetail=function(){dfOpenRun++;dfActive=null;if(dfDetailScope)dfDetailScope.cancelled=true;learningDialog.removeAttribute('data-df-building');return cancel();};}
 if(typeof cwIndex==='function'){const original=cwIndex;cwIndex=function(entries,materials){let byMaterials=dfIndexes.get(entries);if(!byMaterials){byMaterials=new WeakMap();dfIndexes.set(entries,byMaterials);}let index=byMaterials.get(materials);if(!index){index=original(entries,materials);byMaterials.set(materials,index);}return index;};}
 window.addEventListener('storage',e=>{if(e.key===dfStampKey){dfStamp=e.newValue||'';dfInvalidate();}});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){dfCheckStamp();(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')dfCheckStamp();});
 document.addEventListener('pointerover',e=>{if(e.target.closest?.('[data-learn="word-detail"],[data-learn="play-card"],[data-wsl-detail],[data-cw-target]'))(typeof dgGetGraph==='function'?dgGetGraph():dfGetData()).catch(()=>{});},{passive:true});
-const dfWarm=()=>typeof dgGetGraph==='function'?dgGetGraph().catch(()=>{}):dfGetData().then(data=>{if(typeof cwIndex==='function')cwIndex(data.words,data.snap.learningMaterials);}).catch(()=>{});if(typeof requestIdleCallback==='function')requestIdleCallback(dfWarm,{timeout:2000});else dfWarmTimer=setTimeout(dfWarm,1000);
+const dfWarm=()=>typeof dgGetGraph==='function'?dgGetGraph().catch(()=>{}):dfGetData().then(data=>{if(typeof cwIndex==='function')cwIndex(data.words,data.snap.learningMaterials);}).catch(()=>{});void Promise.resolve(window.laoLocalStartup).then(()=>{
+ const warm=()=>{if(document.visibilityState!=='hidden')dfWarm();};
+ if(typeof requestIdleCallback==='function')requestIdleCallback(warm);else dfWarmTimer=setTimeout(warm,1500);
+});
 </script>
 <script data-detail-graph>
 /* Disposable local relation index. Native records remain the source of truth. */

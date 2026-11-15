@@ -21,10 +21,7 @@
   versionText.textContent='当前页面版本：'+(pageVersion||'未知（旧包）');
   const install = panel.querySelector('[data-install]');
   const apply=panel.querySelector('[data-apply-update]'),check=panel.querySelector('[data-check-update]');
-  let applying=false,hadController=!!navigator.serviceWorker?.controller,interacted=false;
-  for(const type of ['pointerdown','click','keydown','input']){
-    document.addEventListener(type,()=>{interacted=true;},{capture:true,once:true});
-  }
+  let applying=false,hadController=!!navigator.serviceWorker?.controller;
   const banner=document.createElement('div');banner.hidden=true;banner.setAttribute('role','status');banner.style.cssText='position:fixed;top:8px;left:12px;right:12px;z-index:9999;background:#eef7f1;color:#183e36;border:1px solid #b9d7cb;border-radius:12px;padding:12px;box-shadow:0 4px 24px #143f3220;font-size:14px';
   banner.innerHTML='<span>新版已就绪，当前页面仍运行旧版。</span> <button type="button">保存进度并更新</button>';document.body.append(banner);banner.querySelector('button').onclick=()=>apply.click();
   const offerUpdate=message=>{status.textContent=message;apply.hidden=false;banner.hidden=false;};
@@ -65,18 +62,7 @@
       const ready=()=>{if(registration.waiting)offerUpdate('新版已下载，等待启用。点击“保存进度并更新”，无需关闭其他页面。');};
       const installed=worker=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>{worker.removeEventListener('statechange',changed);reject(Error('新版仍在下载或网络较慢，尚不能确认完成，请稍后重试'));},30000);function changed(){if(['installed','activated','redundant'].includes(worker.state)){clearTimeout(timer);worker.removeEventListener('statechange',changed);worker.state==='redundant'?reject(Error('新版安装失败，可能文件尚未全部上传；旧版仍可使用')):resolve();}}worker.addEventListener('statechange',changed);changed();});
       let checking=false;
-      const autoApply=async(latest,worker)=>{
-        await window.laoLocalStartup;
-        if(interacted||pageVersion===latest||!window.laoCanAutoUpdate?.())return;
-        if(worker?registration.waiting!==worker:registration.waiting)return;
-        try{
-          const key='lao-auto-update-target';
-          if(sessionStorage.getItem(key)===latest)return;
-          sessionStorage.setItem(key,latest);
-        }catch(_){return;}
-        await applyUpdate({automatic:true});
-      };
-      const verify=async(automatic=false)=>{if(checking||applying)return;checking=true;check.disabled=true;let timer;
+      const verify=async()=>{if(checking||applying)return;checking=true;check.disabled=true;let timer;
         try{
           status.textContent='正在联网核对发布版本…';const abort=new AbortController();timer=setTimeout(()=>abort.abort(),12000);
           const response=await fetch(new URL('version.json?check='+Date.now(),registration.scope),{cache:'no-store',signal:abort.signal});clearTimeout(timer);
@@ -86,25 +72,25 @@
           if(registration.waiting){
             const worker=registration.waiting,waiting=await workerVersion(worker);
             offerUpdate(waiting===latest?'线上新版已下载，当前页尚未更新。保存后即可启用。':'存在等待启用的版本，但还未确认与线上一致；可更新后再次检查。');
-            if(automatic&&waiting===latest)await autoApply(latest,worker);
+
           }
           else if(pageVersion===latest&&active===latest){status.textContent='已核实：当前页面与线上版本一致。';apply.hidden=true;banner.hidden=true;}
           else if(active===latest){
             offerUpdate('新版已经启用，但当前页面仍是旧内容。保存后刷新即可，不需关闭其他窗口。');
-            if(automatic)await autoApply(latest,null);
+
           }
           else {status.textContent='尚未确认更新成功。可能正在发布或下载未完成，请稍后再检查；不能认定当前为最新版。';if(pageVersion!==latest)offerUpdate(status.textContent);}
         }catch(e){status.textContent='未能确认最新版本：'+(e.name==='AbortError'?'网络检查超时，请联网重试':e.message);ready();}
         finally{clearTimeout(timer);checking=false;check.disabled=false;}
       };
       check.onclick=()=>verify();
-      const applyUpdate=async({automatic=false}={})=>{
+      const applyUpdate=async()=>{
         if(applying||apply.disabled)return;
         apply.disabled=true;
         try{
           if(typeof window.prepareLaoAppUpdate!=='function')throw Error('请先保存当前内容，再刷新页面。');
           await window.prepareLaoAppUpdate();
-          if(automatic&&(interacted||!window.laoCanAutoUpdate?.()))return;
+
           applying=true;
           if(registration.waiting){registration.waiting.postMessage({type:'ACTIVATE_SAVED_UPDATE'});status.textContent='进度已保存，正在启用新版…';setTimeout(()=>{if(applying){applying=false;offerUpdate('启用尚未完成，请重试；未要求关闭其他窗口。');}},12000);}
           else location.reload();
@@ -121,7 +107,7 @@
         });
       });
       await navigator.serviceWorker.ready;
-      status.textContent = '程序本体已保存，可断网重新打开。正在核对当前版本…';ready();void verify(true);
+      status.textContent = '程序本体已保存，可断网重新打开。正在核对当前版本…';ready();void verify();
       document.addEventListener('visibilitychange',()=>{if(!document.hidden&&registration.waiting)ready();});
     } catch (e) { status.textContent = '离线安装失败，尚不能保证断网启动：' + e.message; }
   })();

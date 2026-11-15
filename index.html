@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="3d9fade588c2c8c6">
+  <meta name="lao-app-build" content="b14128dc958326ea">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -702,20 +702,38 @@ async function importCodaClassroom(){
       if(origin.view==='practice'&&practiceId){const item=await practiceGetItem(practiceId);if(item)setPracticeAudio(item);}
       requestAnimationFrame(()=>{if(activeView===origin.view)window.scrollTo({top:origin.scroll,behavior:'instant'});});
     }
-    let navigationTouched=false;
+    let navigationTouched=false,chapterPositionTimer;
+    const currentPageKey=()=>workspaceName('lao-current-page-v1');
+    const installedApp=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
     function rememberCurrentPage(){
-      try{const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;if(['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(view))sessionStorage.setItem(workspaceName('lao-current-page-v1'),JSON.stringify({view,y:window.scrollY||0,...(view==='learning'&&typeof learningPagePosition==='function'?{learning:learningPagePosition()}: {})}));}catch(_){}
+      try{
+        const view=activeView==='learning'&&typeof learningRoute!=='undefined'&&learningRoute==='study'?'study':activeView;
+        if(!['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(view))return;
+        const learning=view==='learning'&&typeof learningPagePosition==='function'?learningPagePosition():null;
+        const value=JSON.stringify({view,y:window.scrollY||0,...(learning?{learning}:{})});
+        sessionStorage.setItem(currentPageKey(),value);
+        if(installedApp()){
+          if(learning?.route==='lesson')localStorage.setItem(currentPageKey(),value);
+          else localStorage.removeItem(currentPageKey());
+        }
+      }catch(_){}
     }
     async function restoreCurrentPage(){
       if(navigationTouched)return;
-      let saved;try{saved=JSON.parse(sessionStorage.getItem(workspaceName('lao-current-page-v1')));}catch(_){return;}
+      let saved;try{saved=JSON.parse(sessionStorage.getItem(currentPageKey())||(installedApp()?localStorage.getItem(currentPageKey()):null));}catch(_){return;}
       if(!saved||!['dictionary','practice','alphabet','learning','study','pronunciation','coda'].includes(saved.view))return;
       if(saved.view==='learning'&&typeof learningRestorePosition==='function')await learningRestorePosition(saved.learning);
       if(navigationTouched)return;
       await showView(saved.view);
-      requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study'){const top=Number.isFinite(saved.y)?Math.max(0,saved.y):0;if(saved.view==='learning'&&typeof mobileChapterRestoreScroll==='function')mobileChapterRestoreScroll(top);window.scrollTo({top,behavior:'instant'});}});
+      requestAnimationFrame(()=>{if(activeView===saved.view||saved.view==='study'&&activeView==='learning'&&learningRoute==='study'){const top=Number.isFinite(saved.y)?Math.max(0,saved.y):0;if(saved.view==='learning'&&typeof mobileChapterRestoreScroll==='function')mobileChapterRestoreScroll(top);window.scrollTo({top,behavior:'instant'});rememberCurrentPage();}});
       return true;
     }
+    window.addEventListener('scroll',()=>{
+      if(activeView!=='learning'||learningRoute!=='lesson')return;
+      clearTimeout(chapterPositionTimer);
+      chapterPositionTimer=setTimeout(rememberCurrentPage,240);
+    },{passive:true});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)rememberCurrentPage();});
     window.addEventListener('pagehide',()=>{rememberCurrentPage();if(typeof persistPractice==='function')persistPractice();});
     function showView(view) {
       const panels={dictionary:'dictionaryPanel',add:'addPanel',practice:'practicePanel',alphabet:'alphabetPanel',coda:'codaPanel',learning:'learningPanel',pronunciation:'pronunciationPanel'};
@@ -3110,7 +3128,7 @@ async function renderLearning(){
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
  if(learningRoute==='lesson'&&typeof wordColorChapterToolbar==='function')html=wordColorChapterToolbar(html,learningLesson.id);
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
- if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);$('#learningStatus').textContent='';}
+ if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);if(route==='lesson')rememberCurrentPage();$('#learningStatus').textContent='';}
 }
 async function learningSetup(){
  const words=await allEntries();learningDraft={kind:'setup'};
@@ -9316,7 +9334,6 @@ $('#rpDirection').onchange=async()=>{try{rpGuard();if(!rpCanRestart()){$('#rpDir
 $('#rpRefresh').onclick=async()=>{try{rpGuard();if(rpCanRestart())await rpRender({restart:true});}catch(error){$('#rpStatus').textContent=error.message;}};
 learningDialog.addEventListener('close',()=>{if(activeView==='practice'&&rpMode==='daily'&&!rpSaving)void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='practice'&&rpMode==='daily'&&!learningHasWork()&&!rpSaving)void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});});
-window.laoCanAutoUpdate=()=>!document.hidden&&!document.querySelector('dialog[open]')&&!$('#rrWritten')?.value&&!$('#practiceAnswer')?.value;
 const rpPrepareUpdate=window.prepareLaoAppUpdate;
 window.prepareLaoAppUpdate=async function(){rpGuard();if(!rpCanRestart())throw Error('已取消更新，保留当前默写内容');if(rpPrepareUpdate)await rpPrepareUpdate();};
 rpToggle();if(activeView==='practice')void rpRender().catch(error=>{$('#rpStatus').textContent=error.message;});

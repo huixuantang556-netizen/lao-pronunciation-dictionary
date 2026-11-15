@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="734e87246ddb82ec">
+  <meta name="lao-app-build" content="4cacaa523004d141">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7324,15 +7324,55 @@ function courseCheckFilter(groups,includeFamiliar=true,ratings=new Map(),useWord
 }
 function courseCheckShuffle(items){const out=items.slice();for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;}
 function courseCheckQueue(groups,order){if(order==='random-all')return courseCheckShuffle(groups.flatMap(g=>g.items.map(r=>({...r,group:g.title}))));const random=order===true||order==='random';return (random?courseCheckShuffle(groups):groups).flatMap(g=>(random&&!g.dialogue?courseCheckShuffle(g.items):g.items).map(r=>({...r,group:g.title})));}
+function courseCheckOpenGroup({title,scope,groups,snap,course,checkpointKey,directions}){
+ learningModal((scope==='section'?'检测本小节':'检测本组')+' · '+title,
+  '<form id="courseCheckSetup" class="cc-group-setup">'+directions+
+  '<label class="cc-group-familiar"><input type="checkbox" id="ccExcludeFamiliar"> 排除已标记熟悉的词句</label>'+
+  '<p id="ccQuestionCount" class="cc-count-summary" role="status"></p>'+
+  '<button class="primary" id="ccGroupStart">开始检测</button></form>');
+ const direction=$('#ccDirection'),exclude=$('#ccExcludeFamiliar'),start=$('#ccGroupStart');
+ direction.value=(typeof appPreference==='function'&&appPreference('courseCheckDirection'))||'lao';
+ exclude.checked=typeof appPreference==='function'&&appPreference('includeFamiliar')===false;
+ const histories=new Map();
+ function getQueue(){
+  const dictation=direction.value==='dictation',seen=new Set();
+  if(exclude.checked&&!histories.has(dictation))histories.set(dictation,typeof ccResultValid==='function'?courseCheckRatings(snap,course.id,dictation):new Map());
+  return courseCheckQueue(courseCheckFilter(groups,!exclude.checked,histories.get(dictation),!dictation)).filter(item=>{
+   if(seen.has(item.id))return false;
+   seen.add(item.id);return true;
+  });
+ }
+ function draw(){
+  const count=getQueue().length;
+  $('#ccQuestionCount').textContent=count?count+' 项':'本组没有符合条件的词句';
+  start.disabled=!count;
+ }
+ direction.onchange=exclude.onchange=draw;
+ draw();
+ $('#courseCheckSetup').onsubmit=event=>{
+  event.preventDefault();
+  const queue=getQueue(),dictation=direction.value==='dictation';
+  if(!queue.length)return;
+  courseCheckSession(queue,course,dictation?'audio':direction.value,snap,{
+   checkpointKey,dictation,reviewMode:'none',scopeLabel:title
+  });
+ };
+}
 async function courseCheckOpen(scope='course',key='',skipResume=false){
  if(learningHasWork())throw Error('请先结束编辑或录音');stopPracticeAudio();
  const course={...learningLesson},model=typeof ccReadCourse==='function'?await ccReadCourse():{snap:await learningSnapshot(),words:await allEntries()},snap=model.snap,words=model.words,data=lessonV2Export(snap,course),h=learningEsc;
  const groups=courseCheckGroups(data,course,snap,words,scope,key,'all');
  const ratings=typeof ccResultValid==='function'?courseCheckRatings(snap,course.id):new Map();
+ const scoped=scope!=='course',allowed=new Set(groups.flatMap(group=>group.items.map(item=>item.id)));
  const checkpointKey=typeof ccCheckpointKey==='function'?ccCheckpointKey(course,scope,key):'',saved=!skipResume&&typeof ccCheckpointRead==='function'?ccCheckpointRead(checkpointKey,data,course,snap,words):null;
- if(saved){learningModal('继续章节检测','<p>上次进行到第 '+(saved.index+1)+' / '+saved.queue.length+' 项，题序和已保存评级保留。</p><button type="button" class="primary" id="ccResume">继续上次</button><button type="button" id="ccRestart">重新设置检测</button>');$('#ccResume').onclick=()=>courseCheckSession(saved.queue,course,saved.direction,snap,{checkpointKey,resume:saved,scopeLabel:saved.scopeLabel});$('#ccRestart').onclick=()=>{ccCheckpointSave(checkpointKey,null);void courseCheckOpen(scope,key,true).catch(learningError);};return;}
+ if(saved&&(!scoped||saved.queue.every(item=>allowed.has(item.id)))){learningModal(scoped?'继续本组检测':'继续章节检测','<p>上次进行到第 '+(saved.index+1)+' / '+saved.queue.length+' 项，题序和已保存评级保留。</p><button type="button" class="primary" id="ccResume">继续上次</button><button type="button" id="ccRestart">重新设置检测</button>');$('#ccResume').onclick=()=>courseCheckSession(saved.queue,course,saved.direction,snap,{checkpointKey,resume:saved,scopeLabel:saved.scopeLabel});$('#ccRestart').onclick=()=>{ccCheckpointSave(checkpointKey,null);void courseCheckOpen(scope,key,true).catch(learningError);};return;}
  const title=scope==='block'?groups[0]?.title:scope==='section'?data.sections.find(s=>s.id===key)?.title:course.title;
-learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option><option value="pick">自选词句</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label><label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option><option value="audio">听音辨词</option><option value="dictation">听音写老挝语</option></select></label><label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><label>熟悉项目<select id="ccFamiliar"><option value="include">包含已标记熟悉的词句</option><option value="exclude">排除已标记熟悉的词句</option></select></label><section id="ccPick" hidden><label>搜索词句<input id="ccPickSearch" type="search" placeholder="输入老挝语或中文"></label><label><input id="ccPickWeak" type="checkbox">只看上次陌生或模糊</label><div id="ccPickRows" class="cc-pick-rows"></div></section><p id="ccQuestionCount" class="cc-count-summary" role="status"></p><p class="tag-hint">可选择是否包含熟悉项目；听音模式揭晓前只提供播放，不显示答案和例句。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><label>检测后的学习清单<select id="ccReviewMode"><option value="none">只检测，不加入每日清单</option><option value="weak">检测完成后，将陌生和模糊词加入明日复习</option><option value="all">检测完成后，将全部已测词加入明日复习</option></select></label><button class="primary">开始检测</button></form>');
+ const directions='<label>方向<select id="ccDirection"><option value="lao">看老挝语，回忆中文</option><option value="zh">看中文，读出老挝语</option><option value="audio">听音辨词</option><option value="dictation">听音写老挝语</option></select></label>';
+ if(scoped){
+  courseCheckOpenGroup({title:title||course.title,scope,groups,snap,course,checkpointKey,directions});
+  return;
+ }
+learningModal('检测 · '+(title||course.title),'<form id="courseCheckSetup"><label>检测范围<select id="ccScope"><option value="current">当前'+(scope==='course'?'整章':scope==='section'?'小节':'小分类／对话')+'</option><option value="course">整章所有分组</option><option value="pick">自选词句</option></select></label><label>内容<select id="ccKind"><option value="all">全部单词和句子／对话</option><option value="words">只测单词</option><option value="dialogues">只测句子／对话</option></select></label>'+directions+'<label>顺序<select id="ccOrder"><option value="ordered">逐组测试</option><option value="random">分组随机（对话组内保持顺序）</option><option value="random-all">全部打乱（单词与对话逐句混排）</option></select></label><label>熟悉项目<select id="ccFamiliar"><option value="include">包含已标记熟悉的词句</option><option value="exclude">排除已标记熟悉的词句</option></select></label><section id="ccPick" hidden><label>搜索词句<input id="ccPickSearch" type="search" placeholder="输入老挝语或中文"></label><label><input id="ccPickWeak" type="checkbox">只看上次陌生或模糊</label><div id="ccPickRows" class="cc-pick-rows"></div></section><p id="ccQuestionCount" class="cc-count-summary" role="status"></p><p class="tag-hint">可选择是否包含熟悉项目；听音模式揭晓前只提供播放，不显示答案和例句。没有中文或老挝语的项目会跳过；不调用语音生成，不自动判定口语发音。</p><label>检测后的学习清单<select id="ccReviewMode"><option value="none">只检测，不加入每日清单</option><option value="weak">检测完成后，将陌生和模糊词加入明日复习</option><option value="all">检测完成后，将全部已测词加入明日复习</option></select></label><button class="primary">开始检测</button></form>');
  for(const [id,name,fallback]of [['ccScope','Scope','current'],['ccKind','Kind','all'],['ccDirection','Direction','lao'],['ccOrder','Order','ordered']])$('#'+id).value=(typeof appPreference==='function'&&appPreference('courseCheck'+name))||fallback;
  $('#ccFamiliar').value=(typeof appPreference==='function'&&appPreference('includeFamiliar')===false)?'exclude':'include';const picked=new Set();
  const ratingMaps=[ratings,typeof ccResultValid==='function'?courseCheckRatings(snap,course.id,true):new Map()];
@@ -11701,6 +11741,8 @@ function ccFastContext(queue,course,direction,snap){
 </script>
 <style data-lesson-polish="lesson-polish.css">
 /* Compact mobile hierarchy, with original content/actions and accessible touch targets. */
+.cc-group-setup .cc-group-familiar{display:flex;align-items:center;gap:8px}
+.cc-group-setup .cc-group-familiar input{width:auto;margin:0;accent-color:#087e6e}
 .cc-count-summary{padding:12px 14px;background:#edf6f2;border-radius:12px;font-size:14px;color:#245d4e;line-height:1.6}
 .cc-session-meta{display:flex;justify-content:space-between;gap:12px;align-items:baseline;color:#5e786e;font-size:13px;margin:4px 0 12px}.cc-session-meta small{text-align:right;font-size:12px}
 .cc-progress{height:4px;background:#e9efec;border-radius:6px;overflow:hidden;margin:0 0 12px}.cc-progress>span{display:block;height:100%;background:#168771;border-radius:inherit}

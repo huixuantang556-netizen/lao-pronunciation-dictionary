@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="313dab2ce6c661b6">
+  <meta name="lao-app-build" content="3d9fade588c2c8c6">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -525,7 +525,7 @@
         <div class="filters"><label class="page-size">每页 <select id="pageSize" aria-label="每页显示数量"><option value="5">5 条</option><option value="10" selected>10 条</option><option value="15">15 条</option></select></label></div>
         <div class="dictionary-tag-filter"><p><strong>先选大类，再选小标签</strong></p><label>内容大类<select id="dictionaryKind"><option value="all">全部内容</option><option value="words">单词</option><option value="letters">字母／元音符号</option><option value="drills">拼读练习</option><option value="sentences">句子（含课程例句／对话）</option><option value="phrases">短语／句子</option></select></label><label>小标签分组<select id="dictionaryTagGroup"><option value="topics">生活与主题</option><option value="grammar">词性与语法</option><option value="phonetics">字母与发音</option><option value="source">教材与课次</option><option value="other">其他标签</option><option value="all">全部小标签</option></select></label><p class="tag-hint">小标签仅来自当前大类；切换大类会清空旧标签筛选。分组只整理标签显示，已选标签始终保留。</p><label>匹配方式<select id="dictionaryTagMode"><option value="any">满足任一标签（扩大范围）</option><option value="all">满足全部标签（缩小范围）</option></select></label><input type="search" id="dictionaryTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="我的词典标签搜索" /><p id="dictionaryTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="dictionaryTags" class="tag-picker"></div><button type="button" id="clearDictionaryTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><div class="dictionary-display-filter"><p><strong>卡片显示内容（可多选）</strong></p><div id="dictionaryFields" class="tag-picker"></div><p class="tag-hint">可只保留老挝语、音标、中文或备注中的任意一项；至少保留一项。</p></div></div>
         <div id="dictionaryBatchTools" class="selection-toolbar"><button type="button" id="toggleDeleteMode" aria-pressed="false" aria-controls="selectionTools">批量删除</button></div>
-        <details class="dictionary-settings" id="speechQueueSettings"><summary>勾选生成默认发音</summary><button type="button" id="speechSelectMode">选择要生成的词条</button><section class="recording"><p id="speechQueueStatus" role="status"></p><button type="button" id="speechQueueStart">开始 / 继续</button> <button type="button" id="speechQueuePause">暂停</button> <button type="button" id="speechQueueClear">清空待办</button><p class="tag-hint">仅生成勾选内容，每次请求间隔15秒，遇限流暂停。保持页面打开和电脑唤醒；重新打开后手动继续。音频保存后可云端同步。</p></section></details><button type="button" id="closeDictionarySettings">完成设置 · 收起</button></details><p class="count" id="count"></p><div id="selectionTools" class="hidden"><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="queueSelectedSpeech">加入发音队列</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p></div><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
+        <details class="dictionary-settings" id="speechQueueSettings"><summary>勾选生成默认发音</summary><button type="button" id="speechSelectMode">选择要生成的词条</button><section class="recording"><p id="speechQueueStatus" role="status"></p><button type="button" id="speechQueueStart">开始 / 继续</button> <button type="button" id="speechQueuePause">暂停</button> <button type="button" id="speechQueueClear">清空待办</button><p class="tag-hint">仅生成勾选内容，每次请求间隔15秒，遇限流暂停。保持页面打开和电脑唤醒；重新打开后手动继续。音频保存后可云端同步。</p></section></details><button type="button" id="closeDictionarySettings">完成设置 · 收起</button></details><p class="count" id="count"></p><div id="dictionaryLocalStatus" role="status" hidden></div><div id="selectionTools" class="hidden"><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="queueSelectedSpeech">加入发音队列</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p></div><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
       </section>
       <section class="panel practice hidden" id="practicePanel" aria-labelledby="practice-title">
         <h2 id="practice-title">多方向默写练习</h2>
@@ -725,7 +725,8 @@ async function importCodaClassroom(){
       let viewReady;
       cancelAlphabetClick();
       activeView=view;navigationTouched=true;rememberCurrentPage();
-      if(view==='dictionary'||view==='add')viewReady=render({includePractice:false});
+      if(view==='dictionary')viewReady=loadDictionaryView();
+      if(view==='add')viewReady=render({includePractice:false});
       if(view==='alphabet')viewReady=renderAlphabet();
       if(view==='learning')viewReady=renderLearning().catch(learningError);
       if(view==='pronunciation')viewReady=renderPronunciation();
@@ -867,7 +868,35 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
       }catch(error){$('#bulkStatus').textContent=committed?`词条已保存，但列表刷新失败，请刷新网页：${error.message}`:`未保存本批词条：${error.message}。请重新检查并预览后重试。`;bulkReadyText=null;}
       finally{$('#bulkPreviewButton').disabled=false;$('#bulkText').disabled=false;}
     }
-    async function openDB(force=false) { if(force) resetDBConnection(); if(db)return db; if(dbOpening)return dbOpening; dbOpening=new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-private-pronunciation-dictionary'),3);req.onupgradeneeded=()=>{for(const name of ['learningMaterials','learningPlacements','learningAudio'])if(!req.result.objectStoreNames.contains(name))req.result.createObjectStore(name,{keyPath:'id'});if(!req.result.objectStoreNames.contains('cloud_meta'))req.result.createObjectStore('cloud_meta');if(!req.result.objectStoreNames.contains(storeName))req.result.createObjectStore(storeName,{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{db=req.result;db.onversionchange=()=>resetDBConnection();resolve(db);};req.onerror=()=>reject(req.error||new Error('无法打开本地数据库'));req.onblocked=()=>reject(new Error('本地数据库正被另一个页面占用，请关闭其他词典页面后重试。'));}); try{return await dbOpening;}finally{dbOpening=null;} }
+    async function openDB(force=false){
+      if(force)resetDBConnection();
+      if(db)return db;
+      if(dbOpening)return dbOpening;
+      const pending=new Promise((resolve,reject)=>{
+        const req=indexedDB.open(workspaceName('lao-private-pronunciation-dictionary'),3);
+        let settled=false;
+        const fail=error=>{if(!settled){settled=true;clearTimeout(timer);reject(error);}};
+        const timer=setTimeout(()=>fail(new DOMException('打开本机资料超时','TimeoutError')),6000);
+        req.onupgradeneeded=()=>{
+          if(settled){req.transaction.abort();return;}
+          for(const name of ['learningMaterials','learningPlacements','learningAudio'])
+            if(!req.result.objectStoreNames.contains(name))req.result.createObjectStore(name,{keyPath:'id'});
+          if(!req.result.objectStoreNames.contains('cloud_meta'))req.result.createObjectStore('cloud_meta');
+          if(!req.result.objectStoreNames.contains(storeName))req.result.createObjectStore(storeName,{keyPath:'id',autoIncrement:true});
+        };
+        req.onsuccess=()=>{
+          const connection=req.result;
+          if(settled||dbOpening!==pending){connection.close();fail(new DOMException('本机连接已重置','AbortError'));return;}
+          settled=true;clearTimeout(timer);db=connection;
+          connection.onversionchange=()=>{if(db===connection)resetDBConnection();else connection.close();};
+          resolve(connection);
+        };
+        req.onerror=()=>fail(req.error||Error('无法打开本地数据库'));
+        req.onblocked=()=>fail(Error('本地数据库正被另一个页面占用，请关闭其他词典页面后重试。'));
+      });
+      dbOpening=pending;
+      try{return await pending;}finally{if(dbOpening===pending)dbOpening=null;}
+    }
     function resetDBConnection() { try{db?.close();}catch(_){} db=null; dbOpening=null; }
     function request(req) { return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('数据库操作失败'));}); }
     function transactionDone(transaction) { return new Promise((resolve,reject)=>{transaction.oncomplete=()=>resolve();transaction.onerror=()=>reject(transaction.error||new Error('数据库事务失败'));transaction.onabort=()=>reject(transaction.error||new Error('数据库事务被中断'));}); }
@@ -880,20 +909,19 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
       for(let attempt=0;attempt<2;attempt++){
         try{
           return await new Promise((resolve,reject)=>{
-            let tx,settled=false;
+            let tx,timer,settled=false;
             const finish=(error,value)=>{
               if(settled)return;
               settled=true;
               clearTimeout(timer);
               if(error)reject(error);else resolve(value);
             };
-            const timer=setTimeout(()=>{
-              finish(new DOMException('读取本机资料超时','TimeoutError'));
-              try{tx?.abort();}catch(_){}
-            },8000);
             openDB().then(database=>{
-              if(settled)return;
               tx=database.transaction(stores,'readonly');
+              timer=setTimeout(()=>{
+                finish(new DOMException('读取本机资料超时','TimeoutError'));
+                try{tx.abort();}catch(_){}
+              },8000);
               const results={};
               tx.oncomplete=()=>finish(null,results);
               tx.onabort=()=>finish(tx.error||new DOMException('读取本机资料被中断','AbortError'));
@@ -914,12 +942,33 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         }
       }
     }
+    async function localReadRows(name,{limit=Infinity}={}){
+      const bounded=limit!==Infinity||typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches;
+      if(!bounded||typeof IDBKeyRange==='undefined')return (await localRead([name],store=>store.getAll()))[name].slice(0,limit);
+      const rows=[];
+      let after, size=name===storeName?48:96;
+      while(rows.length<limit){
+        const count=Math.min(size,limit-rows.length),range=after===undefined?null:IDBKeyRange.lowerBound(after,true);
+        let batch;
+        try{batch=(await localRead([name],store=>store.getAll(range,count)))[name];}
+        catch(error){
+          if(size<=12||!localReadCanRetry(error))throw error;
+          size=12;continue;
+        }
+        rows.push(...batch);
+        if(batch.length<count)break;
+        after=batch[batch.length-1].id;
+        if(rows.length<limit)await new Promise(resolve=>setTimeout(resolve,0));
+      }
+      return rows;
+    }
     async function withStore(mode, operation, attempt=0) { let transaction; try { const database=await openDB(); transaction=database.transaction(storeName,mode); const result=await operation(transaction.objectStore(storeName)); await transactionDone(transaction); return result; } catch(error) { if(attempt<1&&shouldReconnect(error)){resetDBConnection();return withStore(mode,operation,attempt+1);} throw error; } }
     const getEntry=id=>withStore('readonly',store=>request(store.get(id)));
     const addEntry=item=>withStore('readwrite',store=>request(store.add(item)));
     const putEntry=item=>withStore('readwrite',store=>request(store.put(item)));
     const deleteEntry=id=>withStore('readwrite',store=>request(store.delete(id)));
     async function allEntries() { const read=async()=>(await localRead([storeName],store=>store.getAll()))[storeName].sort((a,b)=>b.updatedAt-a.updatedAt),scope=((typeof ssDetailRenderGate==='undefined'?null:ssDetailRenderGate)||(typeof dfDetailScope==='undefined'?null:dfDetailScope));return scope?(scope.entries||(scope.entries=read())):read(); }
+    async function readDictionaryDisplayEntries(){return (await localReadRows(storeName)).sort((a,b)=>b.updatedAt-a.updatedAt);}
     function audioDataBuffer(value) { if(value instanceof ArrayBuffer)return value; if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength); return null; }
     function audioBlobFor(item) { if(typeof item?.audioDataUrl==='string'&&item.audioDataUrl){try{return dataURLToBlob(item.audioDataUrl);}catch(_){return null;}} const buffer=audioDataBuffer(item?.audioData); if(buffer)return new Blob([buffer],{type:item.audioType||'audio/webm'}); return item?.audio instanceof Blob?item.audio:null; }
     function hasAudio(item) { return Boolean(audioBlobFor(item)); }
@@ -928,19 +977,6 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function newSyncId() { return globalThis.crypto?.randomUUID?.()||`entry-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
     async function migrateSyncIds() { const items=await allEntries(); for(const item of items) if(!item.syncId) await putEntry({...item,syncId:newSyncId()}); }
     async function seed() { if(cloudWorkspace)return; for (const item of [{word:'ສະບາຍດີ',ipa:'sa.bāːj.diː',meaning:'你好',category:'问候'},{word:'ຂອບໃຈ',ipa:'kʰɔ̀ːp.caj',meaning:'谢谢',category:'日常用语'},{word:'ນ້ຳ',ipa:'nâm',meaning:'水',category:'生活'}]) await addEntry({...item,syncId:newSyncId(),audio:null,audioData:null,audioDataUrl:null,updatedAt:Date.now()}); }
-    async function prepareLocalEntries(){
-      const items=await allEntries();
-      for(const item of items){
-        let changes;
-        if(!item.audioDataUrl&&item.audioStorage!=='blob-v1'){
-          const blob=audioBlobFor(item);
-          if(blob)changes=await audioPayload(blob);
-        }
-        if(!item.syncId)changes={...changes,syncId:newSyncId()};
-        if(changes)await putEntry({...item,...changes});
-      }
-      if(!items.length)await seed();
-    }
     function tagsFor(item) { return [...new Set((item.category||'').split(/[,，]/).map(tag=>tag.trim()).filter(Boolean))]; }
     function legacyEntryKey(item) { return JSON.stringify([(item.word||'').normalize('NFC').trim(),(item.ipa||'').normalize('NFC').trim(),(item.meaning||'').normalize('NFC').trim(),tagsFor(item).map(tag=>tag.normalize('NFC')).sort(),(item.note||'').normalize('NFC').trim()]); }
     function matchesSelectedTags(item,selectedTags,mode) { if(!selectedTags.length)return true; const tags=tagsFor(item); return mode==='all'?selectedTags.every(tag=>tags.includes(tag)):selectedTags.some(tag=>tags.includes(tag)); }
@@ -982,7 +1018,8 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     function loadDictionaryFields() { try { const saved=JSON.parse(localStorage.getItem('lao-dictionary-display-fields')); if(Array.isArray(saved)){const fields=saved.filter(field=>field in dictionaryFieldLabels);if(fields.length)return new Set(fields);} }catch(_){} return new Set(Object.keys(dictionaryFieldLabels)); }
     function saveDictionaryFields() { try{localStorage.setItem('lao-dictionary-display-fields',JSON.stringify([...selectedDictionaryFields]));}catch(_){} }
     function renderDictionaryFields() { $('#dictionaryFields').innerHTML=Object.entries(dictionaryFieldLabels).map(([field,label])=>`<button type="button" class="tag-choice" data-dictionary-field="${field}" aria-pressed="${selectedDictionaryFields.has(field)}">${label}</button>`).join(''); }
-    async function render({includePractice=true}={}) { const [items,sentenceRows]=await Promise.all([allEntries(),typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); if(q){const priorities=new Map(filtered.map(item=>[item,searchPriority(item,q)]));filtered.sort((a,b)=>priorities.get(a)-priorities.get(b));}const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); }
+    let dictionaryRenderRun=0;
+    async function render({includePractice=true}={}) { const run=++dictionaryRenderRun;const [items,sentenceRows]=await Promise.all([includePractice?allEntries():readDictionaryDisplayEntries(),typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); if(run!==dictionaryRenderRun)return; $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); if(q){const priorities=new Map(filtered.map(item=>[item,searchPriority(item,q)]));filtered.sort((a,b)=>priorities.get(a)-priorities.get(b));}const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); const localStatus=$('#dictionaryLocalStatus');if(localStatus)localStatus.hidden=true; }
     function searchPriority(item, query) { if(!query)return 0; const includes=field=>(item[field]||'').toLowerCase().includes(query); if(['word','meaning'].some(includes))return 0; if(['ipa','category'].some(includes))return 1; return 2; }
     async function pasteIntoField(targetId, statusId, replaceAll=false) {
       const field=$('#'+targetId),status=$('#'+statusId),before=field.value,start=field.selectionStart??before.length,end=field.selectionEnd??before.length;
@@ -1461,19 +1498,65 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
     $('#dictionaryFields').onclick=e=>{const button=e.target.closest('[data-dictionary-field]');if(!button)return;const field=button.dataset.dictionaryField;if(selectedDictionaryFields.has(field)){if(selectedDictionaryFields.size===1){alert('卡片至少保留一项显示内容。');return;}selectedDictionaryFields.delete(field);}else selectedDictionaryFields.add(field);saveDictionaryFields();render();};
     $('#pagination').onclick=e=>{const button=e.target.closest('[data-page]');if(!button||button.disabled)return;const action=button.dataset.page;if(action==='first')dictionaryPage=1;if(action==='previous')dictionaryPage--;if(action==='next')dictionaryPage++;if(action==='last')dictionaryPage=Number.MAX_SAFE_INTEGER;render();};
     $('#entries').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const action=['play','ai','focus','edit','delete'].find(name=>name in b.dataset);if(!action)return;const id=Number(b.dataset[action]),item=await getEntry(id);if(!item)return;if(action==='play'){playStoredAudio(item);return;}if(action==='ai'){playEntrySpeech(item,'default');return;}if(action==='focus'){await putEntry({...item,needsExtraPractice:!item.needsExtraPractice});await render();return;}if(action==='delete'){if(confirm(`删除“${item.word}”及其录音吗？`)){await deleteEntry(id);if(editingId===id)resetForm();if(practiceId===id)practiceId=null;await render();choosePractice();}return;}if(action==='edit'){loadNoteImages(item);removePersonalAudio=false;editingId=id;syncRecordingPosition();$('#word').value=item.word;$('#ipa').value=item.ipa;$('#meaning').value=item.meaning;$('#category').value=item.category;$('#note').value=item.note||'';clearCurrentAudio();const storedBlob=audioBlobFor(item);if(storedBlob)setBlob(storedBlob,'已保留原有录音；重新录音会替换它。');else $('#recordStatus').textContent='这个词条还没有录音。';$('#editNote').classList.remove('hidden');$('#saveButton').textContent='保存修改';$('#cancelButton').classList.remove('hidden');showView('add');$('#form-title').textContent='修改词条';}};
+    let dictionaryViewLoad=null;
+    function loadDictionaryView(){
+      if(dictionaryViewLoad)return dictionaryViewLoad;
+      const status=$('#dictionaryLocalStatus');
+      status.hidden=false;
+      status.textContent='正在读取本机词典…';
+      const task=(async()=>{
+        try{
+          const entries=$('#entries'),initial=!entries.childElementCount&&!$('#search').value.trim()&&!selectedDictionaryTags.size&&$('#dictionaryKind').value==='all';
+          if(initial){
+            const generation=dictionaryRenderRun;
+            let preview=await localReadRows(storeName,{limit:12});
+            if(!preview.length&&!cloudWorkspace){await ensureDictionarySeed();preview=await localReadRows(storeName,{limit:12});}
+            if(generation===dictionaryRenderRun&&activeView==='dictionary'&&!entries.childElementCount&&preview.length&&!$('#search').value.trim()){
+              entries.innerHTML=preview.map(item=>'<article class="entry"><div><span class="word" lang="lo">'+escapeHtml(item.word)+'</span><div class="meaning">'+escapeHtml(item.meaning||'')+'</div></div><div class="actions"><button data-learn="word-detail" data-word="'+item.id+'">详情</button></div></article>').join('');
+              status.textContent='已显示部分本机词条，正在读取完整词典…';
+              await new Promise(resolve=>setTimeout(resolve,32));
+            }
+          }
+          if(activeView==='dictionary')await render({includePractice:false});
+        }catch(error){
+          console.warn('Dictionary local read failed',error);
+          status.hidden=false;status.textContent='本机词典读取中断。';
+          const retry=document.createElement('button');
+          retry.type='button';retry.textContent='重试读取';retry.onclick=()=>void loadDictionaryView();
+          status.append(retry);
+        }
+      })();
+      dictionaryViewLoad=task;
+      return task.finally(()=>{if(dictionaryViewLoad===task)dictionaryViewLoad=null;});
+    }
+    let dictionarySeedTask;
+    function ensureDictionarySeed(){
+      if(!dictionarySeedTask)dictionarySeedTask=localRead([storeName],store=>store.count()).then(counts=>{if(!counts[storeName])return seed();}).finally(()=>{dictionarySeedTask=null;});
+      return dictionarySeedTask;
+    }
     async function startLocalDictionary(){
       try{
-        await openDB();
-        await prepareLocalEntries();
-        const classroomImport=await importCodaClassroom();
-        if(classroomImport.added||classroomImport.linked){
-          await migrateSyncIds();
-          $('#codaStatus').textContent='课堂例词已保存：新增 '+classroomImport.added+' 条，关联已有 '+classroomImport.linked+' 条。';
-        }
-        if(!await restoreCurrentPage()&&activeView==='dictionary'&&!navigationTouched)await render({includePractice:false});
-      }catch(error){alert('无法打开本地词典数据库：'+error.message);}
+        if(!await restoreCurrentPage()&&activeView==='dictionary'&&!navigationTouched)await loadDictionaryView();
+      }catch(error){
+        console.warn('Could not restore the last view',error);
+        if(activeView==='dictionary')await loadDictionaryView();
+      }
     }
     window.laoLocalStartup=startLocalDictionary();
+    void window.laoLocalStartup.then(()=>{
+      const prepare=async()=>{
+        if(learningHasWork()||recorder||backupBusy)return;
+        try{
+          const classroom=await importCodaClassroom();
+          if(classroom.added||classroom.linked){
+            $('#codaStatus').textContent='课堂例词已保存';
+            if(activeView==='dictionary')await loadDictionaryView();
+          }
+        }catch(error){console.warn('Classroom intake deferred',error);}
+      };
+      if(typeof requestIdleCallback==='function')requestIdleCallback(prepare);
+      else setTimeout(prepare,2000);
+    });
     // Cloud sync core: three-way merge, immutable audio and conditional writes.
 /* Bounded text batches; never upsert over another device's revision. */
 const cloudBatchCapabilities=new WeakMap();
@@ -8360,7 +8443,7 @@ async function scRender(){
   await new Promise(resolve=>setTimeout(resolve,32));
   if(!current()||!pending?.isConnected)return;
   try{
-   const words=await allEntries();
+   const words=await (typeof readDictionaryDisplayEntries==='function'?readDictionaryDisplayEntries():allEntries());
    if(current()&&pending.isConnected)pending.outerHTML=rrHomeSectionHtml(rrModel(snap,words));
   }catch(error){
    if(current()&&pending.isConnected){pending.removeAttribute('aria-busy');pending.querySelector('[role=status]').textContent='复习记录读取失败：'+error.message;}
@@ -8843,7 +8926,7 @@ async function rrRecords(kind='new'){
 
 }
 
-async function rrRead(){const [snap,words]=await Promise.all([typeof dfReadTextSnapshot==='function'?dfReadTextSnapshot().then(s=>{const copy={...s};delete copy.detailReadOnly;return copy;}):learningSnapshot(),allEntries()]);return {snap,words,model:rrModel(snap,words)};}
+async function rrRead(){const [snap,words]=await Promise.all([typeof dfReadTextSnapshot==='function'?dfReadTextSnapshot().then(s=>{const copy={...s};delete copy.detailReadOnly;return copy;}):learningSnapshot(),typeof readDictionaryDisplayEntries==='function'?readDictionaryDisplayEntries():allEntries()]);return {snap,words,model:rrModel(snap,words)};}
 async function rrAttempt(item,direction,rating,id,source='review',cursor=null,options={}){
  const [snap,words]=await Promise.all([learningSnapshot(),allEntries()]),current=rrCatalog(snap,words).find(w=>reviewKeys(w).some(k=>reviewKeys(item).includes(k)));
  if(!current||rrSignature(current)!==rrSignature(item))throw Error('词句已修改或删除，请重新打开本轮');
@@ -11084,13 +11167,14 @@ openDB=async function(...args){
  }});dfDbProxies.set(db,proxy);return proxy;
 };
 async function dfReadTextSnapshot(){
- const rows=await localRead(['learningMaterials','learningPlacements'],store=>store.getAll());
- return {...rows,learningAudio:[],detailReadOnly:true};
+ const learningMaterials=await localReadRows('learningMaterials');
+ const learningPlacements=await localReadRows('learningPlacements');
+ return {learningMaterials,learningPlacements,learningAudio:[],detailReadOnly:true};
 }
 async function dfGetData(){
  dfCheckStamp();if(dfData&&Date.now()-dfData.at<120000)return dfData;if(dfLoading)return dfLoading;
  const revision=dfRevision,task=(async()=>{
-  const [snap,words]=await Promise.all([dfReadTextSnapshot(),withStore('readonly',store=>request(store.getAll())).then(rows=>rows.sort((a,b)=>b.updatedAt-a.updatedAt))]);
+  const [snap,words]=await Promise.all([dfReadTextSnapshot(),readDictionaryDisplayEntries()]);
   if(revision!==dfRevision)return dfGetData();const result={snap,words,revision,at:Date.now()};dfData=result;return result;
  })();dfLoading=task;try{return await task;}finally{if(dfLoading===task)dfLoading=null;}
 }

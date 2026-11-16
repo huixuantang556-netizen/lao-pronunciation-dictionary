@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="2cc9cdb1c4a6e559">
+  <meta name="lao-app-build" content="485c9412b64bc77e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4367,7 +4367,7 @@ async function lessonQueueDurations(playlist,current){
  await Promise.all(Array.from({length:Math.min(typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches?1:4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
 function lessonPageClearGap(){if(lessonPageGapTimer!==undefined){clearTimeout(lessonPageGapTimer);lessonPageGapTimer=undefined;}}
-function lessonPageStop(){lessonPageClearGap();lessonPagePauseCurrent=null;lessonPagePaused=false;lessonPageResumeCurrent=null;lessonPagePlayAttempt++;lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+function lessonPageStop(){lessonPageResizeObserver?.disconnect();lessonPageResizeObserver=null;lessonPageClearGap();lessonPagePauseCurrent=null;lessonPagePaused=false;lessonPageResumeCurrent=null;lessonPagePlayAttempt++;lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course,grouped=false){
  let blocks=section.blocks;
@@ -4771,7 +4771,7 @@ document.addEventListener('click',e=>{
  if(e.target.closest('[data-learn], [data-view], [data-cf-record], [data-cf-regenerate]'))lessonPageStop();
 },true);
 
-let lessonPageAnchor=null,lessonPageHost=null,lessonPageFollowFrame=false;
+let lessonPageAnchor=null,lessonPageHost=null,lessonPageFollowFrame=false,lessonPageResizeObserver=null;
 function lessonPageFollow(){
  const bar=lessonPageBar;if(!bar?.isConnected||bar.id==='ccContinuous'||typeof bar.getBoundingClientRect!=='function')return;
  if(!lessonPageAnchor||lessonPageAnchor.nextElementSibling!==bar){lessonPageAnchor?.remove();lessonPageAnchor=document.createElement('div');lessonPageAnchor.setAttribute('aria-hidden','true');bar.before(lessonPageAnchor);}
@@ -4780,8 +4780,16 @@ function lessonPageFollow(){
  const style=typeof window!=='undefined'?window.getComputedStyle?.(bar):null;
  if(!bar.classList.contains('page-player-floating'))bar.pageFlowHeight=bar.offsetHeight+(parseFloat(style?.marginTop)||0)+(parseFloat(style?.marginBottom)||0);
  lessonPageAnchor.style.height=floated?(bar.pageFlowHeight||bar.offsetHeight)+'px':'0px';
- if(typeof window!=='undefined'&&bar.style){const height=window.innerHeight||0,v=window.visualViewport,visibleBottom=v?Math.min(height,v.height+(v.offsetTop||0)):height;let bottom=Math.max(8,height-visibleBottom+8);const nav=document.querySelector?.('#viewNav'),rect=nav?.getBoundingClientRect?.();if(rect&&rect.height>0&&rect.top>=0&&rect.top<visibleBottom&&window.getComputedStyle?.(nav).position==='fixed')bottom=Math.max(bottom,height-rect.top+8);bar.style.setProperty('--page-player-bottom',bottom+'px');}
- bar.classList.toggle('page-player-floating',floated);host?.classList.toggle('page-audio-floating-host',floated);host?.style?.setProperty('--page-player-clearance',(bar.offsetHeight+24)+'px');
+ let bottom=20;
+ if(typeof window!=='undefined'&&bar.style){const height=window.innerHeight||0,v=window.visualViewport,visibleBottom=v?Math.min(height,v.height+(v.offsetTop||0)):height;bottom=Math.max(8,height-visibleBottom+8);const nav=document.querySelector?.('#viewNav'),rect=nav?.getBoundingClientRect?.();if(rect&&rect.height>0&&rect.top>=0&&rect.top<visibleBottom&&window.getComputedStyle?.(nav).position==='fixed')bottom=Math.max(bottom,height-rect.top+8);bar.style.setProperty('--page-player-bottom',bottom+'px');}
+ bar.classList.toggle('page-player-floating',floated);host?.classList.toggle('page-audio-floating-host',floated);
+ if(floated){
+  host?.style?.setProperty('--page-player-clearance',Math.ceil(bar.getBoundingClientRect().height+bottom+12)+'px');
+  if(!lessonPageResizeObserver&&typeof ResizeObserver==='function'){
+   lessonPageResizeObserver=new ResizeObserver(lessonPageScheduleFollow);
+   lessonPageResizeObserver.observe(bar);
+  }
+ }else{lessonPageResizeObserver?.disconnect();lessonPageResizeObserver=null;}
 }
 function lessonPageScheduleFollow(){if(lessonPageFollowFrame)return;if(typeof window==='undefined'||!window.requestAnimationFrame){lessonPageFollow();return;}lessonPageFollowFrame=true;window.requestAnimationFrame(()=>{lessonPageFollowFrame=false;lessonPageFollow();});}
 document.addEventListener('scroll',lessonPageScheduleFollow,true);
@@ -10795,7 +10803,8 @@ html,body,body *,body *::before,body *::after{-webkit-tap-highlight-color:transp
 button,a,summary,[role="button"]{touch-action:manipulation}
 @media(hover:none) and (pointer:coarse){button{transition:none}button:not(:disabled):active{filter:brightness(.96)}}
 /* Do not let entry animations turn the panel into a containing block for fixed controls. */
-#learningPanel.page-audio-floating-host{animation:none!important;transform:none!important;overflow:visible!important;padding-bottom:var(--page-player-clearance,180px)}
+#learningPanel.page-audio-floating-host{animation:none!important;transform:none!important;overflow:visible!important}
+#learningPanel.page-audio-floating-host::after{content:"";display:block;height:var(--page-player-clearance,180px);pointer-events:none}
 #learningPanel .lesson-page-player.page-player-floating{bottom:var(--page-player-bottom,20px);z-index:95;max-height:42vh;overflow-y:auto;overscroll-behavior:contain}
 @media(max-width:760px){
  #learningPanel .lesson-page-player.page-player-floating{bottom:var(--page-player-bottom,calc(80px + env(safe-area-inset-bottom)));width:calc(100vw - 20px);max-width:560px;max-height:38dvh;padding:9px 10px;border-radius:14px;box-shadow:0 5px 26px #143d3430}

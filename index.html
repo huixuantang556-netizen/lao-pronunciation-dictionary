@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f0491d5c57a37e32">
+  <meta name="lao-app-build" content="a3f0a704455e6c51">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4277,11 +4277,25 @@ let lessonPageBar=null;
 document.addEventListener('change',e=>{if(e.target.matches('[data-page-speed]')&&lessonPageAudio&&e.target.closest('[data-page-key]')===lessonPageBar)lessonPageAudio.playbackRate=Number(e.target.value)||1;});
 let lessonPageRead=null;
 let lessonPageRun=0,lessonPageAudio=null,lessonPageURL=null,lessonPageJump=null,lessonPageCardJump=null;
-let lessonPageDetailBar=null;
+let lessonPageDetailBar=null,lessonPagePaused=false,lessonPageResumeCurrent=null,lessonPagePlayAttempt=0;
+function lessonPageSetPaused(bar,paused){
+ if(lessonPageBar!==bar)return;
+ lessonPagePaused=paused;
+ if(paused){
+  lessonPagePlayAttempt++;
+  lessonPageAudio?.pause();
+  bar.querySelector('[data-page-status]').textContent='已暂停';
+ }else if(lessonPageResumeCurrent){
+  void lessonPageResumeCurrent();
+ }else{
+  bar.querySelector('[data-page-status]').textContent='正在准备播放…';
+ }
+}
+function lessonPageTogglePause(bar){lessonPageSetPaused(bar,!lessonPagePaused);}
 function lessonPageBeginDetail(){if(lessonPageBar)lessonPageDetailBar=lessonPageBar;}
 function lessonPagePauseForDetail(){
  if(!lessonPageBar||lessonPageDetailBar!==lessonPageBar||typeof learningDialog==='undefined'||!learningDialog.open)return false;
- if(lessonPageAudio&&!lessonPageAudio.paused){lessonPageAudio.pause();const status=lessonPageBar.querySelector('[data-page-status]');if(status)status.textContent='已暂停整页播放，可关闭详情后继续';}return true;
+ if(!lessonPagePaused){lessonPageSetPaused(lessonPageBar,true);const status=lessonPageBar.querySelector('[data-page-status]');if(status)status.textContent='已暂停整页播放，可关闭详情后继续';}return true;
 }
 const lessonDurationCache=new WeakMap(),lessonDurationProbes=new Set();
 const lessonPageMarked=new Map();
@@ -4318,7 +4332,7 @@ async function lessonQueueDurations(playlist,current){
  const durations=new Array(playlist.length);let index=0;
  await Promise.all(Array.from({length:Math.min(typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches?1:4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
-function lessonPageStop(){lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+function lessonPageStop(){lessonPagePaused=false;lessonPageResumeCurrent=null;lessonPagePlayAttempt++;lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course,grouped=false){
  let blocks=section.blocks;
@@ -4460,7 +4474,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
  const status=bar.querySelector('[data-page-status]');
  const current=()=>token===lessonPageRun&&bar.isConnected!==false;
  if(!current())return;lessonPageBar=bar;let ready=false,pendingIndex=0;
- lessonPageCardJump=(id,button)=>{if(!current()||!bar.parentElement?.contains(button))return false;const word=items.findIndex(w=>w.id===id);if(word<0)return false;const index=playlist.findIndex(p=>word===p.at&&p.count>=1);if(index<0)return false;if(ready)void play(index);else pendingIndex=index;return true;};
+ lessonPageCardJump=(id,button)=>{if(!current()||!bar.parentElement?.contains(button))return false;const word=items.findIndex(w=>w.id===id);if(word<0)return false;const index=playlist.findIndex(p=>word===p.at&&p.count>=1);if(index<0)return false;if(ready)void play(index,0,false);else pendingIndex=index;return true;};
  const incremental=playlist.some(part=>part.loadAudio)||typeof learningMobileChapter==='function'&&learningMobileChapter();
  let durations;
  if(incremental){
@@ -4488,10 +4502,11 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
  controls.querySelector('[data-queue-next]').onclick=()=>lessonPageJump?.(position+1);
  lessonPageJump=index=>{if(token!==lessonPageRun)return;lessonPageAudio?.pause();void play(index);};
  controls.hidden=false;seek.max='10000';seek.disabled=!timelineReady;
- seek.oninput=()=>{if(!current()||!timelineReady)return;const time=Math.max(0,Math.min(duration-.001,duration*Number(seek.value)/10000));let index=starts.length-1;while(index>0&&starts[index]>time)index--;const offset=time-starts[index],a=lessonPageAudio,paused=!!a?.paused&&!finished;if(index===position&&a&&!finished){a.queueOffset=offset;try{a.currentTime=(playlist[index].start||0)+offset;}catch(_){}clock.textContent=format(time)+' / '+format(duration);}else void play(index,offset,paused);};
- async function play(index,offset=0,paused=false){
+ seek.oninput=()=>{if(!current()||!timelineReady)return;const time=Math.max(0,Math.min(duration-.001,duration*Number(seek.value)/10000));let index=starts.length-1;while(index>0&&starts[index]>time)index--;const offset=time-starts[index],a=lessonPageAudio,paused=(lessonPagePaused||Boolean(lessonPageResumeCurrent&&a?.paused))&&!finished;if(index===position&&a&&!finished){a.queueOffset=offset;try{a.currentTime=(playlist[index].start||0)+offset;}catch(_){}clock.textContent=format(time)+' / '+format(duration);}else void play(index,offset,paused);};
+ async function play(index,offset=0,paused=lessonPagePaused){
   if(!current())return;
   const run=++partRun;
+  lessonPagePaused=paused;lessonPageResumeCurrent=null;
   lessonPageRead?.abort();lessonPageRead=null;
   if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){lessonPageClearMarked();status.textContent='本页播放完成';finished=true;if(timelineReady){seek.value='10000';clock.textContent=format(duration)+' / '+format(duration);}return;}index=0;}
   finished=false;position=index;
@@ -4499,7 +4514,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
   if(part.loadAudio){
    lessonPageAudio?.pause();
    const controller=lessonPageRead=new AbortController();
-   status.textContent='正在加载第 '+(part.at+1)+' 项公共音频…';
+   status.textContent=lessonPagePaused?'已暂停':'正在加载第 '+(part.at+1)+' 项公共音频…';
    try{
     const blob=await part.loadAudio(controller.signal);
     if(!current()||run!==partRun)return;
@@ -4521,8 +4536,8 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
   a.queueOffset=offset;a.playbackRate=Number(bar.querySelector('[data-page-speed]')?.value)||1;let advanced=false;
   const next=()=>{if(advanced||!currentPart())return;advanced=true;a.pause();void play(index+1);};
   const playbackLabel='正在播放 '+(part.at+1)+(part.count>1?'–'+(part.at+part.count):'')+' / '+total+' 项'+(part.count>1?'（未切分整段，只能按段跳转）':'');
-  status.textContent=paused?'已暂停': '正在准备播放…';
-  a.onplaying=()=>{if(currentPart())status.textContent=playbackLabel;};
+  status.textContent=lessonPagePaused?'已暂停':'正在准备播放…';
+  a.onplaying=()=>{if(currentPart()&&!lessonPagePaused)status.textContent=playbackLabel;};
   const update=(elapsed=Math.max(0,Math.min(durations[index]??Infinity,a.currentTime-(part.start||0))))=>{
    if(!currentPart())return;
    seek.disabled=!timelineReady;
@@ -4547,13 +4562,15 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
   a.ontimeupdate=()=>{if(!currentPart())return;update();if(part.end!=null&&a.currentTime>=part.end)next();};a.onended=next;
   a.onerror=()=>{if(currentPart()){status.textContent='音频播放失败，请检查已保存的音频';lessonPageStop();}};
   async function startPart(){
-   if(!currentPart())return;
+   if(!currentPart()||lessonPagePaused)return;
+   const attempt=++lessonPagePlayAttempt;
+   const currentAttempt=()=>currentPart()&&attempt===lessonPagePlayAttempt&&!lessonPagePaused;
    try{
     await a.play();
-    if(currentPart())status.textContent=playbackLabel;
+    if(currentAttempt())status.textContent=playbackLabel;
    }catch(error){
-    if(!currentPart())return;
-    if(error.name!=='NotAllowedError'){status.textContent='播放失败：'+error.message;lessonPageStop();return;}
+    if(!currentAttempt())return;
+    if(error.name!=='NotAllowedError'&&error.name!=='AbortError'){status.textContent='播放失败：'+error.message;lessonPageStop();return;}
     status.textContent='音频已就绪，请点一下继续播放。';
     const retry=document.createElement('button');retry.type='button';retry.dataset.pageResumeAudio='';
     retry.textContent='继续播放';
@@ -4561,7 +4578,8 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[]){
     status.append(retry);
    }
   }
-  if(!paused)await startPart();
+  lessonPageResumeCurrent=startPart;
+  if(!lessonPagePaused)await startPart();
  }
  ready=true;await play(pendingIndex);lessonPageFollow();
 }
@@ -4666,7 +4684,7 @@ async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await di
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-page-action]');if(!button)return;
  const bar=button.closest('[data-page-key]'),page=lessonPages.get(bar.dataset.pageKey);if(!page)return;
- try{if(button.dataset.pageAction==='pause'){if(lessonPageAudio&&lessonPageBar===bar){if(lessonPageAudio.paused){await lessonPageAudio.play();bar.querySelector('[data-page-status]').textContent='继续播放';}else{lessonPageAudio.pause();bar.querySelector('[data-page-status]').textContent='已暂停';}}}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
+ try{if(button.dataset.pageAction==='pause'){lessonPageTogglePause(bar);}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
 });
 document.addEventListener('click',e=>{
  if(e.target.closest('.cf-tape')?.dataset.cfTapeLanguage)return;
@@ -10399,7 +10417,7 @@ fvOpen=async function(button){
  const fail=e=>{if(host.isConnected)get('[data-page-status]').textContent=e.message;},reset=()=>{seq++;lessonPageStop();page=0;draw();};get('[data-cf-folder]').onchange=get('[data-cf-kind]').onchange=get('[data-cf-search]').oninput=reset;
  get('[data-cf-prev]').onclick=()=>{page--;draw();};get('[data-cf-next]').onclick=()=>{page++;draw();};
  get('[data-cf-create]').onclick=async()=>{const name=prompt('新文件夹名称');if(name===null)return;try{const id=await cfCreateFolder(name);if(!host.isConnected)return;get('[data-cf-folder]').innerHTML=folderOptions();get('[data-cf-folder]').value=id;page=0;draw();}catch(e){fail(e);}};
- get('[data-cf-listen]').onclick=()=>cfFavoritePlaylist([...filtered],bar).catch(fail);get('[data-cf-stop]').onclick=()=>{lessonPageStop();lessonPageClearProgress(bar);get('[data-page-status]').textContent='已终止';};get('[data-cf-pause]').onclick=()=>{if(lessonPageBar!==bar||!lessonPageAudio)return;if(lessonPageAudio.paused)lessonPageAudio.play().catch(fail);else lessonPageAudio.pause();};
+ get('[data-cf-listen]').onclick=()=>cfFavoritePlaylist([...filtered],bar).catch(fail);get('[data-cf-stop]').onclick=()=>{lessonPageStop();lessonPageClearProgress(bar);get('[data-page-status]').textContent='已终止';};get('[data-cf-pause]').onclick=()=>lessonPageTogglePause(bar);
  get('[data-cf-rows]').onchange=async e=>{const b=e.target.closest('[data-cf-move]');if(!b)return;b.disabled=true;try{lessonPageStop();await cfMove(filtered[Number(b.dataset.cfMove)].item,b.value);if(host.isConnected)draw();}catch(e){fail(e);}finally{b.disabled=false;}};
  get('[data-cf-rows]').onclick=async e=>{const b=e.target.closest('[data-cf-play],[data-cf-detail],[data-cf-remove]');if(!b)return;const row=filtered[Number(b.dataset.cfPlay??b.dataset.cfDetail??b.dataset.cfRemove)];if(!row)return;b.disabled=true;const run=++seq;try{if(b.dataset.cfPlay!==undefined)await fvPlay(row.item,()=>run===seq&&host.isConnected);else if(b.dataset.cfDetail!==undefined)await fvDetail(row.item,b);else{lessonPageStop();await fvSetRemoved(row.item);if(host.isConnected)draw();}}catch(e){fail(e);}finally{b.disabled=false;}};draw();
 };

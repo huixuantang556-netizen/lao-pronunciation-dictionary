@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="927797a60687eaef">
+  <meta name="lao-app-build" content="25f56fb2954beb12">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -166,6 +166,11 @@
 .batch-segment{padding:12px;border-bottom:1px solid #dbe9e2}.batch-segment>div{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.batch-segment label{font-size:12px}.batch-segment input[type=number]{width:90px;font-size:13px;padding:6px}
 </style>
 <style data-page-audio-styles>
+#learningPanel .learn-dialogue-actions{display:flex;align-items:center;gap:6px;flex:none;margin-inline-start:auto}
+#learningPanel .learn-block-heading .learn-dialogue-actions .learn-group-test{margin:0}
+.learn-dialogue-status:empty{display:none}
+.learn-dialogue-status{font-size:13px;color:#537368;overflow-wrap:anywhere}
+@media(max-width:640px){#learningPanel .learn-block-heading:has(.learn-dialogue-actions){flex-wrap:wrap}}
 /* Compact lesson navigation and page listening controls. */
 .page-player-mobile{display:none}
 .lesson-page-player [data-page-status]:empty{display:none}
@@ -4078,12 +4083,15 @@ async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop===
  if(c.library==='communication'||visibleSections.some(s=>s.blocks.some(b=>b.contentType==='word-ref')))for(const word of words)for(const ref of syncKeys(word))if(!wordsByRef.has(ref))wordsByRef.set(ref,word);
  const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?wordsByRef.get(m.linkedWordSyncIds[0]):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||''});};
  const teachingTools=b=>c.library==='communication'||!['word-ref','reading','sentence','dialogue'].includes(b.contentType)?'':'<details class="v2-view-options"><summary>批量处理本组</summary><button type="button" data-learn="v2-batch-grammar" data-key="'+h(b.id)+'">构词与语法</button><button type="button" data-learn="v2-batch-phonetics" data-key="'+h(b.id)+'">发音分析</button><button type="button" data-learn="v2-batch-audio" data-key="'+h(b.id)+'">生成／切分音频</button></details>';
- const block=b=>{const m=rec('block',b.id),x=b.content;let body='';if(!lessonV2Displays[b.contentType]?.includes(b.displayType))body='<p>该内容类型暂未支持专用展示</p><pre>'+h(JSON.stringify(x,null,2))+'</pre>';
+ const block=b=>{const m=rec('block',b.id),x=b.content;
+ const sceneDialogue=c.library==='communication'&&b.contentType==='dialogue';
+ const audioManage=sceneDialogue?'<button type="button" class="learn-group-test" data-dialogue-action="manage">音频管理</button>':'';
+ let body='';if(!lessonV2Displays[b.contentType]?.includes(b.displayType))body='<p>该内容类型暂未支持专用展示</p><pre>'+h(JSON.stringify(x,null,2))+'</pre>';
  else if(b.contentType==='knowledge')body='<p class="learn-note">'+h(x.body)+'</p><div class="learn-glyphs">'+(m.alphabetKeys||[]).map(k=>{const [r,c]=k.split(':').map(Number),f=chart[k]??window.learningAlphabetRows()[r]?.[2][c];return f?'<button class="learn-glyph" lang="lo" data-learn="glyph" data-form="'+h(f)+'" data-alphabet-key="'+h(k)+'">'+h(f.replaceAll('x','◌'))+'</button>':'';}).join('')+'</div>'+((m.unresolvedAlphabet||[]).length?'<p>待关联字母：'+h(m.unresolvedAlphabet.join('、'))+'</p>':'');
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
- else body=(b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+(context.mobilePlan&&b.contentType==='word-ref'?mobileChapterCards(context.mobilePlan,x.items,r=>card(r,b.contentType),r=>lessonV2Id(key,'item',r.itemId)):x.items.map(r=>card(r,b.contentType)).join(''))+'</div>';
- return '<section class="learn-knowledge"><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>'+teachingTools(b):'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
+ else body=(!sceneDialogue&&b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+(context.mobilePlan&&b.contentType==='word-ref'?mobileChapterCards(context.mobilePlan,x.items,r=>card(r,b.contentType),r=>lessonV2Id(key,'item',r.itemId)):x.items.map(r=>card(r,b.contentType)).join(''))+'</div>';
+ return '<section class="learn-knowledge"'+(sceneDialogue?' data-dialogue-player="'+h(m?.id||lessonV2Id(key,'block',b.id))+'"':'')+'><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(sceneDialogue?'<div class="learn-dialogue-actions">':'')+audioManage+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+(sceneDialogue?'</div>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(sceneDialogue?'<p class="learn-dialogue-status" data-page-status role="status"></p>':'')+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>'+teachingTools(b):'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  if(selected)lessonV2Sections.set(c.id,selected.id);

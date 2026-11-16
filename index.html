@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="494850ded9b42a60">
+  <meta name="lao-app-build" content="3d6d9e56dcd0d42e">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -451,6 +451,11 @@
 .word-color-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 0 2px}
 .word-color-tools button{min-height:40px;background:var(--soft);color:#46665c}
 .word-color-tools [role=status]{font-size:13px;color:#536e63}
+
+#learningPanel .word-color-mode[hidden]{display:none!important}
+.word-color-tools [data-word-color-done]{order:1;background:#087e6e;color:white;border-color:#087e6e}
+.word-color-tools [role=status]{order:2;flex-basis:100%}
+.word-color-tools [role=status]:empty{display:none}
 </style>
 </head>
 <body>
@@ -4280,13 +4285,22 @@ let lessonPageBar=null;
 document.addEventListener('change',e=>{if(e.target.matches('[data-page-speed]')&&lessonPageAudio&&e.target.closest('[data-page-key]')===lessonPageBar)lessonPageAudio.playbackRate=Number(e.target.value)||1;});
 let lessonPageRead=null,lessonPageGapTimer;
 let lessonPageRun=0,lessonPageAudio=null,lessonPageURL=null,lessonPageJump=null,lessonPageCardJump=null;
-let lessonPageDetailBar=null,lessonPagePaused=false,lessonPageResumeCurrent=null,lessonPagePlayAttempt=0;
+let lessonPageDetailBar=null,lessonPagePaused=false,lessonPageResumeCurrent=null,lessonPagePauseCurrent=null,lessonPagePlayAttempt=0;
+function lessonPageActionLabel(bar,label){
+ const button=bar?.querySelector?.("[data-page-action=pause]");
+ const caption=button?.querySelector?.(".page-player-label");
+ if(caption)caption.textContent=label;
+ button?.setAttribute?.("aria-label",label);
+ button?.setAttribute?.("title",label);
+}
 function lessonPageSetPaused(bar,paused){
  if(lessonPageBar!==bar)return;
  lessonPagePaused=paused;
+ lessonPageActionLabel(bar,paused?"继续播放":"暂停");
  if(paused){
   lessonPagePlayAttempt++;
   lessonPageAudio?.pause();
+  lessonPagePauseCurrent?.();
   bar.querySelector('[data-page-status]').textContent='已暂停';
  }else if(lessonPageResumeCurrent){
   void lessonPageResumeCurrent();
@@ -4335,7 +4349,8 @@ async function lessonQueueDurations(playlist,current){
  const durations=new Array(playlist.length);let index=0;
  await Promise.all(Array.from({length:Math.min(typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches?1:4,playlist.length)},async()=>{while(index<playlist.length){if(!current())throw Error('播放列表已停止');const i=index++,p=playlist[i],start=p.start||0,end=p.end??await lessonBlobDuration(p.blob,current);if(!Number.isFinite(end)||end<=start)throw Error('第 '+(i+1)+' 条音频的时间范围无效');durations[i]=end-start;}}));return durations;
 }
-function lessonPageStop(){if(lessonPageGapTimer!==undefined){clearTimeout(lessonPageGapTimer);lessonPageGapTimer=undefined;}lessonPagePaused=false;lessonPageResumeCurrent=null;lessonPagePlayAttempt++;lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
+function lessonPageClearGap(){if(lessonPageGapTimer!==undefined){clearTimeout(lessonPageGapTimer);lessonPageGapTimer=undefined;}}
+function lessonPageStop(){lessonPageClearGap();lessonPagePauseCurrent=null;lessonPagePaused=false;lessonPageResumeCurrent=null;lessonPagePlayAttempt++;lessonPageRead?.abort();lessonPageRead=null;lessonPageBar?.querySelector('[data-page-resume-audio]')?.remove?.();lessonPageDetailBar=null;lessonPageClearProgress(lessonPageBar);lessonPageClearMarked();if(lessonPageHost){lessonPageHost.classList.remove('page-audio-floating-host');lessonPageHost=null;}lessonPageJump=null;lessonPageCardJump=null;if(lessonPageBar){lessonPageBar.classList?.remove('page-player-floating');if(typeof lessonPageAnchor!=='undefined'&&lessonPageAnchor)lessonPageAnchor.style.height='0px';lessonPageBar=null;}lessonPageRun++;for(const cancel of [...lessonDurationProbes])cancel();if(lessonPageAudio){lessonPageAudio.pause();lessonPageAudio.src='';}lessonPageAudio=null;if(lessonPageURL)URL.revokeObjectURL(lessonPageURL);lessonPageURL=null;}
 function lessonPageText(words){return words.map(w=>w.word).join('.\n\n')+'.';}
 function lessonPageItems(section,course,grouped=false){
  let blocks=section.blocks;
@@ -4441,7 +4456,7 @@ async function lessonPagePlaybackData(page,current,signal){
 async function lessonPageListen(page,bar){
  if(typeof learningCancelChapterTap==='function')learningCancelChapterTap();
  stopPracticeAudio();const token=lessonPageRun;lessonPageBar=bar;
- const status=bar.querySelector('[data-page-status]');status.textContent='正在准备本页音频…';
+ const status=bar.querySelector('[data-page-status]');status.textContent='正在准备本页音频…';lessonPageActionLabel(bar,'暂停');
  if(typeof rememberCurrentPage==='function')rememberCurrentPage();
  let timer,expired=false,data;
  const controller=typeof AbortController==='function'?new AbortController():null;lessonPageRead=controller;
@@ -4506,13 +4521,15 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
  lessonPageJump=index=>{if(token!==lessonPageRun)return;lessonPageAudio?.pause();void play(index);};
  controls.hidden=Boolean(options.dictation);seek.max='10000';seek.disabled=!timelineReady;
  seek.oninput=()=>{if(!current()||!timelineReady)return;const time=Math.max(0,Math.min(duration-.001,duration*Number(seek.value)/10000));let index=starts.length-1;while(index>0&&starts[index]>time)index--;const offset=time-starts[index],a=lessonPageAudio,paused=(lessonPagePaused||Boolean(lessonPageResumeCurrent&&a?.paused))&&!finished;if(index===position&&a&&!finished){a.queueOffset=offset;try{a.currentTime=(playlist[index].start||0)+offset;}catch(_){}clock.textContent=format(time)+' / '+format(duration);}else void play(index,offset,paused);};
- async function play(index,offset=0,paused=lessonPagePaused){
+ async function play(index,offset=0,paused=lessonPagePaused,repetition=1){
   if(!current())return;
+  lessonPageClearGap();lessonPagePauseCurrent=null;
+  if(options.dictation){const input=bar.querySelector("[data-queue-gap]");if(input)input.onchange=null;}
   const run=++partRun;
   lessonPagePaused=paused;lessonPageResumeCurrent=null;
   lessonPageRead?.abort();lessonPageRead=null;
-  if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){lessonPageClearMarked();status.textContent='本页播放完成';finished=true;if(timelineReady){seek.value='10000';clock.textContent=format(duration)+' / '+format(duration);}options.onComplete?.();return;}index=0;}
-  finished=false;position=index;
+  if(index>=playlist.length){if(!bar.querySelector('[data-page-loop]')?.checked){lessonPageClearMarked();status.textContent='本页播放完成';finished=true;lessonPageActionLabel(bar,'重新播放');if(timelineReady){seek.value='10000';clock.textContent=format(duration)+' / '+format(duration);}options.onComplete?.();return;}index=0;}
+  finished=false;lessonPageActionLabel(bar,paused?"继续播放":"暂停");position=index;options.onPosition?.(index);
   let part=playlist[index];lessonPageMark(part,items,bar);
   if(part.loadAudio){
    lessonPageAudio?.pause();
@@ -4540,15 +4557,29 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
   const next=()=>{
    if(advanced||!currentPart())return;
    advanced=true;a.pause();
+   if(repetition<(options.repeats?.()||1)){void play(index,0,lessonPagePaused,repetition+1);return;}
    if(!options.gap||index+1===playlist.length){void play(index+1);return;}
    const label="第 "+(index+1)+" / "+total+" 项 · 书写时间";
-   let waiting=true;
-   if(!lessonPagePaused)status.textContent=label;
-   lessonPageResumeCurrent=()=>{if(waiting)status.textContent=label;else void play(index+1);};
-   lessonPageGapTimer=setTimeout(()=>{
-    waiting=false;
-    if(currentPart()&&!lessonPagePaused)void play(index+1);
-   },options.gap);
+   const gapInput=bar.querySelector("[data-queue-gap]");
+   let elapsed=0,started=null;
+   const freeze=()=>{
+    lessonPageClearGap();
+    if(started!==null){elapsed+=Date.now()-started;started=null;}
+   };
+   const schedule=()=>{
+    freeze();
+    if(!currentPart()||lessonPagePaused)return;
+    status.textContent=label;
+    started=Date.now();
+    const duration=typeof options.gap==="function"?options.gap():options.gap;
+    lessonPageGapTimer=setTimeout(()=>{
+     if(currentPart()&&!lessonPagePaused)void play(index+1);
+    },Math.max(0,duration-elapsed));
+   };
+   lessonPagePauseCurrent=freeze;
+   lessonPageResumeCurrent=schedule;
+   if(gapInput)gapInput.onchange=schedule;
+   schedule();
   };
   const playbackLabel='正在播放 '+(part.at+1)+(part.count>1?'–'+(part.at+part.count):'')+' / '+total+' 项'+(part.count>1?'（未切分整段，只能按段跳转）':'');
   status.textContent=lessonPagePaused?'已暂停':'正在准备播放…';
@@ -4586,6 +4617,8 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
    }catch(error){
     if(!currentAttempt())return;
     if(error.name!=='NotAllowedError'&&error.name!=='AbortError'){status.textContent='播放失败：'+error.message;lessonPageStop();options.onError?.();return;}
+    if(options.onTapRequired){lessonPagePaused=true;status.textContent='音频已就绪，点继续播放。';options.onTapRequired();return;}
+    if(bar.classList?.contains?.('page-player-floating')){lessonPagePaused=true;lessonPageActionLabel(bar,'继续播放');status.textContent='点继续播放。';return;}
     status.textContent='音频已就绪，请点一下继续播放。';
     const retry=document.createElement('button');retry.type='button';retry.dataset.pageResumeAudio='';
     retry.textContent='继续播放';
@@ -4699,7 +4732,7 @@ async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await di
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-page-action]');if(!button)return;
  const bar=button.closest('[data-page-key]'),page=lessonPages.get(bar.dataset.pageKey);if(!page)return;
- try{if(button.dataset.pageAction==='pause'){lessonPageTogglePause(bar);}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
+ try{if(button.dataset.pageAction==='pause'){if(button.getAttribute?.('aria-label')==='重新播放')await lessonPageListen(page,bar);else lessonPageTogglePause(bar);}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
 });
 document.addEventListener('click',e=>{
  if(e.target.closest('.cf-tape')?.dataset.cfTapeLanguage)return;
@@ -7329,6 +7362,24 @@ batchEditor=function(){
  batchDialog.querySelector('#batchFull').parentElement.after(panel);
 };
 </script>
+<style data-cc-dictation>
+.cc-dictation-panel{display:grid;gap:18px}
+.cc-dictation-progress{padding:16px 18px;background:var(--soft,#edf5ef);border:1px solid #d9e7df;border-radius:16px}
+.cc-dictation-progress p{margin:0}
+#ccDictationPosition{font-size:clamp(1.15rem,4vw,1.6rem);line-height:1.3;font-weight:700;font-variant-numeric:tabular-nums}
+.cc-dictation-progress progress{display:block;width:100%;height:8px;margin:10px 0;accent-color:#087e6e}
+.cc-dictation-progress [data-page-status]{min-height:1.5em;color:#47665c;font-size:.9rem}
+.cc-dictation-actions{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:stretch;gap:10px}
+#ccContinuous .cc-dictation-actions button{min-height:60px;margin:0;touch-action:manipulation}
+#ccContinuousStart{font-size:1.15rem;font-weight:700}
+.cc-dictation-settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#ccContinuous .cc-dictation-settings label{display:grid;gap:5px;margin:0;font-size:.83rem}
+#ccContinuous .cc-dictation-settings select{width:100%;min-width:0;min-height:44px;margin:0;padding-inline:8px;font-size:16px}
+#ccContinuous [hidden]{display:none!important}
+#ccRevealAll{width:100%;margin-top:12px}
+#ccContinuousAnswers li{padding:8px 0;border-bottom:1px solid #d9e7df}
+#ccContinuousAnswers p{margin:4px 0 0}
+</style>
 <script data-learning-bundle="course-check">
 /* Course-local recall tests and precise block management. No generated audio or data deletion. */
 function courseCheckGroups(data,course,snap,words,scope,key,kind){
@@ -7491,13 +7542,22 @@ function courseCheckIsDictation(direction){return direction==='dictation'||direc
 function courseCheckContinuous(queue,title){
  const h=learningEsc;
  learningModal('连续听写 · '+title,
-  '<section id="ccContinuous"><p class="cc-count-summary">'+queue.length+' 项 · 播完后统一核对答案</p>'+
-  '<label>每题书写时间<select id="ccWriteGap"><option value="3">3 秒</option><option value="8" selected>8 秒</option><option value="15">15 秒</option><option value="25">25 秒</option></select></label>'+
-  '<p id="ccAudioMissing" class="tag-hint" hidden></p><p data-page-status role="status"></p>'+
-  '<button type="button" class="primary" id="ccContinuousStart">开始播放</button> '+
-  '<button type="button" id="ccRevealAll" hidden>核对全部答案</button><ol id="ccContinuousAnswers" hidden></ol></section>');
+  '<section id="ccContinuous"><div class="cc-dictation-panel"><div class="cc-dictation-progress">'+
+  '<p id="ccDictationPosition">共 '+queue.length+' 项</p><progress max="'+queue.length+'" value="0" aria-label="听写进度"></progress>'+
+  '<p data-page-status role="status">播完后统一核对答案</p></div>'+
+  '<div class="cc-dictation-actions"><button type="button" id="ccDictationPrev" disabled>‹ 上一题</button>'+
+  '<button type="button" class="primary" id="ccContinuousStart">开始播放</button></div>'+
+  '<div class="cc-dictation-settings"><label>书写时间<select id="ccWriteGap" data-queue-gap><option value="3">3 秒</option><option value="8" selected>8 秒</option><option value="15">15 秒</option><option value="25">25 秒</option></select></label>'+
+  '<label>每题播放<select id="ccDictationRepeats"><option value="1">1 遍</option><option value="2">2 遍</option><option value="3">3 遍</option><option value="4">4 遍</option><option value="5">5 遍</option></select></label>'+
+  '<label>语速<select id="ccDictationSpeed" data-page-speed><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option></select></label></div></div>'+
+  '<p id="ccAudioMissing" class="tag-hint" hidden></p><button type="button" class="primary" id="ccRevealAll" hidden>核对全部答案</button><ol id="ccContinuousAnswers" hidden></ol></section>');
  const bar=$('#ccContinuous'),start=$('#ccContinuousStart'),status=bar.querySelector('[data-page-status]');
  const gap=$('#ccWriteGap'),missing=$('#ccAudioMissing'),reveal=$('#ccRevealAll'),answers=$('#ccContinuousAnswers');
+ const previous=$('#ccDictationPrev'),speed=$('#ccDictationSpeed'),repeats=$('#ccDictationRepeats');
+ const position=$('#ccDictationPosition'),progress=bar.querySelector('progress');
+ let at=0;
+ previous.onclick=()=>{if(lessonPageBar===bar&&at>0)lessonPageJump?.(at-1);};
+ speed.onchange=()=>{if(lessonPageBar===bar&&lessonPageAudio)lessonPageAudio.playbackRate=Number(speed.value);};
  let played=[],controller;
  const active=()=>learningDialog.open&&bar.isConnected;
  learningDialog.addEventListener('close',()=>{
@@ -7521,9 +7581,9 @@ function courseCheckContinuous(queue,title){
   const token=lessonPageRun;
   controller=lessonPageRead=new AbortController();
   const read=controller,current=()=>active()&&token===lessonPageRun;
-  const stopWaiting=()=>{if(!current())return;lessonPageStop();status.textContent='读取录音超时，请重试。';start.disabled=gap.disabled=false;};
+  const stopWaiting=()=>{if(!current())return;lessonPageStop();status.textContent='读取录音超时，请重试。';start.disabled=false;};
   const timeout=setTimeout(stopWaiting,15000);
-  start.disabled=gap.disabled=true;
+  start.disabled=true;
   status.textContent='正在查找已保存的录音…';
   try{
    const data=await lessonPagePlaybackData({words:queue.map(row=>({id:row.id,word:row.lao,meaning:row.zh}))},current,read.signal);
@@ -7544,16 +7604,18 @@ function courseCheckContinuous(queue,title){
    start.disabled=false;
    start.textContent='暂停';
    await lessonQueuePlay(playlist,playlist.length,bar,token,[],{
-    dictation:true,gap:Number(gap.value)*1000,
-    onComplete:()=>{lessonPageStop();status.textContent='听写播放完成';start.hidden=true;reveal.hidden=false;reveal.focus();},
-    onError:()=>{start.textContent='重新播放';gap.disabled=false;}
+    dictation:true,gap:()=>Number(gap.value)*1000,repeats:()=>Number(repeats.value),
+    onPosition:index=>{at=index;position.textContent='第 '+(index+1)+' / '+playlist.length+' 题';progress.max=playlist.length;progress.value=index;previous.disabled=!index;},
+    onTapRequired:()=>{start.textContent='继续播放';},
+    onComplete:()=>{lessonPageStop();status.textContent='听写播放完成';progress.value=progress.max;previous.disabled=true;start.hidden=true;reveal.hidden=false;reveal.focus();},
+    onError:()=>{start.textContent='重新播放';previous.disabled=true;}
    });
   }catch(error){
    if(current()){lessonPageStop();status.textContent=error.message||'无法读取录音，请重试。';start.textContent='重新播放';}
   }finally{
    clearTimeout(timeout);
    if(lessonPageRead===read)lessonPageRead=null;
-   if(controller===read&&lessonPageBar!==bar)start.disabled=gap.disabled=false;
+   if(controller===read&&lessonPageBar!==bar)start.disabled=false;
   }
  };
 }
@@ -12107,6 +12169,23 @@ document.addEventListener('pointerover',event=>{if(event.pointerType!=='touch'&&
  #learningPanel #learningContent .lesson-page-player.page-player-floating .page-player-controls{position:relative}
  #learningPanel #learningContent .lesson-page-player.page-player-floating .page-player-controls>details>div{position:absolute;inset:auto 0 calc(100% + 4px);width:100%;max-height:35vh;max-height:35dvh;overflow-y:auto;overscroll-behavior:contain;margin:0;z-index:102;box-shadow:0 10px 28px #143d3420}
 }
+
+@media(max-width:640px){
+ #learningPanel #learningContent .lesson-page-player.page-player-floating{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px;background:#f7fcf9;border:1px solid #c9ded4;border-radius:16px}
+ #learningPanel #learningContent .page-player-floating .page-player-heading{display:none}
+ #learningPanel #learningContent .page-player-floating [data-page-status]{order:0;min-height:1.5em;font-variant-numeric:tabular-nums}
+ #learningPanel #learningContent .page-player-floating .page-progress{order:1;width:100%;box-sizing:border-box}
+ #learningPanel #learningContent .page-player-floating .page-total-progress{font-size:0}
+ #learningPanel #learningContent .page-player-floating .page-player-controls{order:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 6px}
+ #learningPanel #learningContent .page-player-floating .page-player-controls>[data-page-action=play]{display:none}
+ #learningPanel #learningContent .page-player-floating .page-player-controls>[data-page-action=pause]{grid-column:1/-1;grid-row:1;width:100%;height:auto;min-height:56px;justify-content:center;margin:0;border:1px solid #087e6e;border-radius:12px;background:#087e6e;color:#fff;box-shadow:none;touch-action:manipulation;font-size:16px;font-weight:700}
+ #learningPanel #learningContent .page-player-floating [data-page-action=pause] .page-player-label{display:inline;color:inherit;font-size:inherit}
+ #learningPanel #learningContent .page-player-floating [data-page-action=pause] .page-player-mobile{display:none}
+ #learningPanel #learningContent .page-player-floating .page-player-controls>[data-page-action=stop]{grid-row:2;grid-column:1;width:100%;min-height:44px;justify-content:center;margin:0;background:#edf5f0}
+ #learningPanel #learningContent .page-player-floating .page-player-more{grid-row:2;grid-column:2}
+ #learningPanel #learningContent .page-player-floating .cf-mask-controls{grid-row:2;grid-column:3}
+ #learningPanel #learningContent .page-player-floating .page-player-controls>details>summary{min-height:44px;justify-content:center;padding-inline:4px}
+}
 </style>
 <script data-interaction-fast>
 /* Targeted local audio reads; no generation, network request or user-record writes. */
@@ -12203,6 +12282,11 @@ async function sfRead(id){
 function sfSuspendChapterPlayback(){
  if(!learningMobileChapter())return;
  const bar=lessonPageBar;
+ if(bar?.id==='ccContinuous'){
+  lessonPageSetPaused(bar,true);
+  bar.querySelector('#ccContinuousStart').textContent='继续播放';
+  return;
+ }
  if(!bar&&!practiceAudio&&!learningChapterTap)return;
  learningCancelChapterTap();
  for(const key of sfReads.keys())if(!sfReadyReads.has(key))sfReads.delete(key);
@@ -13447,7 +13531,7 @@ let wordColorEditingChapter = '';
 let wordColorClearing = false;
 
 function wordColorModeButton(active){
- return '<button type="button" class="word-color-mode" data-word-color-mode aria-pressed="'+active+'">'+
+ return '<button type="button" class="word-color-mode" data-word-color-mode aria-pressed="'+active+'"'+(active?' hidden':'')+'>'+
   (active?'完成调色':'调整颜色')+'</button>';
 }
 
@@ -13550,7 +13634,7 @@ function wordColorMountClear(){
  }
  if(!toolbar){
   mode.closest('[data-page-key]')?.insertAdjacentHTML('beforeend',
-   '<div class="word-color-tools" data-word-color-tools><button type="button" data-word-color-clear>清除全部颜色</button><span role="status"></span></div>');
+   '<div class="word-color-tools" data-word-color-tools><button type="button" data-word-color-clear>清除全部颜色</button><span role="status"></span><button type="button" data-word-color-done>完成调色</button></div>');
   toolbar=content.querySelector('[data-word-color-tools]');
  }
  if(toolbar)toolbar.querySelector('button').disabled=wordColorClearing;
@@ -13664,17 +13748,20 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
 document.addEventListener('click',event=>{
  const mode=event.target.closest('[data-word-color-mode]');
  const clear=event.target.closest('[data-word-color-clear]');
+ const done=event.target.closest('[data-word-color-done]');
  if(clear){void wordColorClear(clear);return;}
- if(mode){
-  const active=mode.getAttribute('aria-pressed')!=='true';
+ if(mode||done){
+  const active=!done&&mode.getAttribute('aria-pressed')!=='true';
   wordColorEditingChapter=active?workspaceName('word-color')+'|'+learningLesson.id:'';
   for(const control of document.querySelectorAll('[data-word-color-mode]')){
    control.setAttribute('aria-pressed',String(active));
+   control.hidden=active;
    control.textContent=active?'完成调色':'调整颜色';
   }
-  const menu=mode.closest('.cf-mask-controls');
+  const menu=mode?.closest('.cf-mask-controls');
   if(menu)menu.open=false;
   wordColorMountClear();
+  if(done)document.querySelector('#learningContent .cf-mask-controls summary')?.focus?.({preventScroll:true});
   return;
  }
  const button=event.target.closest('[data-word-color-open]');

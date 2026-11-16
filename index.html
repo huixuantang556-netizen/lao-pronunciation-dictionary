@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="485c9412b64bc77e">
+  <meta name="lao-app-build" content="898c0078661ca705">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6365,6 +6365,7 @@ function letterDetailBackButton(){
  if(!letterDetailParents.length||learningDialog.querySelector('[data-letter-detail-back]'))return;
  const button=document.createElement('button');button.type='button';button.dataset.letterDetailBack='';
  button.textContent='← 返回上一级';button.style.cssText='font-size:14px;padding:7px 12px;margin:0 0 12px';
+ button.onclick=event=>{event.preventDefault();event.stopPropagation();learningClose();};
  learningDialog.prepend(button);
  const close=learningDialog.querySelector('[data-learn="close"]');if(close)close.setAttribute('aria-label','返回上一级');
 }
@@ -6387,8 +6388,7 @@ if(typeof learningClose==='function'){
  };
  const parentModal=learningModal;
  learningModal=function(...args){const result=parentModal(...args);letterDetailBackButton();return result;};
- learningDialog.addEventListener('close',()=>{letterDetailParents.length=0;});
- document.addEventListener('click',e=>{if(e.target.closest('[data-letter-detail-back]')){e.preventDefault();learningClose();}});
+ learningDialog.addEventListener('close',()=>{if(!learningDialog.open)letterDetailParents.length=0;});
 }
 </script>
 <script data-practice-vowels>
@@ -7015,11 +7015,21 @@ function saUnitHtml(unit,label){const h=learningEsc;return '<span class="sa-unit
 function saRenderContent(a){
  const h=learningEsc;return '<p class="sa-source">AI 整理／待核对 · '+(a.savedAt?h(new Date(a.savedAt).toLocaleDateString()):'导入预览')+'</p>'+(a.translation?'<details><summary>全文译文（解析附注，不替换原译文）</summary><p>'+h(a.translation)+'</p></details>':'')+(a.notes?'<p class="sa-note">'+h(a.notes)+'</p>':'')+a.segments.map((s,i)=>'<details class="sa-segment"><summary>第 '+(i+1)+' 段 · <span lang="lo">'+h(s.lao)+'</span></summary>'+saUnitHtml(s,'分句点读／录音')+'<p>'+h(s.chinese)+'</p><h4>单词／短语 · 本句用法</h4><div class="sa-words">'+s.words.map(w=>saUnitHtml(w,[w.meaning,w.role].filter(Boolean).join(' · '))).join('')+'</div>'+saGrammarHtml(s.grammar)+'</details>').join('')+(a.patterns.length?'<details><summary>重点句型</summary>'+saGrammarHtml(a.patterns)+'</details>':'')+(a.quiz.length?'<details class="sa-quiz"><summary>语法小测验 · '+a.quiz.length+' 题</summary>'+a.quiz.map((q,i)=>'<fieldset><legend>'+h(q.question)+'</legend><select aria-label="第 '+(i+1)+' 题答案" data-sa-quiz="'+i+'"><option value="">请选择</option>'+q.options.map((x,n)=>'<option value="'+n+'">'+h(x)+'</option>').join('')+'</select><p class="sa-quiz-result" role="status"></p></fieldset>').join('')+'</details>':'');
 }
+let saOpeningNested=false;
 async function saOpenNested(id,button){
  if(learningHasWork()||recorder)throw Error('请先保存解析、编辑内容或完成录音。');
  if(!id)throw Error('请先保存解析，再打开点读资料。');
- const parent=letterDetailCapture(button);stopPracticeAudio({preservePageQueue:true});await learningOpenDetail(id);
- if(parent&&learningDetail===id){letterDetailParents.push(parent);letterDetailBackButton();}
+ if(saOpeningNested||button.isConnected===false||learningDetail===id)return;
+ const parent=letterDetailCapture(button);
+ if(parent)letterDetailParents.push(parent);
+ saOpeningNested=true;
+ try{
+  stopPracticeAudio({preservePageQueue:true});
+  await learningOpenDetail(id);
+ }finally{
+  saOpeningNested=false;
+  if(parent&&learningDialog.open)letterDetailBackButton();
+ }
 }
 async function saPlay(id,options={}){
  const blocked=()=>Boolean((typeof learningBusy!=='undefined'&&learningBusy)||(typeof learningRecorder!=='undefined'&&learningRecorder)||(typeof learningDraft!=='undefined'&&learningDraft?.dirty)||recorder);
@@ -7772,8 +7782,9 @@ function wslRanges(text,analysis){
  return chosen.sort((a,b)=>a.start-b.start);
 }
 function wslSentenceHtml(text,ranges){let at=0,out='';const h=learningEsc;for(const [i,r]of ranges.entries()){out+=h(text.slice(at,r.start))+'<button data-wsl-token="'+i+'" aria-pressed="false">'+h(text.slice(r.start,r.end))+'</button>';at=r.end;}return out+h(text.slice(at));}
+function wslExampleKey(row){return saTextKey(row.textLao).replace(/[.!?。！？]+$/u,'')||row.id;}
 function wslRelated(snap,target,parentId,text=''){
- return snap.learningMaterials.filter(m=>!m.deleted&&!m.analysisOwner&&m.id!==parentId&&['sentence','dialogue'].includes(m.contentType)&&(!text||typeof studyWordOccurs!=='function'||studyWordOccurs(text,m.textLao,m.sentenceAnalysis))&&((target.startsWith('word:')&&(m.linkedWordSyncIds||[]).includes(target.slice(5)))||m.sentenceAnalysis?.segments.some(s=>s.words.some(w=>w.target===target)))).filter((m,i,rows)=>!m.textLao||rows.findIndex(x=>x.textLao===m.textLao&&x.translationZh===m.translationZh)===i);
+ return snap.learningMaterials.filter(m=>!m.deleted&&!m.analysisOwner&&m.id!==parentId&&['sentence','dialogue'].includes(m.contentType)&&(!text||typeof studyWordOccurs!=='function'||studyWordOccurs(text,m.textLao,m.sentenceAnalysis))&&((target.startsWith('word:')&&(m.linkedWordSyncIds||[]).includes(target.slice(5)))||m.sentenceAnalysis?.segments.some(s=>s.words.some(w=>w.target===target)))).filter((m,i,rows)=>rows.findIndex(x=>wslExampleKey(x)===wslExampleKey(m))===i);
 }
 const wslPreviousDetail=learningOpenDetail;
 function wslMeaningTerms(value){return new Set(String(value||'').normalize('NFC').replace(/[（(][^）)]*[）)]/g,'').split(/[；;、，,／/\s]+/u).map(s=>s.trim()).filter(Boolean));}
@@ -7790,7 +7801,7 @@ function wslExampleGroups(snap,word,parentId){
   else if(tokens.some(t=>[...wslMeaningTerms(t.meaning)].some(term=>terms.has(term))))matched.push(item);
   else other.push(item);
  }
- const seen=new Set(),unique=rows=>rows.filter(r=>{const key=JSON.stringify([norm(r.textLao),r.translationZh||'']);if(seen.has(key))return false;seen.add(key);return true;});
+ const seen=new Set(),unique=(rows,keyFor)=>rows.filter(r=>{const key=keyFor(r);if(seen.has(key))return false;seen.add(key);return true;});
  const usage=[],index=typeof cwIndex==='function'?cwIndex(snap.entries||[],snap.learningMaterials):null;
  const usageRows=Array.isArray(snap.detailUsageRows)?snap.detailUsageRows:[...snap.learningMaterials,...(snap.entries||[]).filter(e=>e.syncId&&!e.deleted).map(e=>({id:'word:'+e.syncId,contentType:'word',textLao:e.word,translationZh:e.meaning,source:'我的词典'}))];
  for(const m of usageRows){
@@ -7799,7 +7810,9 @@ function wslExampleGroups(snap,word,parentId){
   const parts=[{lao:q.noun,target:q.target},...q.parts.map(p=>({lao:p[0],target:''})),{lao:q.classifier,target:q.classifierTarget}];
   if(parts.some(p=>norm(p.lao)===text))usage.push({...m,exampleMeanings:[],usagePhrase:true});
  }
- return {linked:unique(linked),matched:unique(matched),other:unique(other),usage:unique(usage)};
+ const phrases=unique(usage,r=>JSON.stringify([norm(r.textLao),r.translationZh||'']));
+ seen.clear();
+ return {linked:unique(linked,wslExampleKey),matched:unique(matched,wslExampleKey),other:unique(other,wslExampleKey),usage:phrases};
 }
 function wslWordExamplesHtml(groups){
  const h=learningEsc,card=r=>'<p><button data-letter-example-material="'+h(r.id)+'"><span lang="lo">'+h(r.textLao)+'</span> · '+h(r.translationZh||'')+'</button>'+(r.exampleMeanings.length?'<small>句中词义：'+h(r.exampleMeanings.join('；'))+'</small>':'')+'<small>'+h(r.source||r.sourceType||'已收录材料')+'</small></p>',list=rows=>rows.slice(0,5).map(card).join('')+(rows.length>5?'<details><summary>更多例句 · '+(rows.length-5)+'</summary>'+rows.slice(5).map(card).join('')+'</details>':'');
@@ -8725,10 +8738,10 @@ function paSegmentTokens(parent,index,snap,entries){
   return {...t,target};
  });
 }
-function paSegmentWordCards(tokens){const h=learningEsc;return '<div class="pa-segment-words">'+tokens.map((t,i)=>'<div class="pa-segment-word"><button type="button" class="pa-segment-word-text" data-pa-segment-action="play" data-pa-token="'+i+'" lang="lo">'+h(t.lao)+'</button><p>'+h(t.meaning||'本段未提供词义')+'</p><div class="pa-toolbar"><button type="button" data-pa-segment-action="play" data-pa-token="'+i+'">▶ 听词语</button><button type="button" data-pa-segment-action="detail" data-pa-token="'+i+'" '+(t.target?'':'disabled')+'>词语详情</button><button type="button" data-pa-segment-action="correct" data-pa-token="'+i+'" '+(t.target?'':'disabled')+'>纠正发音／录音</button></div>'+(!t.target?'<small>尚无唯一对应词卡；可在句子解析设置中关联，不会自动新增词条。</small>':'')+'</div>').join('')+'</div><p class="pa-segment-status pa-muted" role="status"></p>';}
+function paSegmentWordCards(tokens){const h=learningEsc;return '<div class="pa-segment-words">'+tokens.map((t,i)=>'<div class="pa-segment-word"><button type="button" class="pa-segment-word-text" data-pa-segment-action="play" data-pa-token="'+i+'" lang="lo">'+h(t.lao)+'</button><p>'+h(t.meaning||'本段未提供词义')+'</p><div class="pa-toolbar"><button type="button" data-pa-segment-action="play" data-pa-token="'+i+'">▶ 听词语</button><button type="button" data-pa-segment-action="detail" data-pa-token="'+i+'" '+(t.target?'':'disabled')+'>词语详情</button></div>'+(!t.target?'<small>尚无唯一对应词卡；可在句子解析设置中关联，不会自动新增词条。</small>':'')+'</div>').join('')+'</div><p class="pa-segment-status pa-muted" role="status"></p>';}
 function paBindSegmentWords(wrap,tokens){
  const status=wrap.querySelector('.pa-segment-status');let timer=null,run=0;
- const act=async(kind,token,button)=>{const sequence=++run;try{if(!token?.target)throw Error('本词尚无唯一对应的已保存词卡，请先在句子解析设置中关联。');if(kind==='detail')await saOpenNested(token.target,button);else if(kind==='correct')await paCorrectWord(token.target,button);else{status.textContent='';await saPlay(token.target);}}catch(error){if(wrap.isConnected&&sequence===run)status.textContent=error.message;}};
+ const act=async(kind,token,button)=>{const sequence=++run;try{if(!token?.target)throw Error('本词尚无唯一对应的已保存词卡，请先在句子解析设置中关联。');if(kind==='detail')await saOpenNested(token.target,button);else{status.textContent='';await saPlay(token.target);}}catch(error){if(wrap.isConnected&&sequence===run)status.textContent=error.message;}};
  wrap.addEventListener('click',e=>{const b=e.target.closest('[data-pa-segment-action]');if(!b||!wrap.contains(b))return;e.stopPropagation();clearTimeout(timer);const token=tokens[Number(b.dataset.paToken)],kind=b.dataset.paSegmentAction;
   if(kind==='play'){if(e.detail>1)return;timer=setTimeout(()=>{if(wrap.isConnected)void act('play',token,b);},250);}else void act(kind,token,b);
  });
@@ -9052,7 +9065,7 @@ function ssCompose(detail,resolved,id){
  if(detail.dataset.ssLayout)return;detail.dataset.ssLayout='true';detail.dataset.ssWord=String(!!resolved.w);detail.classList.add('ss-detail');
  const {m,w}=resolved,a=m.sentenceAnalysis,trusted=!!a&&saTextKey(a.original)===saTextKey(w?.word||m.textLao)&&(!w||saTextKey(a.translation||'')===saTextKey(w.meaning||'')),existing=detail.querySelector('.sentence-analysis'),host=existing||ssElement('section','ss-root'),panel=trusted?detail.querySelector('.wsl-panel'):null,meaning=detail.querySelector('.learn-meaning'),ipa=detail.querySelector('.ipa'),audio=detail.querySelector('.learn-audio-bottom'),record=detail.querySelector('#learningRecord'),reference=detail.querySelector('#learningReferenceRecord'),draft=detail.querySelector('#learningRecordingDraft'),raw=existing?.querySelector('.sa-content'),paTools=detail.querySelector('.pa-analysis-tools'),quiz=trusted?raw?.querySelector('.sa-quiz'):null;
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
- const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssGroup('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
+ const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
  const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText)quick.append(editText);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
  actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
@@ -9084,7 +9097,7 @@ function ssCompose(detail,resolved,id){
  for(const n of originalHostChildren){if(n===panel||n===paTools||n===raw||n===stale)continue;if(n.tagName==='H3'||n.classList.contains('sa-help')){n.remove();continue;}if(n.querySelector('[data-split]'))audioTools.append(n);else parseTools.append(n);}
  if(raw){const fold=ssFold('分段与原始解析（核对用）','ss-raw-analysis');fold.append(raw);parseTools.append(fold);}
  if(existing)manager.append(parseTools);
- if(paTools){paTools.classList.add('ss-phonetic-tools');const heading=paTools.querySelector('h3');if(heading)heading.textContent='发音分析管理';for(const n of [...paTools.children]){if(n.classList.contains('pa-muted'))n.remove();else if(n.classList.contains('pa-pending'))main.append(n);}manager.append(paTools);}
+ if(paTools){paTools.classList.add('ss-phonetic-tools');const heading=paTools.querySelector('h3');const fold=ssFold('发音分析管理','ss-phonetic-management');heading?.remove();for(const n of [...paTools.children]){if(n.classList.contains('pa-muted'))n.remove();else if(n.classList.contains('pa-pending'))main.append(n);}fold.append(paTools);manager.append(fold);}
  if(audio){audioTools.append(audio);manager.append(audioTools);}
  const removed=new Set([host,panel,meaning,ipa,audio,record,reference,draft,warning,related,paTools]);
  for(const n of originalDetailChildren){if(removed.has(n)||main.contains(n)||manager.contains(n))continue;if(n.classList.contains('learn-detail-play')){n.remove();continue;}if(n.tagName==='P'&&!n.textContent.trim()){n.remove();continue;}metadata.append(n);}
@@ -9096,7 +9109,7 @@ function ssCompose(detail,resolved,id){
 const ssPreviousDetail=learningOpenDetail;
 let ssDetailRenderGate=null,ssDetailRequest=0,ssDetailQueue=Promise.resolve(),ssDetailActiveId=null,ssDetailActivePromise=null;
 function ssCancelDetail(){ssDetailRequest++;if(ssDetailRenderGate)ssDetailRenderGate.cancelled=true;ssDetailActiveId=null;ssDetailActivePromise=null;learningDetail=null;learningDialog.removeAttribute('data-ss-building');learningDialog.removeAttribute('aria-busy');}
-if(learningDialog.addEventListener){learningDialog.addEventListener('cancel',()=>{if(!learningHasWork())ssCancelDetail();});learningDialog.addEventListener('close',()=>{if(!learningDialog.open)ssCancelDetail();});}
+if(learningDialog.addEventListener){learningDialog.addEventListener('cancel',event=>{if(!event.defaultPrevented&&!learningHasWork())ssCancelDetail();});learningDialog.addEventListener('close',()=>{if(!learningDialog.open)ssCancelDetail();});}
 learningOpenDetail=function(id){
  if(ssDetailActivePromise&&ssDetailActiveId===id)return ssDetailActivePromise;
  const request=++ssDetailRequest;learningDialog.setAttribute('data-ss-building','true');learningDialog.setAttribute('aria-busy','true');
@@ -12908,7 +12921,7 @@ learningWrite=async function(rows,expected,options){
 async function mtApply(id){const snap=await learningSnapshot(),m=snap.learningMaterials.find(x=>x.id===id&&!x.deleted);if(!m)throw Error('这句已修改或删除，请重新打开');const rows=await mtRepairPlan(m,snap);if(rows.length)await learningWrite({learningMaterials:rows},snap,{quickAudio:true});return rows.length;}
 function mtAddTools(id,resolved){
  const detail=learningDialog.querySelector('.learn-detail');if(!detail||detail.querySelector('.mt-tools')||resolved.w||resolved.m.analysisOwner)return;
- const group=document.createElement('section');group.className='mt-tools';group.innerHTML='<h3>只更新这一句</h3><button type="button" data-mt="audio">试听／确认已有录音</button><button type="button" data-mt="keep">仅标点调整：沿用原分析</button><button type="button" data-mt="grammar">编辑本句翻译与语法</button><button type="button" data-mt="phonetics">核对本句发音分析</button><p class="tag-hint">标点、空格调整可沿用原分析；字母或声调符号改变需核对本句。录音始终保留，可先试听再决定是否沿用。</p><p data-mt-status role="status"></p>';
+ const group=document.createElement('details');group.className='mt-tools';group.innerHTML='<summary>只更新这一句</summary><button type="button" data-mt="audio">试听／确认已有录音</button><button type="button" data-mt="keep">仅标点调整：沿用原分析</button><button type="button" data-mt="grammar">编辑本句翻译与语法</button><button type="button" data-mt="phonetics">核对本句发音分析</button><p class="tag-hint">标点、空格调整可沿用原分析；字母或声调符号改变需核对本句。录音始终保留，可先试听再决定是否沿用。</p><p data-mt-status role="status"></p>';
  (detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
 }
 const mtOriginalDetail=learningOpenDetail;

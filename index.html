@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="3d6d9e56dcd0d42e">
+  <meta name="lao-app-build" content="17312bec31c9547f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -950,12 +950,17 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         }
       }
     }
-    async function localReadRows(name,{limit=Infinity}={}){
+    async function localReadRows(name,{limit=Infinity,project=null}={}){
       const bounded=limit!==Infinity||typeof window!=='undefined'&&window.matchMedia?.('(max-width:640px)').matches;
-      if(!bounded||typeof IDBKeyRange==='undefined')return (await localRead([name],store=>store.getAll()))[name].slice(0,limit);
+      if(!bounded||typeof IDBKeyRange==='undefined'){
+        const records=(await localRead([name],store=>store.getAll()))[name].slice(0,limit);
+        return project?records.map(project):records;
+      }
       const rows=[];
-      let after, size=name===storeName?48:96;
+      const deadline=Date.now()+18000;
+      let after, size=name===storeName?32:96;
       while(rows.length<limit){
+        if(Date.now()>deadline)throw new DOMException('读取本机资料超时','TimeoutError');
         const count=Math.min(size,limit-rows.length),range=after===undefined?null:IDBKeyRange.lowerBound(after,true);
         let batch;
         try{batch=(await localRead([name],store=>store.getAll(range,count)))[name];}
@@ -963,7 +968,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
           if(size<=12||!localReadCanRetry(error))throw error;
           size=12;continue;
         }
-        rows.push(...batch);
+        for(const row of batch)rows.push(project?project(row):row);
         if(batch.length<count)break;
         after=batch[batch.length-1].id;
         if(rows.length<limit)await new Promise(resolve=>setTimeout(resolve,0));
@@ -979,7 +984,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     const localViewReads=new Map();
     function invalidateLocalViewReads(changes){
       const stores=changes?.length?new Set(changes.map(change=>change.store)):null;
-      if(!stores||stores.has('entries'))localViewReads.delete('words');
+      if(!stores||stores.has('entries')){localViewReads.delete('words');localViewReads.delete('dictionaryText');}
       if(!stores||stores.has('learningMaterials')||stores.has('learningPlacements'))localViewReads.delete('courseText');
     }
     async function readLocalViewData(kind,read){
@@ -1002,6 +1007,10 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
     }
     function readDictionaryDisplayEntries(){
       return readLocalViewData('words',async()=>(await localReadRows(storeName)).sort((a,b)=>b.updatedAt-a.updatedAt));
+    }
+    function readDictionaryTextEntries(){
+      if(!window.matchMedia?.('(max-width:640px)').matches)return readDictionaryDisplayEntries();
+      return readLocalViewData('dictionaryText',async()=>(await localReadRows(storeName,{project:({audio,audioData,audioDataUrl,noteImages,...row})=>({...row,_hasStoredAudio:Boolean(audio?.size||audioData?.byteLength||audioDataUrl)})})).sort((a,b)=>b.updatedAt-a.updatedAt));
     }
     function audioDataBuffer(value) { if(value instanceof ArrayBuffer)return value; if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength); return null; }
     function audioBlobFor(item) { if(typeof item?.audioDataUrl==='string'&&item.audioDataUrl){try{return dataURLToBlob(item.audioDataUrl);}catch(_){return null;}} const buffer=audioDataBuffer(item?.audioData); if(buffer)return new Blob([buffer],{type:item.audioType||'audio/webm'}); return item?.audio instanceof Blob?item.audio:null; }
@@ -1059,7 +1068,7 @@ function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncer
         ...['search','pageSize','dictionaryKind','dictionaryTagMode','dictionaryTagGroup'].map(id=>$('#'+id).value),
         dictionaryPage,[...selectedDictionaryTags],[...selectedDictionaryFields]]);
     }
-    async function render({includePractice=true}={}) { const run=++dictionaryRenderRun,revision=typeof dfRevision==='number'?dfRevision:0;const [items,sentenceRows]=await Promise.all([includePractice?allEntries():readDictionaryDisplayEntries(),typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); if(run!==dictionaryRenderRun)return; $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); if(q){const priorities=new Map(filtered.map(item=>[item,searchPriority(item,q)]));filtered.sort((a,b)=>priorities.get(a)-priorities.get(b));}const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${hasAudio(x)?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); const viewKey=dictionaryViewKey();if(typeof dfRevision==='undefined'||revision===dfRevision)dictionaryRenderedKey=viewKey; const localStatus=$('#dictionaryLocalStatus');if(localStatus)localStatus.hidden=true; }
+    async function render({includePractice=true,includeSentences=true}={}) { const run=++dictionaryRenderRun,revision=typeof dfRevision==='number'?dfRevision:0;const [items,sentenceRows]=await Promise.all([includePractice?allEntries():readDictionaryTextEntries(),includeSentences&&typeof dictionarySentenceRows==='function'?dictionarySentenceRows():[]]), practiceRows=includePractice?await practiceAllItems(items):null, cats=categories(items); if(run!==dictionaryRenderRun)return; $('#categoryChoices').innerHTML=cats.map(c=>`<option value="${escapeHtml(c)}">`).join(''); if(practiceRows)renderPracticeTags(categories(practiceKindItems(practiceRows))); const scoped=dictionaryKindItems([...items,...sentenceRows]);renderDictionaryTags(categories(scoped)); renderDictionaryFields(); const q=$('#search').value.trim().toLowerCase(), selectedTags=[...selectedDictionaryTags], filtered=scoped.filter(x=>matchesSelectedTags(x,selectedTags,$('#dictionaryTagMode').value)&&(!q||[x.word,x.ipa,x.meaning,x.category,x.note].some(v=>(v||'').toLowerCase().includes(q)))), pageSize=Number($('#pageSize').value)||10, totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)); dictionaryPage=Math.min(Math.max(1,dictionaryPage),totalPages); if(q){const priorities=new Map(filtered.map(item=>[item,searchPriority(item,q)]));filtered.sort((a,b)=>priorities.get(a)-priorities.get(b));}const start=(dictionaryPage-1)*pageSize, visible=filtered.slice(start,start+pageSize), filterText=q||selectedTags.length||$('#dictionaryKind').value!=='all'?'（已筛选）':''; $('#count').textContent=`共 ${filtered.length} 项内容（词条／句子）${filterText}；第 ${dictionaryPage} / ${totalPages} 页`; const filterKey=JSON.stringify([$('#dictionaryKind').value,q,[...selectedTags].sort(),$('#dictionaryTagMode').value]);if(filterKey!==selectionFilter){selectedEntryIds.clear();selectionFilter=filterKey;}const existingIds=new Set(items.map(item=>item.id));for(const id of selectedEntryIds)if(!existingIds.has(id))selectedEntryIds.delete(id);visibleEntryIds=visible.filter(item=>!item._sentenceId).map(item=>item.id); $('#entries').innerHTML=visible.length?visible.map(x=>{if(x._sentenceId)return dictionarySentenceCard(x);const mistakeCount=Number(x.mistakes)||0,reviews=Number(x.reviews)||0,correct=Number(x.correct)||0,showWord=selectedDictionaryFields.has('word'),showIpa=selectedDictionaryFields.has('ipa'),showMeaning=selectedDictionaryFields.has('meaning'),showNote=selectedDictionaryFields.has('note'),tags=[...tagsFor(x).map(tag=>`<span class="tag">${escapeHtml(tag)}</span>`),reviews?`<span class="tag">练 ${reviews} · 对 ${correct}</span>`:'',mistakeCount?`<span class="tag hard">错 ${mistakeCount} 次</span>`:'',x.needsExtraPractice?'<span class="tag focus">重点</span>':''].join(''); return `<article class="entry"><div><label class="entry-select"><input type="checkbox" data-select="${x.id}" aria-label="勾选词条" ${selectedEntryIds.has(x.id)?'checked':''} />勾选</label>${showWord||showIpa?`<div>${showWord?`<span class="word">${escapeHtml(x.word)}</span>`:''}${showIpa&&x.ipa?`<span class="ipa">/${escapeHtml(x.ipa)}/</span>`:''}</div>`:''}${showMeaning&&x.meaning?`<div class="meaning">${escapeHtml(x.meaning)}</div>`:''}${showNote&&x.note?`<details class="entry-note"><summary>备注</summary><div>${escapeHtml(x.note)}</div></details>`:''}${tags}</div><div class="actions"><button type="button" class="dict-play" data-ai="${x.id}" aria-label="播放默认发音" title="默认发音（首次生成可能消耗额度）">${typeof lessonIcon==='function'?lessonIcon('play'):'▶'}</button>${typeof cfDictionaryRecordHtml==='function'?cfDictionaryRecordHtml('word:'+x.syncId):''}<button type="button" class="dict-detail" data-learn="word-detail" data-word="${x.id}">详情</button><details class="entry-more"><summary aria-label="更多词条操作">⋯</summary><div class="entry-more-menu">${(x._hasStoredAudio??hasAudio(x))?`<button data-play="${x.id}">▶ 我的录音</button>`:''}<button data-focus="${x.id}">${x.needsExtraPractice?'取消重点':'标为重点'}</button><button data-edit="${x.id}">修改</button><button class="danger" data-delete="${x.id}">删除</button></div></details></div></article>`;}).join(''):'<div class="empty">没有符合条件的词条。<br>在左侧添加第一个吧。</div>'; $('#pagination').innerHTML=filtered.length?`<button type="button" data-page="first" ${dictionaryPage===1?'disabled':''}>首页</button><button type="button" data-page="previous" ${dictionaryPage===1?'disabled':''}>上一页</button><p>第 ${dictionaryPage} / ${totalPages} 页</p><button type="button" data-page="next" ${dictionaryPage===totalPages?'disabled':''}>下一页</button><button type="button" data-page="last" ${dictionaryPage===totalPages?'disabled':''}>末页</button>`:''; if(practiceRows)updatePracticeSummary(practiceRows); updateSelectionControls(); const viewKey=dictionaryViewKey();if(includeSentences&&(typeof dfRevision==='undefined'||revision===dfRevision))dictionaryRenderedKey=viewKey; const localStatus=$('#dictionaryLocalStatus');if(localStatus)localStatus.hidden=true; }
     function searchPriority(item, query) { if(!query)return 0; const includes=field=>(item[field]||'').toLowerCase().includes(query); if(['word','meaning'].some(includes))return 0; if(['ipa','category'].some(includes))return 1; return 2; }
     async function pasteIntoField(targetId, statusId, replaceAll=false) {
       const field=$('#'+targetId),status=$('#'+statusId),before=field.value,start=field.selectionStart??before.length,end=field.selectionEnd??before.length;
@@ -1568,10 +1577,17 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
             let preview=await localReadRows(storeName,{limit:12});
             if(!preview.length&&!cloudWorkspace){await ensureDictionarySeed();preview=await localReadRows(storeName,{limit:12});}
             if(generation===dictionaryRenderRun&&activeView==='dictionary'&&!entries.childElementCount&&preview.length&&!$('#search').value.trim()){
-              entries.innerHTML=preview.map(item=>'<article class="entry"><div><span class="word" lang="lo">'+escapeHtml(item.word)+'</span><div class="meaning">'+escapeHtml(item.meaning||'')+'</div></div><div class="actions"><button data-learn="word-detail" data-word="'+item.id+'">详情</button></div></article>').join('');
+              entries.innerHTML=preview.map(item=>'<article class="entry"><div><span class="word" lang="lo">'+escapeHtml(item.word)+'</span><div class="meaning">'+escapeHtml(item.meaning||'')+'</div></div><div class="actions"><button class="dict-detail" data-learn="word-detail" data-word="'+item.id+'">详情</button></div></article>').join('');
               status.textContent='已显示部分本机词条，正在读取完整词典…';
               await new Promise(resolve=>setTimeout(resolve,32));
             }
+          }
+          if(activeView!=='dictionary')return;
+          if(window.matchMedia?.('(max-width:640px)').matches&&['all','words'].includes($('#dictionaryKind').value)){
+            await render({includePractice:false,includeSentences:false});
+            if(activeView!=='dictionary')return;
+            status.hidden=false;status.textContent='词条已可用，正在载入例句…';
+            await new Promise(resolve=>setTimeout(resolve,32));
           }
           if(activeView==='dictionary')await render({includePractice:false});
         }catch(error){showDictionaryReadError(error,loadDictionaryView);}
@@ -3584,8 +3600,9 @@ async function learningSeedLessonOne(){
  const learningLesson=learningFirstLesson,learningPlacement=(id,section,position)=>learningPlacementFor(id,section,position,learningFirstLesson);
  // A completed intake needs one indexed read, not a read/write scan of all recordings on every tab click.
  const {learningPlacements:marker}=await localRead(['learningPlacements'],store=>store.get(learningPlacement('knowledge:lesson1','knowledge',0).id));if(marker?.intakeVersion===1)return;
- const d=await openDB(),t=d.transaction(['entries',...learningStores],'readwrite'),done=transactionDone(t),rows={};let left=4,issue;
- for(const kind of ['entries',...learningStores]){const q=t.objectStore(kind).getAll();q.onsuccess=()=>{rows[kind]=q.result;if(--left)return;try{
+ const stores=['entries','learningMaterials','learningPlacements'];
+ const d=await openDB(),t=d.transaction(stores,'readwrite'),done=transactionDone(t),rows={};let left=stores.length,issue;
+ for(const kind of stores){const q=t.objectStore(kind).getAll();q.onsuccess=()=>{rows[kind]=q.result;if(--left)return;try{
   const marker=rows.learningPlacements.find(p=>p.materialId==='knowledge:lesson1');if(marker?.intakeVersion===1)return;
   const words=rows.entries,materials=rows.learningMaterials,placements=rows.learningPlacements;
   const saveMaterial=m=>{learningValidateRecord('learningMaterials',m);t.objectStore('learningMaterials').put(m);if(!materials.some(x=>x.id===m.id))materials.push(m);};
@@ -8898,10 +8915,11 @@ async function scRender({reuse=false}={}){
  status.textContent='';
  let snap,renderKey;
  try{
-  await learningSeedLessonOne();
+  const read=()=>typeof dfReadTextSnapshot==='function'?dfReadTextSnapshot():learningSnapshot();
+  snap=await read();
   if(!current())return;
+  if(!learningCourses(snap).length){await learningSeedLessonOne();snap=await read();}
   renderKey=scRenderKey();
-  snap=typeof dfReadTextSnapshot==='function'?await dfReadTextSnapshot():await learningSnapshot();
  }catch(error){
   if(!current())return;
   console.warn('Study center local read failed',error);

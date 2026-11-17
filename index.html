@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="5182465d7dc6104d">
+  <meta name="lao-app-build" content="482c60f4d8bb66a7">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8952,11 +8952,62 @@ const paLaunch=document.createElement('button');paLaunch.type='button';paLaunch.
 const paAuditLaunch=document.createElement('button');paAuditLaunch.type='button';paAuditLaunch.textContent='已有分析问题清单';paAuditLaunch.dataset.paAudit='true';$('#dictionaryBatchTools').prepend(paAuditLaunch);
 </script>
 <style data-learning-style="study-center">
-.study-center .sc-listening{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 18px;align-items:center;margin:16px 0 20px;padding:18px;border-color:#c7dfd4;background:linear-gradient(115deg,#e6f3ee,#f7faf6)}
-.study-center .sc-listening h3{grid-column:1;margin:0;color:#18564a;font-size:18px}
-.study-center .sc-listening p{grid-column:1;margin:0;color:#46665a;font-size:14px;line-height:1.55}
-.study-center .sc-listening>button{grid-column:2;grid-row:1/3;margin:0;white-space:nowrap}
-@media(max-width:520px){.study-center .sc-listening{padding:14px;gap:7px 10px}.study-center .sc-listening h3{font-size:16px}.study-center .sc-listening p{grid-column:1/-1;font-size:13px}.study-center .sc-listening>button{grid-row:1;font-size:13px}}
+.study-center .sc-listening{display:grid;gap:14px;margin:16px 0 20px;padding:18px;border-color:#c4dbd0;background:linear-gradient(120deg,#e8f4ed,#f9fcf7)}
+.cl-home-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cl-home-heading h3{margin:0;color:#174f43;font-size:18px}
+.cl-home-heading p{margin:4px 0 0;color:#48685c;font-size:13px;line-height:1.5}
+.cl-home-heading button{flex:none;margin:0;white-space:nowrap}
+.cl-home-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.cl-home-shortcuts button{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:3px 7px;padding:8px 4px;margin:0;min-height:42px;font-size:13px}
+.cl-home-shortcuts strong{font-variant-numeric:tabular-nums}
+[data-cl-tone="yellow"]{--cl-tint:#fff3cb;--cl-ink:#634900;--cl-line:#e5d28e}
+[data-cl-tone="red"]{--cl-tint:#fae5ed;--cl-ink:#773753;--cl-line:#e9bfd0}
+[data-cl-tone="slow"]{--cl-tint:#eee7fb;--cl-ink:#553a7b;--cl-line:#d6c6eb}
+[data-cl-tone="green"]{--cl-tint:#dff1e5;--cl-ink:#245843;--cl-line:#bcdac7}
+.cl-home-shortcuts button[data-cl-tone],.cl-row-actions button[data-cl-tone],.chapter-listening-filters label[data-cl-tone]{color:var(--cl-ink);background:var(--cl-tint);border:1px solid var(--cl-line)}
+#learningDialog:has(>.chapter-listening){width:min(680px,calc(100% - 22px));padding-bottom:0}
+.chapter-listening{display:grid;gap:12px;min-width:0}
+.chapter-listening [hidden]{display:none!important}
+.cl-filters,.cl-list-tools,.cl-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cl-chapters{position:relative;flex:1 0 100%;padding:8px 12px;background:#f0f6f2;border:1px solid #d8e5db;border-radius:12px}
+.cl-chapters summary{cursor:pointer;font-weight:600}
+.cl-chapters .chapter-listening-choices{max-height:175px;overflow:auto;margin:8px 0}
+.cl-chapters .chapter-listening-choices label{display:flex;align-items:center;gap:8px}
+.chapter-listening .chapter-listening-filters{display:flex;flex-wrap:wrap;gap:6px;border:0;padding:0;margin:0}
+.chapter-listening-filters label{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:6px 9px;font-size:13px;font-weight:600;cursor:pointer}
+.chapter-listening-filters label:not(:has(:checked)){background:#fff;color:#48645b;border-color:#d7e3db}
+.chapter-listening input[type="checkbox"]{width:auto;margin:0;accent-color:#087b69}
+.cl-list-tools p{margin:0;color:#4a695e;font-size:13px}
+.cl-list-tools [data-cl-select]{margin-left:auto}
+.chapter-listening .chapter-listening-kind{display:flex;align-items:center;gap:7px;margin:0;font-size:13px}
+.chapter-listening .chapter-listening-kind select{width:auto;margin:0}
+.cl-list{display:grid;gap:8px;min-width:0}
+.cl-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;min-width:0;padding:9px 11px;background:#fff;border:1px solid #d9e7df;border-radius:12px}
+.cl-row-content{grid-column:2;min-width:0;overflow-wrap:anywhere}
+.cl-row-content button[data-cl-detail]{border:0;background:transparent;padding:4px 0;min-height:38px;text-align:left;color:#075e51;font-size:18px;font-weight:650;white-space:normal}
+.cl-row-content p{margin:0;font-size:14px}
+.cl-row-content small{display:block;margin-top:3px;color:#526e64;font-size:12px}
+.cl-row-actions{justify-content:flex-end;max-width:150px}
+.cl-row-actions button{padding:5px 8px;min-height:42px;border-radius:10px;font-size:12px}
+.cl-row-actions [data-cl-single]{min-width:42px;font-size:18px}
+.cl-row .word-color-picker{grid-column:1/-1;margin:0}
+.cl-empty{padding:18px 12px;margin:0;border:1px dashed #cadbd1;border-radius:12px;color:#48685c}
+.chapter-listening [data-cl-more]{justify-self:center}
+.cl-player{position:sticky;bottom:0;z-index:2;padding:8px 2px max(10px,env(safe-area-inset-bottom));border-top:1px solid #c8ddd1;background:#fcfdfa}
+.cl-player details{margin:0 0 7px}
+.cl-player .chapter-listening-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cl-player .chapter-listening-controls .primary{flex:1;min-width:120px}
+.cl-player [data-page-status]{margin:5px 0 0;font-size:13px;overflow-wrap:anywhere}
+.cl-player [data-page-status]:empty,#learningDialog:has(>.chapter-listening)>#learningDialogStatus:empty{display:none}
+.cl-player .chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;max-height:min(170px,26dvh);overflow:auto}
+@media(max-width:520px){
+ .study-center .sc-listening{padding:13px;gap:10px}
+ .cl-home-heading button{font-size:13px;padding-inline:9px}
+ .cl-home-heading h3{font-size:17px}
+ .cl-row{padding:7px 8px;gap:7px}
+ .cl-row-actions{gap:4px;max-width:116px}
+ .chapter-listening-filters label{padding-inline:7px}
+}
 .study-center{max-width:1060px;margin:auto}.sc-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sc-heading h2{margin:4px 0}.sc-eyebrow,.sc-note,.sc-course small,.sc-box small{color:#607970;font-size:13px}.sc-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.sc-box{border:1px solid #cee3da;background:#f7fcf9;padding:18px;border-radius:16px}.sc-box h3{margin:0 0 12px}.sc-box p{margin:8px 0}.sc-box>.primary{display:block;margin-top:16px}.sc-continue{background:#e6f4ee}.sc-course-title{font-size:20px;font-weight:650;overflow-wrap:anywhere}.sc-actions,.sc-lesson-tools{display:flex;flex-wrap:wrap;gap:8px}.sc-actions{margin-top:12px}.sc-section{margin:24px 0}.sc-list{display:grid;gap:10px}.sc-course{border:1px solid #d5e5de;border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:14px}.sc-course h3{font-size:17px;margin:6px 0;overflow-wrap:anywhere}.sc-course p{font-size:13px;color:#607970;margin:4px 0}.sc-course .sc-actions{flex-shrink:0;margin:0}.sc-course button,.sc-box button,.sc-lesson-tools button,.sc-heading button,.study-center form button,#scBrowseMore{min-height:44px;padding:9px 13px;font-size:14px}.sc-search{display:grid;grid-template-columns:1fr 1fr;gap:12px}.sc-search label,.sc-goal-editor label{display:grid;gap:6px;font-size:14px}.sc-search select,.sc-search input,.sc-goal-editor select{width:100%;min-width:0;max-width:100%;padding:10px;font-size:16px;min-height:44px}.sc-goal-editor,.sc-recent{border-top:1px solid #d5e5de;padding:14px 0}.sc-goal-editor>summary,.sc-recent>summary{cursor:pointer;padding:8px 0;color:#176d5d}.sc-goal-editor form{display:grid;gap:12px;margin-top:10px}.sc-lesson-tools{margin-bottom:14px}.sc-note{line-height:1.7}.sc-recent .sc-list{margin-top:12px}
 .view-nav-group [data-study-open][aria-pressed=true]{background:#087f70;color:white;border-color:#087f70}
 @media(max-width:640px){.sc-overview{grid-template-columns:1fr}.sc-heading{align-items:flex-start}.sc-heading button{max-width:112px}.sc-box{padding:14px}.sc-course{display:block;padding:12px}.sc-course .sc-actions{margin-top:10px}.sc-search{grid-template-columns:1fr}.sc-course-title{font-size:18px}.sc-lesson-tools button{font-size:13px;padding:8px 10px}.sc-lesson-tools{gap:6px}.sc-actions button{flex:0 1 auto}}
@@ -9088,6 +9139,7 @@ async function scRender({reuse=false,keepChapterShortcuts=false}={}){
    const model=rrModel(snap,words),now=Date.now();
    for(const row of model.rows||[]){const due=row.state?.nextReviewAt;if(row.status==='active'&&due>now)expires=Math.min(expires,due);}
    pending.outerHTML=rrHomeSectionHtml(model);
+   if(typeof chapterListeningHomeTotals==='function')chapterListeningHomeTotals(snap,words,courses);
   }catch(error){
    if(current()&&pending.isConnected){pending.removeAttribute('aria-busy');pending.querySelector('[role=status]').textContent='复习记录读取失败：'+error.message;}
    return;
@@ -13938,7 +13990,7 @@ function wordColorCardButton(m,w,options){
  return '<button type="button" class="word-color-card-button" data-word-color-open aria-label="调整词卡颜色" title="调整词卡颜色"><span class="word-color-dot" aria-hidden="true"></span></button>';
 }
 
-function wordColorPicker({target,id,lao,zh},expanded=false){
+function wordColorPicker({target,id,lao,zh},expanded=false,onSaved){
  const picker=document.createElement(expanded?'div':'details');
  picker.className='word-color-picker';
  picker.innerHTML=(expanded?'':'<summary><span class="word-color-dot" aria-hidden="true"></span>词卡颜色</summary>')+
@@ -13975,6 +14027,7 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
    wordColorView.manual.set(row.id,row.wordCardColor);
    status.textContent='已保存';
    if(!expanded)picker.open=false;
+   if(onSaved)void Promise.resolve().then(onSaved).catch(error=>{status.textContent='已保存，列表刷新失败。'+error.message;});
   }catch(error){status.textContent='颜色未保存。'+error.message;}
   finally{
    wordColorPending.delete(pendingKey);
@@ -14194,7 +14247,25 @@ async function chapterListeningBindResult(host,result){
  }catch(error){if(panel.isConnected)panel.textContent='暂时无法读取词卡标记。'+error.message;}
 }
 function chapterListeningHome(){
- return '<section class="sc-box sc-listening" aria-labelledby="scListeningTitle"><h3 id="scListeningTitle">听力列表</h3><p>跨章节选词句，按熟悉程度筛选。语速、每项播放次数和题间停顿都可以调。</p><button type="button" class="primary" data-cl-open>打开听力列表</button></section>';
+ return `<section class="sc-box sc-listening" aria-labelledby="scListeningTitle">
+  <div class="cl-home-heading"><div><h3 id="scListeningTitle">词句集录</h3><p>汇总各章标记的词句，也可以选来连听。</p></div><button type="button" class="primary" data-cl-open>查看集录</button></div>
+  <div class="cl-home-shortcuts">${chapterListeningTones.map(key=>`<button type="button" data-cl-open="${key}" data-cl-tone="${key}"><span>${chapterListeningLabels[key]}</span><strong data-cl-total="${key}"></strong></button>`).join('')}</div>
+ </section>`;
+}
+const chapterListeningTones=['yellow','red','slow','green'];
+function chapterListeningHomeTotals(snap,words,courses){
+ const home=document.querySelector('.sc-listening');
+ if(!home)return;
+ const render=()=>{
+  if(!home.isConnected||document.hidden)return;
+  const totals={red:0,yellow:0,slow:0,green:0};
+  for(const row of chapterListeningCatalog(snap,words,courses.filter(course=>course.schemaVersion===2))){
+   for(const flag of row.flags)if(Object.hasOwn(totals,flag))totals[flag]++;
+  }
+  for(const node of home.querySelectorAll('[data-cl-total]'))node.textContent=totals[node.dataset.clTotal];
+ };
+ if(typeof requestIdleCallback==='function')requestIdleCallback(render);
+ else setTimeout(render,100);
 }
 function chapterListeningMenu(){
  return '<button type="button" data-cl-chapter>听待巩固词句</button>';
@@ -14227,7 +14298,7 @@ function chapterListeningCatalog(snap,words,courses){
    }
    if(!flags.size)continue;
    const needsWork=flags.has('red')||flags.has('yellow')||flags.has('slow');
-   catalog.push({id:row.id,word:row.lao,meaning:row.zh,courseId:course.id,itemKind:row.itemKind,needsWork,flags});
+   catalog.push({id:row.id,target,word:row.lao,meaning:row.zh,courseId:course.id,itemKind:row.itemKind,needsWork,flags});
   }
  }
  return catalog;
@@ -14245,10 +14316,10 @@ function chapterListeningPreferences(){
  try{return JSON.parse(localStorage.getItem(workspaceName('chapter-listening-playback')))||{};}
  catch(_){return {};}
 }
-async function chapterListeningOpen(courseId=''){
+async function chapterListeningOpen(courseId='',tone=''){
  const owner=workspaceName('chapter-listening'),preferenceKey=workspaceName('chapter-listening-playback'),h=learningEsc;
  const read=()=>typeof lnGetData==='function'?lnGetData():ccReadCourse();
- learningModal(courseId?'待巩固词句':'听力列表','<p role="status" data-cl-loading>正在读取章节与词句标记…</p>');
+ learningModal(courseId?'待巩固词句':'词句集录','<p role="status" data-cl-loading>正在读取章节与词句标记…</p>');
  const loading=learningDialog.querySelector('[data-cl-loading]');
  let data;
  try{data=await read();}
@@ -14256,21 +14327,20 @@ async function chapterListeningOpen(courseId=''){
  if(!loading.isConnected||!learningDialog.open||owner!==workspaceName('chapter-listening'))return;
  const {snap,words}=data;
  const courses=learningOrderedCourses(snap).filter(course=>course.schemaVersion===2&&(!courseId||course.id===courseId));
- const catalog=chapterListeningCatalog(snap,words,courses);
- const available=new Set(catalog.map(row=>row.courseId));
+ let catalog=chapterListeningCatalog(snap,words,courses);
+ const titles=new Map(courses.map(course=>[course.id,[course.textbookName,course.title].filter(Boolean).join(' · ')]));
+ wordColorPrepare(snap);
  const options=(values,unit)=>values.map(value=>'<option value="'+value+'">'+value+unit+'</option>').join('');
- const title=courseId?'待巩固词句 · '+(courses[0]?.title||'本章'):'听力列表';
+ const title=courseId?'待巩固词句 · '+(courses[0]?.title||'本章'):'词句集录';
  learningModal(title,`<section class="chapter-listening" data-page-key="chapter-listening">
-  ${courseId?'':`<details class="cc-review-options" open><summary>选章节 <span data-cl-count></span></summary><div class="cc-pick-rows chapter-listening-choices">${courses.filter(course=>available.has(course.id)).map(course=>'<label><input type="checkbox" name="cl-course" value="'+h(course.id)+'"><span>'+h(course.title)+'</span></label>').join('')||'<p>标记词句或完成检测后，相关章节会列在这里。</p>'}</div></details>
-  <fieldset class="cc-review-options"><legend>按熟悉度筛选</legend><div class="chapter-listening-filters">${Object.entries(chapterListeningLabels).map(([key,label])=>'<label><input type="checkbox" name="cl-status" value="'+key+'" '+(key==='green'?'':'checked')+'> '+label+'</label>').join('')}</div></fieldset>`}
-  <label class="chapter-listening-kind">听读内容 <select name="cl-kind"><option value="all">单词和句子</option><option value="word">仅单词</option><option value="sentence">仅句子</option></select></label>
-  <p data-cl-selection aria-live="polite"></p>
-  <div class="chapter-listening-controls">
-   <button type="button" data-cl-start class="primary">开始播放</button>
-   <button type="button" data-cl-pause class="primary" data-page-action="pause" hidden><span class="page-player-label">暂停</span></button>
-   <button type="button" data-cl-previous hidden>上一项</button>
-   <button type="button" data-cl-replay hidden>重播</button>
+  <div class="cl-filters">
+   ${courseId?'':`<details class="cl-chapters"><summary><span data-cl-count>全部章节</span></summary><div class="cc-pick-rows chapter-listening-choices">${courses.map(course=>'<label><input type="checkbox" name="cl-course" value="'+h(course.id)+'"><span>'+h(titles.get(course.id))+'</span></label>').join('')||'<p>暂无章节。</p>'}</div><button type="button" data-cl-all-chapters>恢复全部章节</button></details>`}
+   <fieldset class="chapter-listening-filters" aria-label="熟悉度">${chapterListeningTones.map(key=>`<label data-cl-tone="${key}"><input type="checkbox" name="cl-status" value="${key}" ${(tone?tone===key:!courseId||key!=='green')?'checked':''}> ${chapterListeningLabels[key]}</label>`).join('')}</fieldset>
   </div>
+  <div class="cl-list-tools"><label class="chapter-listening-kind">类型 <select name="cl-kind"><option value="all">词和句</option><option value="word">单词</option><option value="sentence">句子</option></select></label><p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button></div>
+  <div data-cl-list class="cl-list"></div>
+  <button type="button" data-cl-more hidden>显示更多</button>
+  <footer class="cl-player">
   <details class="cc-review-options"><summary>播放设置</summary>
    <div class="chapter-listening-settings">
     <label>每词播放<select data-cl-repeat>${options([1,2,3],' 遍')}</select></label>
@@ -14279,11 +14349,20 @@ async function chapterListeningOpen(courseId=''){
     <label>播放顺序<select data-cl-order><option value="ordered">按章节顺播</option><option value="random">打乱</option></select></label>
    </div>
   </details>
-  <p data-page-status role="status"></p>
-  <button type="button" data-cl-missing hidden></button>
+   <div class="chapter-listening-controls">
+    <button type="button" data-cl-start class="primary">播放筛选结果</button>
+    <button type="button" data-cl-pause class="primary" data-page-action="pause" hidden><span class="page-player-label">暂停</span></button>
+    <button type="button" data-cl-previous hidden>上一项</button>
+    <button type="button" data-cl-replay hidden>重播</button>
+    <button type="button" data-cl-stop hidden>停止</button>
+   </div>
+   <p data-page-status role="status"></p>
+   <button type="button" data-cl-missing hidden></button>
+  </footer>
  </section>`);
  const bar=learningDialog.querySelector('.chapter-listening'),q=selector=>bar.querySelector(selector);
  const start=q('[data-cl-start]'),pause=q('[data-cl-pause]'),prev=q('[data-cl-previous]'),replay=q('[data-cl-replay]'),missing=q('[data-cl-missing]'),status=q('[data-page-status]');
+ const stop=q('[data-cl-stop]');
  const repeats=q('[data-cl-repeat]'),speed=q('[data-page-speed]'),gap=q('[data-cl-gap]'),order=q('[data-cl-order]');
  const saved=chapterListeningPreferences();
  repeats.value=[1,2,3].includes(saved.repeats)?saved.repeats:2;
@@ -14292,21 +14371,91 @@ async function chapterListeningOpen(courseId=''){
  order.value=saved.order==='random'?'random':'ordered';
  const gapSeconds=()=>Math.max(0,Math.min(120,Math.round(Number(gap.value)||0)));
  const checked=name=>new Set([...bar.querySelectorAll('input[name="'+name+'"]:checked')].map(input=>input.value));
- let playingIndex=0;
- const selection=()=>chapterListeningSelection(catalog.filter(row=>q('[name="cl-kind"]').value==='all'||row.itemKind===q('[name="cl-kind"]').value),courseId?new Set([courseId]):checked('cl-course'),checked('cl-status'),Boolean(courseId));
- function update(){
-  const count=q('[data-cl-count]'),n=checked('cl-course').size;
-  if(count)count.textContent=n?'· 已选 '+n+' 章':'';
-  const items=selection();
-  q('[data-cl-selection]').textContent=items.length?'可听列表 · '+items.length+' 项':courseId?'本章暂无待巩固词句。':'选择章节与熟悉度以准备播放。';
-  start.disabled=!items.length;
+ let playingIndex=0,selecting=false,limit=30,visible=[],loadingAudio=false;
+ const marked=new Set(),unavailable=new Set();
+ const key=row=>JSON.stringify([row.courseId,row.id,row.word,row.meaning]);
+ const selection=()=>visible.filter(row=>!selecting||marked.has(key(row)));
+ function updateControls(){
+  const count=selection().length;
+  start.textContent=selecting?'播放已选 · '+count:'播放筛选结果';
+  start.disabled=loadingAudio||!count;
+  q('[data-cl-selection]').textContent=visible.length+' 项'+(selecting?' · 已选 '+count:'');
  }
+ function showStart(){
+  start.hidden=false;
+  pause.hidden=prev.hidden=replay.hidden=stop.hidden=true;
+  updateControls();
+ }
+ function resetPlayer(){
+  if(lessonPageBar===bar||loadingAudio)stopPracticeAudio();
+  loadingAudio=false;
+  start.hidden=false;
+  pause.hidden=prev.hidden=replay.hidden=stop.hidden=missing.hidden=true;
+  status.textContent='';
+ }
+ function update(){
+  const count=q('[data-cl-count]'),chapters=checked('cl-course'),statuses=checked('cl-status'),kind=q('[name="cl-kind"]').value;
+  if(count)count.textContent=chapters.size?'已选 '+chapters.size+' 章':'全部章节';
+  visible=catalog.filter(row=>(!chapters.size||chapters.has(row.courseId))&&(kind==='all'||row.itemKind===kind)&&[...row.flags].some(flag=>statuses.has(flag)));
+  q('[data-cl-list]').innerHTML=visible.slice(0,limit).map((row,index)=>`<article class="cl-row" data-cl-row="${index}">
+   ${selecting?`<input type="checkbox" data-cl-item aria-label="勾选 ${h(row.word)}" ${marked.has(key(row))?'checked':''}>`:''}
+   <div class="cl-row-content"><button type="button" data-cl-detail lang="lo">${h(row.word)}</button><p>${h(row.meaning)}</p><small>${h(titles.get(row.courseId))}</small><small data-cl-unavailable ${unavailable.has(key(row))?'':'hidden'}>本机暂无录音</small></div>
+   <div class="cl-row-actions"><button type="button" data-cl-single aria-label="播放 ${h(row.word)}" title="播放">▷</button><button type="button" data-cl-mark data-cl-tone="${chapterListeningTones.find(tone=>row.flags.has(tone))||''}" aria-expanded="false" aria-label="调整熟悉度">${chapterListeningTones.filter(tone=>row.flags.has(tone)).map(tone=>chapterListeningLabels[tone]).join('、')}</button></div>
+  </article>`).join('')||'<p class="cl-empty">没有符合筛选条件的词句。可调整筛选，或在课程里标记熟悉度。</p>';
+  q('[data-cl-more]').hidden=visible.length<=limit;
+  updateControls();
+ }
+ q('[data-cl-more]').onclick=()=>{limit+=30;update();q('[data-cl-list]').querySelector('[data-cl-row="'+(limit-30)+'"] [data-cl-detail]')?.focus();};
+ q('[data-cl-select]').onclick=event=>{
+  resetPlayer();
+  selecting=!selecting;marked.clear();
+  event.currentTarget.textContent=selecting?'完成勾选':'勾选';
+  event.currentTarget.setAttribute('aria-pressed',String(selecting));
+  update();
+ };
+ const resetChapters=q('[data-cl-all-chapters]');
+ if(resetChapters)resetChapters.onclick=()=>{
+  for(const input of bar.querySelectorAll('[name="cl-course"]'))input.checked=false;
+  resetChapters.closest('details').open=false;
+  resetPlayer();limit=30;update();
+ };
+ q('[data-cl-list]').onclick=event=>{
+  const button=event.target.closest('button'),card=button?.closest('[data-cl-row]'),row=card&&visible[Number(card.dataset.clRow)];
+  if(!row)return;
+  if(button.matches('[data-cl-detail]')){
+   resetPlayer();updateControls();
+   void saOpenNested(row.id,button).catch(learningError);
+  }
+  if(button.matches('[data-cl-single]')){
+   resetPlayer();
+   void play([row],true);
+  }
+  if(button.matches('[data-cl-mark]')){
+   const old=q('.cl-row .word-color-picker');
+   const same=old?.parentElement===card;
+   old?.parentElement.querySelector('[data-cl-mark]').setAttribute('aria-expanded','false');
+   old?.remove();
+   if(same)return;
+   button.setAttribute('aria-expanded','true');
+   card.append(wordColorPicker({target:row.target,id:row.id,lao:row.word,zh:row.meaning},true,async()=>{
+    const fresh=await read();
+    if(!bar.isConnected||owner!==workspaceName('chapter-listening'))return;
+    catalog=chapterListeningCatalog(fresh.snap,fresh.words,courses);
+    update();
+    q('[data-cl-selection]').textContent+=' · 标记已保存';
+    chapterListeningHomeTotals(fresh.snap,fresh.words,learningOrderedCourses(fresh.snap));
+   }));
+  }
+ };
  bar.onchange=event=>{
+  if(event.target.matches('[data-cl-item]')){
+   const row=visible[Number(event.target.closest('[data-cl-row]').dataset.clRow)];
+   if(event.target.checked)marked.add(key(row));else marked.delete(key(row));
+   resetPlayer();updateControls();
+   return;
+  }
   if(event.target.matches('[name="cl-course"],[name="cl-status"],[name="cl-kind"]')){
-   if(lessonPageBar===bar||(!start.hidden&&start.disabled&&status.textContent))stopPracticeAudio();
-   start.hidden=false;
-   pause.hidden=prev.hidden=replay.hidden=missing.hidden=true;
-   status.textContent='';
+   resetPlayer();limit=30;marked.clear();
    update();
    return;
   }
@@ -14314,12 +14463,14 @@ async function chapterListeningOpen(courseId=''){
   try{localStorage.setItem(preferenceKey,JSON.stringify({repeats:Number(repeats.value),speed:Number(speed.value),gap:gapSeconds(),order:order.value}));}
   catch(_){}
  };
- pause.onclick=()=>{if(pause.getAttribute('aria-label')==='重新播放')void start.onclick();else lessonPageTogglePause(bar);};
+ pause.onclick=()=>lessonPageTogglePause(bar);
+ stop.onclick=()=>{resetPlayer();updateControls();start.focus();};
  prev.onclick=()=>lessonPageJump?.(Math.max(0,playingIndex-1));
  replay.onclick=()=>lessonPageJump?.(playingIndex,true);
- start.onclick=async()=>{
-  const selected=selection();
-  if(!selected.length||start.disabled)return;
+ start.onclick=()=>play(selection());
+ async function play(selected,single=false){
+  if(!selected.length||loadingAudio)return;
+  loadingAudio=true;
   start.disabled=true;
   stopPracticeAudio();const token=lessonPageRun;
   const current=()=>token===lessonPageRun&&bar.isConnected&&learningDialog.open&&owner===workspaceName('chapter-listening');
@@ -14328,29 +14479,49 @@ async function chapterListeningOpen(courseId=''){
    const rows=order.value==='random'?courseCheckShuffle(selected):selected;
    const resolved=await lessonPagePlaybackData({words:rows},current);
    if(!resolved||!current())return;
-   const playlist=[],items=[],missingRows=[];
-   for(const row of resolved.words){
-    const asset=lessonPageAsset(row,resolved.snap,resolved.cache);
-    if(asset){playlist.push({...asset,at:items.length,count:1});items.push(row);}
-    else missingRows.push(row);
+   const playlist=[],items=[],missingRows=[],missingKeys=new Set(),seen=new Map();
+   let unavailableReason='';
+   for(const [index,row] of resolved.words.entries()){
+    let asset;
+    try{asset=lessonPageAsset(row,resolved.snap,resolved.cache);}
+    catch(error){unavailableReason||=error.message;missingKeys.add(key(rows[index]));continue;}
+    if(!asset){missingRows.push(row);missingKeys.add(key(rows[index]));continue;}
+    const range=JSON.stringify([asset.start||0,asset.end??null]);
+    if(!seen.has(asset.blob))seen.set(asset.blob,new Set());
+    if(seen.get(asset.blob).has(range))continue;
+    seen.get(asset.blob).add(range);
+    playlist.push({...asset,at:items.length,count:1});items.push(row);
    }
-   const missingLabel=missingRows.length?' · '+missingRows.length+' 项缺音':'';
-   q('[data-cl-selection]').textContent='本轮 '+items.length+' 项'+missingLabel;
-   missing.hidden=!missingRows.length;
-   missing.textContent='批量补发音 · '+missingRows.length+' 项';
-   missing.onclick=()=>{void lessonPageSelectMissing({title,words:missingRows}).catch(error=>{status.textContent=error.message;});};
-   if(!items.length){status.textContent='所选内容还没有可用的录音。';return;}
-   start.hidden=true;pause.hidden=prev.hidden=replay.hidden=false;
-   await lessonQueuePlay(playlist,items.length,bar,token,items,{
-    incremental:true,gapLabel:'回忆时间',gap:()=>gapSeconds()*1000,repeats:()=>Number(repeats.value),
+   for(const row of selected){
+    if(missingKeys.has(key(row)))unavailable.add(key(row));else unavailable.delete(key(row));
+   }
+   for(const card of bar.querySelectorAll('[data-cl-row]'))card.querySelector('[data-cl-unavailable]').hidden=!unavailable.has(key(visible[Number(card.dataset.clRow)]));
+   const missingLabel=missingKeys.size?' · '+missingKeys.size+' 项缺音':'';
+   const missingMaterials=[...new Map(missingRows.map(row=>[row.id,row])).values()];
+   missing.hidden=!missingMaterials.length;
+   missing.textContent='批量补发音 · '+missingMaterials.length+' 项';
+   missing.onclick=()=>{
+    stopPracticeAudio();
+    showStart();
+    void lessonPageSelectMissing({title,words:missingMaterials}).catch(error=>{status.textContent=error.message;});
+   };
+   if(!items.length){status.textContent=unavailableReason||'所选内容还没有可用的录音。';return;}
+   loadingAudio=false;
+   start.hidden=true;pause.hidden=stop.hidden=false;
+   prev.hidden=replay.hidden=single;
+   const queue=lessonQueuePlay(playlist,items.length,bar,token,items,{
+    incremental:true,gapLabel:'回忆时间',gap:()=>single?0:gapSeconds()*1000,repeats:()=>single?1:Number(repeats.value),
     onPosition:index=>{playingIndex=index;prev.disabled=index===0;},
     onTapRequired:()=>lessonPageActionLabel(bar,'继续播放'),
-    onError:()=>{start.hidden=false;pause.hidden=prev.hidden=replay.hidden=true;update();},
+    onError:showStart,onComplete:()=>{showStart();if(lessonPageBar===bar)stopPracticeAudio();},
     doneLabel:'本轮听完'+missingLabel
    });
+   const progress=q('.page-progress');
+   if(progress)q('.cl-player').append(progress);
+   await queue;
   }catch(error){if(current())status.textContent=error.message;}
-  finally{if(current())start.disabled=!selection().length;}
- };
+  finally{if(current()){loadingAudio=false;updateControls();}}
+ }
  update();
 }
 document.addEventListener('click',event=>{
@@ -14359,7 +14530,7 @@ document.addEventListener('click',event=>{
  if(typeof scGuard==='function')try{scGuard();}catch(error){learningError(error);return;}
  const chapter=button.hasAttribute('data-cl-chapter')?learningLesson.id:'';
  const menu=button.closest('details');if(menu)menu.open=false;
- void chapterListeningOpen(chapter).catch(learningError);
+ void chapterListeningOpen(chapter,button.dataset.clOpen).catch(learningError);
 });
 learningDialog.addEventListener('close',()=>{if(lessonPageBar?.matches?.('.chapter-listening'))stopPracticeAudio();});
 </script>

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="a79f4da1fd593f09">
+  <meta name="lao-app-build" content="11b7034bf28234e3">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8936,6 +8936,11 @@ const paLaunch=document.createElement('button');paLaunch.type='button';paLaunch.
 const paAuditLaunch=document.createElement('button');paAuditLaunch.type='button';paAuditLaunch.textContent='已有分析问题清单';paAuditLaunch.dataset.paAudit='true';$('#dictionaryBatchTools').prepend(paAuditLaunch);
 </script>
 <style data-learning-style="study-center">
+.study-center .sc-listening{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 18px;align-items:center;margin:16px 0 20px;padding:18px;border-color:#c7dfd4;background:linear-gradient(115deg,#e6f3ee,#f7faf6)}
+.study-center .sc-listening h3{grid-column:1;margin:0;color:#18564a;font-size:18px}
+.study-center .sc-listening p{grid-column:1;margin:0;color:#46665a;font-size:14px;line-height:1.55}
+.study-center .sc-listening>button{grid-column:2;grid-row:1/3;margin:0;white-space:nowrap}
+@media(max-width:520px){.study-center .sc-listening{padding:14px;gap:7px 10px}.study-center .sc-listening h3{font-size:16px}.study-center .sc-listening p{grid-column:1/-1;font-size:13px}.study-center .sc-listening>button{grid-row:1;font-size:13px}}
 .study-center{max-width:1060px;margin:auto}.sc-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sc-heading h2{margin:4px 0}.sc-eyebrow,.sc-note,.sc-course small,.sc-box small{color:#607970;font-size:13px}.sc-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.sc-box{border:1px solid #cee3da;background:#f7fcf9;padding:18px;border-radius:16px}.sc-box h3{margin:0 0 12px}.sc-box p{margin:8px 0}.sc-box>.primary{display:block;margin-top:16px}.sc-continue{background:#e6f4ee}.sc-course-title{font-size:20px;font-weight:650;overflow-wrap:anywhere}.sc-actions,.sc-lesson-tools{display:flex;flex-wrap:wrap;gap:8px}.sc-actions{margin-top:12px}.sc-section{margin:24px 0}.sc-list{display:grid;gap:10px}.sc-course{border:1px solid #d5e5de;border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:14px}.sc-course h3{font-size:17px;margin:6px 0;overflow-wrap:anywhere}.sc-course p{font-size:13px;color:#607970;margin:4px 0}.sc-course .sc-actions{flex-shrink:0;margin:0}.sc-course button,.sc-box button,.sc-lesson-tools button,.sc-heading button,.study-center form button,#scBrowseMore{min-height:44px;padding:9px 13px;font-size:14px}.sc-search{display:grid;grid-template-columns:1fr 1fr;gap:12px}.sc-search label,.sc-goal-editor label{display:grid;gap:6px;font-size:14px}.sc-search select,.sc-search input,.sc-goal-editor select{width:100%;min-width:0;max-width:100%;padding:10px;font-size:16px;min-height:44px}.sc-goal-editor,.sc-recent{border-top:1px solid #d5e5de;padding:14px 0}.sc-goal-editor>summary,.sc-recent>summary{cursor:pointer;padding:8px 0;color:#176d5d}.sc-goal-editor form{display:grid;gap:12px;margin-top:10px}.sc-lesson-tools{margin-bottom:14px}.sc-note{line-height:1.7}.sc-recent .sc-list{margin-top:12px}
 .view-nav-group [data-study-open][aria-pressed=true]{background:#087f70;color:white;border-color:#087f70}
 @media(max-width:640px){.sc-overview{grid-template-columns:1fr}.sc-heading{align-items:flex-start}.sc-heading button{max-width:112px}.sc-box{padding:14px}.sc-course{display:block;padding:12px}.sc-course .sc-actions{margin-top:10px}.sc-search{grid-template-columns:1fr}.sc-course-title{font-size:18px}.sc-lesson-tools button{font-size:13px;padding:8px 10px}.sc-lesson-tools{gap:6px}.sc-actions button{flex:0 1 auto}}
@@ -14129,7 +14134,7 @@ async function chapterListeningBindResult(host,result){
  }catch(error){if(panel.isConnected)panel.textContent='暂时无法读取词卡标记。'+error.message;}
 }
 function chapterListeningHome(){
- return '<div class="sc-section"><button type="button" data-cl-open>听力列表</button></div>';
+ return '<section class="sc-box sc-listening" aria-labelledby="scListeningTitle"><h3 id="scListeningTitle">听力列表</h3><p>跨章节选词，按熟悉程度筛选。语速、每词播放次数和词间停顿都可以调。</p><button type="button" class="primary" data-cl-open>打开听力列表</button></section>';
 }
 function chapterListeningMenu(){
  return '<button type="button" data-cl-chapter>听待巩固词</button>';

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="482c60f4d8bb66a7">
+  <meta name="lao-app-build" content="88e83a5182df7137">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -467,8 +467,25 @@
 .cf-self-test[data-word-color-filter=pink] .learn-card:not([data-word-color=pink]),
 .cf-self-test[data-word-color-filter=lilac] .learn-card:not([data-word-color=lilac]),
 .cf-self-test[data-word-color-filter=mint] .learn-card:not([data-word-color=mint]){display:none!important}
-.chapter-listening-kind{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.chapter-listening-kind select{max-width:70%}
+.study-filter-select{position:relative;display:inline-flex;align-items:center;min-width:0;margin:0}
+.study-filter-select::after{content:"";position:absolute;inset-inline-end:12px;inset-block-start:calc(50% - 5px);width:6px;height:6px;border:solid #59796e;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);pointer-events:none}
+#learningPanel .study-filter-select select,#learningDialog .study-filter-select select{appearance:none;-webkit-appearance:none;width:100%;max-width:none;margin:0;padding:6px 28px 6px 10px;min-height:38px;border:1px solid #dce7df;border-radius:9px;background:#f1f6f2;color:#31584c;font:inherit;font-size:13px;line-height:1.4;cursor:pointer}
+#learningPanel .word-color-filter{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px;padding:5px 4px 2px}
+#learningDialog .word-color-detail-picker{margin:0 0 10px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+#learningDialog .word-color-detail-picker>summary{display:inline-flex;min-height:36px;padding:4px 7px;margin:0;border:0;border-radius:7px;background:transparent;color:#46665c;font-size:13px;font-weight:500}
+#learningDialog .word-color-detail-picker>summary::marker{content:""}
+#learningDialog .word-color-detail-picker>summary::after{content:"";width:6px;height:6px;margin:0 2px 3px 2px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+#learningDialog .word-color-detail-picker[open]>summary::after{transform:rotate(225deg);margin-block:3px 0}
+#learningDialog .word-color-detail-picker>summary:hover,#learningDialog .word-color-detail-picker[open]>summary{background:#eef5f0}
+#learningDialog .word-color-detail-picker .word-color-options{margin:6px 0 0}
+@media(min-width:641px){
+ #learningPanel .learn-card-actions>.word-color-card-button{position:static;inset:auto;flex:0 0 32px;width:32px;height:32px;min-height:32px;align-self:center}
+ #learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card[data-dialogue-card]>.learn-card-main{padding-inline-end:16px!important}
+}
+@media(max-width:640px){
+ #learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card:has(.word-color-card-button)>.learn-card-main{padding-inline-end:40px!important}
+ #learningPanel .study-filter-select select,#learningDialog .study-filter-select select,#learningDialog .word-color-detail-picker>summary{min-height:44px}
+}
 </style>
 <style>
 .chapter-listening{display:grid;gap:12px}.chapter-listening .cc-review-options{margin:0}.chapter-listening summary{cursor:pointer;padding:8px 0;font-weight:650}.chapter-listening-choices{max-height:14rem;overflow:auto;margin:10px 0}.chapter-listening-choices label{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px}.chapter-listening-choices small{display:block;color:#607970}.chapter-listening-filters{display:flex;flex-wrap:wrap;gap:8px 16px}.chapter-listening-filters label{display:flex;align-items:center;gap:6px;min-height:40px}.chapter-listening-controls,.chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chapter-listening-controls .primary{grid-column:1/-1;min-height:56px}.chapter-listening-settings label{display:grid;gap:4px;min-width:0}.chapter-listening-settings :is(input,select){width:100%;min-width:0;padding:8px}.chapter-listening [data-page-status],.chapter-listening [data-cl-selection]{margin:0;color:#46665a}.cc-response-timer{display:block;text-align:center;color:#46665a}.chapter-listening [hidden]{display:none!important}
@@ -3138,7 +3155,7 @@ function learningStudyCardHtml(m,w,options={}){
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):'')+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(options.dialogue?'':(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):''))+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):''):'')+'</div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -8979,12 +8996,11 @@ const paAuditLaunch=document.createElement('button');paAuditLaunch.type='button'
 .chapter-listening input[type="checkbox"]{width:auto;margin:0;accent-color:#087b69}
 .cl-list-tools p{margin:0;color:#4a695e;font-size:13px}
 .cl-list-tools [data-cl-select]{margin-left:auto}
-.chapter-listening .chapter-listening-kind{display:flex;align-items:center;gap:7px;margin:0;font-size:13px}
-.chapter-listening .chapter-listening-kind select{width:auto;margin:0}
 .cl-list{display:grid;gap:8px;min-width:0}
 .cl-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;min-width:0;padding:9px 11px;background:#fff;border:1px solid #d9e7df;border-radius:12px}
 .cl-row-content{grid-column:2;min-width:0;overflow-wrap:anywhere}
-.cl-row-content button[data-cl-detail]{border:0;background:transparent;padding:4px 0;min-height:38px;text-align:left;color:#075e51;font-size:18px;font-weight:650;white-space:normal}
+.cl-row-content button[data-cl-detail],.cl-row-content .cl-lao{border:0;background:transparent;padding:4px 0;min-height:38px;text-align:left;color:#075e51;font-size:18px;font-weight:650;white-space:normal}
+.cl-row-content .cl-lao{display:block}
 .cl-row-content p{margin:0;font-size:14px}
 .cl-row-content small{display:block;margin-top:3px;color:#526e64;font-size:12px}
 .cl-row-actions{justify-content:flex-end;max-width:150px}
@@ -9008,6 +9024,16 @@ const paAuditLaunch=document.createElement('button');paAuditLaunch.type='button'
  .cl-row-actions{gap:4px;max-width:116px}
  .chapter-listening-filters label{padding-inline:7px}
 }
+.study-center .sc-listening{background:#f4f8f4;border-color:#d7e4da}
+.cl-home-shortcuts button[data-cl-tone]{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;justify-items:center;background:#fafcf9;border-color:#dce7de;color:#36594e}
+.cl-home-shortcuts button span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.cl-home-shortcuts button span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cl-ink);opacity:.52}
+.cl-home-shortcuts strong{color:#46665a;font-size:14px}
+.cl-home-shortcuts button[data-cl-tone]:hover{background:#e9f2ec;border-color:#bed6c8}
+.cl-list-tools .study-filter-select{flex:0 1 auto}
+.cl-list-tools [data-cl-select]{min-height:38px;padding:6px 10px;font-size:13px}
+.cl-answer-mask{display:block;width:fit-content;max-width:100%;margin:3px 0;padding:4px 8px;border-radius:6px;background:#edf3ee;color:#506d62;font-size:13px}
+#learningDialog .cl-row-content [data-cl-reveal]{display:block;padding:3px 0;margin:4px 0 0;border:0;background:transparent;min-height:40px;color:#176756;font-size:13px;text-decoration:underline;text-underline-offset:3px}
 .study-center{max-width:1060px;margin:auto}.sc-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.sc-heading h2{margin:4px 0}.sc-eyebrow,.sc-note,.sc-course small,.sc-box small{color:#607970;font-size:13px}.sc-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.sc-box{border:1px solid #cee3da;background:#f7fcf9;padding:18px;border-radius:16px}.sc-box h3{margin:0 0 12px}.sc-box p{margin:8px 0}.sc-box>.primary{display:block;margin-top:16px}.sc-continue{background:#e6f4ee}.sc-course-title{font-size:20px;font-weight:650;overflow-wrap:anywhere}.sc-actions,.sc-lesson-tools{display:flex;flex-wrap:wrap;gap:8px}.sc-actions{margin-top:12px}.sc-section{margin:24px 0}.sc-list{display:grid;gap:10px}.sc-course{border:1px solid #d5e5de;border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:14px}.sc-course h3{font-size:17px;margin:6px 0;overflow-wrap:anywhere}.sc-course p{font-size:13px;color:#607970;margin:4px 0}.sc-course .sc-actions{flex-shrink:0;margin:0}.sc-course button,.sc-box button,.sc-lesson-tools button,.sc-heading button,.study-center form button,#scBrowseMore{min-height:44px;padding:9px 13px;font-size:14px}.sc-search{display:grid;grid-template-columns:1fr 1fr;gap:12px}.sc-search label,.sc-goal-editor label{display:grid;gap:6px;font-size:14px}.sc-search select,.sc-search input,.sc-goal-editor select{width:100%;min-width:0;max-width:100%;padding:10px;font-size:16px;min-height:44px}.sc-goal-editor,.sc-recent{border-top:1px solid #d5e5de;padding:14px 0}.sc-goal-editor>summary,.sc-recent>summary{cursor:pointer;padding:8px 0;color:#176d5d}.sc-goal-editor form{display:grid;gap:12px;margin-top:10px}.sc-lesson-tools{margin-bottom:14px}.sc-note{line-height:1.7}.sc-recent .sc-list{margin-top:12px}
 .view-nav-group [data-study-open][aria-pressed=true]{background:#087f70;color:white;border-color:#087f70}
 @media(max-width:640px){.sc-overview{grid-template-columns:1fr}.sc-heading{align-items:flex-start}.sc-heading button{max-width:112px}.sc-box{padding:14px}.sc-course{display:block;padding:12px}.sc-course .sc-actions{margin-top:10px}.sc-search{grid-template-columns:1fr}.sc-course-title{font-size:18px}.sc-lesson-tools button{font-size:13px;padding:8px 10px}.sc-lesson-tools{gap:6px}.sc-actions button{flex:0 1 auto}}
@@ -13825,8 +13851,8 @@ function wordColorMenuButton(bar){
  if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-open]'))return '';
  const chapter=workspaceName('word-color')+'|'+learningLesson.id;
  return wordColorModeButton(wordColorEditingChapter===chapter)+
-  '<label class="word-color-filter">按熟悉度看卡片<select data-word-color-filter><option value="">全部卡片</option>'+
-  ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></label>';
+  '<label class="word-color-filter"><span>按熟悉度看卡片</span><span class="study-filter-select"><select data-word-color-filter><option value="">全部卡片</option>'+
+  ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></span></label>';
 }
 
 function wordColorKey(id, lao, zh) {
@@ -13975,13 +14001,16 @@ learningOpenDetail=async function(id,...args){
  const result=await wordColorPreviousDetail(id,...args);
  if(learningDetail!==id)return result;
  const detail=learningDialog.querySelector('.learn-detail');
- const actions=detail?.querySelector('.ss-main-actions');
- if(!actions)return result;
+ if(!detail||detail.querySelector('.word-color-detail-picker'))return result;
  const {m,w}=await learningResolve(id);
- if(learningDetail!==id||!actions.isConnected)return result;
+ if(learningDetail!==id||!detail.isConnected||detail.querySelector('.word-color-detail-picker'))return result;
  const target=wordColorTarget(m,w);
  if(!target)return result;
- actions.append(wordColorPicker({target,id:m.id,lao:w?.word||m.textLao,zh:w?.meaning||m.translationZh||''}));
+ const picker=wordColorPicker({target,id:m.id,lao:w?.word||m.textLao,zh:w?.meaning||m.translationZh||''});
+ picker.classList.add('word-color-detail-picker');
+ const actions=detail.querySelector('.ss-main-actions');
+ if(actions)actions.after(picker);
+ else detail.prepend(picker);
  return result;
 };
 
@@ -14337,7 +14366,11 @@ async function chapterListeningOpen(courseId='',tone=''){
    ${courseId?'':`<details class="cl-chapters"><summary><span data-cl-count>全部章节</span></summary><div class="cc-pick-rows chapter-listening-choices">${courses.map(course=>'<label><input type="checkbox" name="cl-course" value="'+h(course.id)+'"><span>'+h(titles.get(course.id))+'</span></label>').join('')||'<p>暂无章节。</p>'}</div><button type="button" data-cl-all-chapters>恢复全部章节</button></details>`}
    <fieldset class="chapter-listening-filters" aria-label="熟悉度">${chapterListeningTones.map(key=>`<label data-cl-tone="${key}"><input type="checkbox" name="cl-status" value="${key}" ${(tone?tone===key:!courseId||key!=='green')?'checked':''}> ${chapterListeningLabels[key]}</label>`).join('')}</fieldset>
   </div>
-  <div class="cl-list-tools"><label class="chapter-listening-kind">类型 <select name="cl-kind"><option value="all">词和句</option><option value="word">单词</option><option value="sentence">句子</option></select></label><p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button></div>
+  <div class="cl-list-tools">
+   <label class="study-filter-select"><select name="cl-kind" aria-label="词句类型"><option value="all">词和句</option><option value="word">只看单词</option><option value="sentence">只看句子</option></select></label>
+   <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏两种语言</option></select></label>
+   <p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button>
+  </div>
   <div data-cl-list class="cl-list"></div>
   <button type="button" data-cl-more hidden>显示更多</button>
   <footer class="cl-player">
@@ -14372,7 +14405,7 @@ async function chapterListeningOpen(courseId='',tone=''){
  const gapSeconds=()=>Math.max(0,Math.min(120,Math.round(Number(gap.value)||0)));
  const checked=name=>new Set([...bar.querySelectorAll('input[name="'+name+'"]:checked')].map(input=>input.value));
  let playingIndex=0,selecting=false,limit=30,visible=[],loadingAudio=false;
- const marked=new Set(),unavailable=new Set();
+ const marked=new Set(),unavailable=new Set(),revealed=new Set();
  const key=row=>JSON.stringify([row.courseId,row.id,row.word,row.meaning]);
  const selection=()=>visible.filter(row=>!selecting||marked.has(key(row)));
  function updateControls(){
@@ -14394,18 +14427,27 @@ async function chapterListeningOpen(courseId='',tone=''){
   status.textContent='';
  }
  function update(){
-  const count=q('[data-cl-count]'),chapters=checked('cl-course'),statuses=checked('cl-status'),kind=q('[name="cl-kind"]').value;
+  const count=q('[data-cl-count]'),chapters=checked('cl-course'),statuses=checked('cl-status'),kind=q('[name="cl-kind"]').value,display=q('[name="cl-display"]').value;
   if(count)count.textContent=chapters.size?'已选 '+chapters.size+' 章':'全部章节';
   visible=catalog.filter(row=>(!chapters.size||chapters.has(row.courseId))&&(kind==='all'||row.itemKind===kind)&&[...row.flags].some(flag=>statuses.has(flag)));
-  q('[data-cl-list]').innerHTML=visible.slice(0,limit).map((row,index)=>`<article class="cl-row" data-cl-row="${index}">
-   ${selecting?`<input type="checkbox" data-cl-item aria-label="勾选 ${h(row.word)}" ${marked.has(key(row))?'checked':''}>`:''}
-   <div class="cl-row-content"><button type="button" data-cl-detail lang="lo">${h(row.word)}</button><p>${h(row.meaning)}</p><small>${h(titles.get(row.courseId))}</small><small data-cl-unavailable ${unavailable.has(key(row))?'':'hidden'}>本机暂无录音</small></div>
-   <div class="cl-row-actions"><button type="button" data-cl-single aria-label="播放 ${h(row.word)}" title="播放">▷</button><button type="button" data-cl-mark data-cl-tone="${chapterListeningTones.find(tone=>row.flags.has(tone))||''}" aria-expanded="false" aria-label="调整熟悉度">${chapterListeningTones.filter(tone=>row.flags.has(tone)).map(tone=>chapterListeningLabels[tone]).join('、')}</button></div>
-  </article>`).join('')||'<p class="cl-empty">没有符合筛选条件的词句。可调整筛选，或在课程里标记熟悉度。</p>';
+  q('[data-cl-list]').innerHTML=visible.slice(0,limit).map((row,index)=>{
+   const isRevealed=revealed.has(key(row));
+   const hideLao=!isRevealed&&(display==='lo'||display==='both'),hideChinese=!isRevealed&&(display==='zh'||display==='both');
+   return `<article class="cl-row" data-cl-row="${index}">
+    ${selecting?`<input type="checkbox" data-cl-item aria-label="勾选第 ${index+1} 项" ${marked.has(key(row))?'checked':''}>`:''}
+    <div class="cl-row-content">
+     ${hideLao?'<span class="cl-answer-mask">老挝语已隐藏</span>':hideChinese?`<strong class="cl-lao" lang="lo">${h(row.word)}</strong>`:`<button type="button" data-cl-detail lang="lo">${h(row.word)}</button>`}
+     ${hideChinese?'<span class="cl-answer-mask">中文已隐藏</span>':`<p>${h(row.meaning)}</p>`}
+     ${display==='all'?'':`<button type="button" data-cl-reveal aria-expanded="${isRevealed}">${isRevealed?'收起答案':'揭晓答案'}</button>`}
+     <small>${h(titles.get(row.courseId))}</small><small data-cl-unavailable ${unavailable.has(key(row))?'':'hidden'}>本机暂无录音</small>
+    </div>
+    <div class="cl-row-actions"><button type="button" data-cl-single aria-label="播放第 ${index+1} 项" title="播放">▷</button><button type="button" data-cl-mark data-cl-tone="${chapterListeningTones.find(tone=>row.flags.has(tone))||''}" aria-expanded="false" aria-label="调整熟悉度">${chapterListeningTones.filter(tone=>row.flags.has(tone)).map(tone=>chapterListeningLabels[tone]).join('、')}</button></div>
+   </article>`;
+  }).join('')||'<p class="cl-empty">没有符合筛选条件的词句。可调整筛选，或在课程里标记熟悉度。</p>';
   q('[data-cl-more]').hidden=visible.length<=limit;
   updateControls();
  }
- q('[data-cl-more]').onclick=()=>{limit+=30;update();q('[data-cl-list]').querySelector('[data-cl-row="'+(limit-30)+'"] [data-cl-detail]')?.focus();};
+ q('[data-cl-more]').onclick=()=>{limit+=30;update();q('[data-cl-list]').querySelector('[data-cl-row="'+(limit-30)+'"] :is([data-cl-reveal],[data-cl-detail])')?.focus();};
  q('[data-cl-select]').onclick=event=>{
   resetPlayer();
   selecting=!selecting;marked.clear();
@@ -14422,6 +14464,13 @@ async function chapterListeningOpen(courseId='',tone=''){
  q('[data-cl-list]').onclick=event=>{
   const button=event.target.closest('button'),card=button?.closest('[data-cl-row]'),row=card&&visible[Number(card.dataset.clRow)];
   if(!row)return;
+  if(button.matches('[data-cl-reveal]')){
+   const index=card.dataset.clRow;
+   if(revealed.has(key(row)))revealed.delete(key(row));else revealed.add(key(row));
+   update();
+   q('[data-cl-row="'+index+'"] [data-cl-reveal]')?.focus({preventScroll:true});
+   return;
+  }
   if(button.matches('[data-cl-detail]')){
    resetPlayer();updateControls();
    void saOpenNested(row.id,button).catch(learningError);
@@ -14448,6 +14497,10 @@ async function chapterListeningOpen(courseId='',tone=''){
   }
  };
  bar.onchange=event=>{
+  if(event.target.matches('[name="cl-display"]')){
+   revealed.clear();update();
+   return;
+  }
   if(event.target.matches('[data-cl-item]')){
    const row=visible[Number(event.target.closest('[data-cl-row]').dataset.clRow)];
    if(event.target.checked)marked.add(key(row));else marked.delete(key(row));

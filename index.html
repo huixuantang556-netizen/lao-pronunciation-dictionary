@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="88e83a5182df7137">
+  <meta name="lao-app-build" content="b4702cdf0a512a65">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -438,29 +438,8 @@
 .word-color-picker [role=status]:empty{display:none}
 .word-color-picker [role=status]{font-size:13px;color:#536e63}
 .word-color-hint{margin:8px 0 0;color:#536e63;font-size:12px;line-height:1.5}
-.learn-card[data-word-color-target]{position:relative}
-#learningPanel .word-color-card-button{position:absolute;inset:5px 5px auto auto;z-index:1;display:none;place-items:center;width:36px;height:36px;min-height:36px;padding:0;border:0;border-radius:10px;background:transparent}
-#learningContent:has([data-word-color-mode][aria-pressed=true]) .word-color-card-button{display:grid}
-#learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card:has(>.word-color-card-button)>.learn-card-main{padding-inline-end:40px!important}
-#learningPanel .word-color-mode{min-height:40px;padding:6px 12px;white-space:nowrap;font-size:13px;color:#46665c;background:#f0f6f2;border:1px solid #dce8e1;border-radius:9px}
-#learningPanel .word-color-mode[aria-pressed=true]{background:#e2f1e8;border-color:#7fb29d;color:#126e60}
-#learningPanel .word-color-card-button:hover,#learningPanel .word-color-card-button:focus-visible{background:#e3efe8}
-.word-color-card-button .word-color-dot{background:conic-gradient(#ffe5a1 0 33%,#f5bcca 33% 66%,#b8dcca 66%);border-color:#8cae9e}
-[data-word-color=yellow] .word-color-card-button .word-color-dot{background:#ffe5a1;border-color:#c7a659}
-[data-word-color=pink] .word-color-card-button .word-color-dot{background:#f5bcca;border-color:#bc8091}
-[data-word-color=mint] .word-color-card-button .word-color-dot{background:#b8dcca}
-[data-word-color=lilac] .word-color-card-button .word-color-dot{background:#ddc9f3}
-.word-color-heading{font-size:1.6rem;color:#126e60;margin:0 0 12px}
-#learningPanel .cf-mask-menu .word-color-mode{margin-top:4px;border-top:1px solid #dce8e1}
 
-.word-color-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 0 2px}
-.word-color-tools button{min-height:40px;background:var(--soft);color:#46665c}
-.word-color-tools [role=status]{font-size:13px;color:#536e63}
 
-#learningPanel .word-color-mode[hidden]{display:none!important}
-.word-color-tools [data-word-color-done]{order:1;background:#087e6e;color:white;border-color:#087e6e}
-.word-color-tools [role=status]{order:2;flex-basis:100%}
-.word-color-tools [role=status]:empty{display:none}
 .word-color-filter{display:grid;gap:4px;margin:6px 4px;font-size:13px;color:#46665c}
 .word-color-filter select{min-height:40px;width:100%}
 .cf-self-test[data-word-color-filter=yellow] .learn-card:not([data-word-color=yellow]),
@@ -478,14 +457,12 @@
 #learningDialog .word-color-detail-picker[open]>summary::after{transform:rotate(225deg);margin-block:3px 0}
 #learningDialog .word-color-detail-picker>summary:hover,#learningDialog .word-color-detail-picker[open]>summary{background:#eef5f0}
 #learningDialog .word-color-detail-picker .word-color-options{margin:6px 0 0}
-@media(min-width:641px){
- #learningPanel .learn-card-actions>.word-color-card-button{position:static;inset:auto;flex:0 0 32px;width:32px;height:32px;min-height:32px;align-self:center}
- #learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card[data-dialogue-card]>.learn-card-main{padding-inline-end:16px!important}
-}
 @media(max-width:640px){
- #learningContent:has([data-word-color-mode][aria-pressed=true]) .learn-card:has(.word-color-card-button)>.learn-card-main{padding-inline-end:40px!important}
  #learningPanel .study-filter-select select,#learningDialog .study-filter-select select,#learningDialog .word-color-detail-picker>summary{min-height:44px}
 }
+
+.word-color-clear-status{color:#536e63;font-size:12px;padding-inline:10px}
+.word-color-clear-status:empty{display:none}
 </style>
 <style>
 .chapter-listening{display:grid;gap:12px}.chapter-listening .cc-review-options{margin:0}.chapter-listening summary{cursor:pointer;padding:8px 0;font-weight:650}.chapter-listening-choices{max-height:14rem;overflow:auto;margin:10px 0}.chapter-listening-choices label{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px}.chapter-listening-choices small{display:block;color:#607970}.chapter-listening-filters{display:flex;flex-wrap:wrap;gap:8px 16px}.chapter-listening-filters label{display:flex;align-items:center;gap:6px;min-height:40px}.chapter-listening-controls,.chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chapter-listening-controls .primary{grid-column:1/-1;min-height:56px}.chapter-listening-settings label{display:grid;gap:4px;min-width:0}.chapter-listening-settings :is(input,select){width:100%;min-width:0;padding:8px}.chapter-listening [data-page-status],.chapter-listening [data-cl-selection]{margin:0;color:#46665a}.cc-response-timer{display:block;text-align:center;color:#46665a}.chapter-listening [hidden]{display:none!important}
@@ -3155,7 +3132,7 @@ function learningStudyCardHtml(m,w,options={}){
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(options.dialogue?'':(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):''))+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):''):'')+'</div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+'</div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -3223,7 +3200,6 @@ async function renderLearning(){
   if(learningSettings)html+='<details><summary>本课音频情况</summary><p>只检查当前账号本机已保存音频，不请求生成。</p><button data-learn="audio-audit">检查已有／缺少音频</button><div id="learningAudioAudit"></div></details>';
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
- if(learningRoute==='lesson'&&typeof wordColorEditingChapter!=='undefined'&&wordColorEditingChapter!==workspaceName('word-color')+'|'+learningLesson.id)wordColorEditingChapter='';
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
  if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);if(route==='lesson')rememberCurrentPage();$('#learningStatus').textContent='';}
 }
@@ -10910,7 +10886,6 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record]
 function cfDecorate(){
  if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
  for(const bar of document.querySelectorAll('[data-page-key]:not(.chapter-listening)')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons(typeof wordColorMenuButton==='function'?wordColorMenuButton(bar):''));if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
- if(typeof wordColorMountClear==='function')wordColorMountClear();
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
  for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
@@ -13838,21 +13813,13 @@ const wordColorOptions = {
  auto:'自动', plain:'原色', yellow:'模糊', pink:'陌生', mint:'熟悉', lilac:'反应慢'
 };
 let wordColorView = null;
-let wordColorEditingChapter = '';
 let wordColorClearing = false;
-
-function wordColorModeButton(active){
- return '<button type="button" class="word-color-mode" data-word-color-mode aria-pressed="'+active+'"'+(active?' hidden':'')+'>'+
-  (active?'完成调色':'调整颜色')+'</button>';
-}
 
 function wordColorMenuButton(bar){
  const content=bar.closest('#learningContent');
- if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-open]'))return '';
- const chapter=workspaceName('word-color')+'|'+learningLesson.id;
- return wordColorModeButton(wordColorEditingChapter===chapter)+
-  '<label class="word-color-filter"><span>按熟悉度看卡片</span><span class="study-filter-select"><select data-word-color-filter><option value="">全部卡片</option>'+
-  ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></span></label>';
+ if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-target]'))return '';
+ return '<label class="word-color-filter"><span>按熟悉度看卡片</span><span class="study-filter-select"><select data-word-color-filter><option value="">全部卡片</option>'+
+  ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></span></label><button type="button" data-word-color-clear>清除全部颜色</button><span class="word-color-clear-status" role="status"></span>';
 }
 
 function wordColorKey(id, lao, zh) {
@@ -13941,23 +13908,6 @@ function wordColorClearTargets(index){
  return targets;
 }
 
-function wordColorMountClear(){
- const content=document.querySelector?.('#learningContent');
- if(!content)return;
- let toolbar=content.querySelector('[data-word-color-tools]');
- const mode=content.querySelector('[data-word-color-mode][aria-pressed=true]');
- if(!mode){
-  toolbar?.remove();
-  return;
- }
- if(!toolbar){
-  mode.closest('[data-page-key]')?.insertAdjacentHTML('beforeend',
-   '<div class="word-color-tools" data-word-color-tools><button type="button" data-word-color-clear>清除全部颜色</button><span role="status"></span><button type="button" data-word-color-done>完成调色</button></div>');
-  toolbar=content.querySelector('[data-word-color-tools]');
- }
- if(toolbar)toolbar.querySelector('button').disabled=wordColorClearing;
-}
-
 async function wordColorClear(button){
  if(wordColorClearing||wordColorPending.size||learningHasWork())return;
  const owner=workspaceName('word-color'),status=button.nextElementSibling;
@@ -13982,7 +13932,6 @@ async function wordColorClear(button){
  }finally{
   wordColorClearing=false;
   button.disabled=false;
-  wordColorMountClear();
  }
 }
 
@@ -14013,11 +13962,6 @@ learningOpenDetail=async function(id,...args){
  else detail.prepend(picker);
  return result;
 };
-
-function wordColorCardButton(m,w,options){
- if(options.multi||!wordColorTarget(m,w))return '';
- return '<button type="button" class="word-color-card-button" data-word-color-open aria-label="调整词卡颜色" title="调整词卡颜色"><span class="word-color-dot" aria-hidden="true"></span></button>';
-}
 
 function wordColorPicker({target,id,lao,zh},expanded=false,onSaved){
  const picker=document.createElement(expanded?'div':'details');
@@ -14068,35 +14012,9 @@ function wordColorPicker({target,id,lao,zh},expanded=false,onSaved){
 }
 
 document.addEventListener('click',event=>{
- const mode=event.target.closest('[data-word-color-mode]');
  const clear=event.target.closest('[data-word-color-clear]');
- const done=event.target.closest('[data-word-color-done]');
- if(clear){void wordColorClear(clear);return;}
- if(mode||done){
-  const active=!done&&mode.getAttribute('aria-pressed')!=='true';
-  wordColorEditingChapter=active?workspaceName('word-color')+'|'+learningLesson.id:'';
-  for(const control of document.querySelectorAll('[data-word-color-mode]')){
-   control.setAttribute('aria-pressed',String(active));
-   control.hidden=active;
-   control.textContent=active?'完成调色':'调整颜色';
-  }
-  const menu=mode?.closest('.cf-mask-controls');
-  if(menu)menu.open=false;
-  wordColorMountClear();
-  if(done)document.querySelector('#learningContent .cf-mask-controls summary')?.focus?.({preventScroll:true});
-  return;
- }
- const button=event.target.closest('[data-word-color-open]');
- if(!button)return;
- event.preventDefault();
- event.stopImmediatePropagation();
- if(learningHasWork())return;
- const data=button.closest('[data-word-color-target]')?.dataset;
- if(!data)return;
- learningModal('词卡颜色','<p class="word-color-heading" lang="lo">'+learningEsc(data.wordColorLao)+'</p><div data-word-color-panel></div>');
- const panel=learningDialog.querySelector('[data-word-color-panel]');
- panel.append(wordColorPicker({target:data.wordColorTarget,id:data.cardId,lao:data.wordColorLao,zh:data.wordColorZh},true));
-},true);
+ if(clear)void wordColorClear(clear);
+});
 document.addEventListener('change',event=>{
  const filter=event.target.closest('#learningContent [data-word-color-filter]');
  const scope=filter?.closest('.cf-self-test');

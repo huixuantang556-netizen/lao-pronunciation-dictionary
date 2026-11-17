@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="11b7034bf28234e3">
+  <meta name="lao-app-build" content="ba37516f34a01549">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -6890,7 +6890,7 @@ function learningGroupView(data,course){
  const categories=sections.flatMap(s=>s.blocks.map(b=>({id:b.id,title:b.title||s.title})));
  const category=categories.some(b=>b.id===state.category)?state.category:'';
  const h=learningEsc;
- const nav='<nav class="learning-primary-groups" aria-label="内容分类">'+[['words','单词'],['dialogue','情景对话']].map(([key,title])=>'<button type="button" data-learning-group="'+key+'" aria-pressed="'+(state.kind===key)+'">'+title+'</button>').join('')+'</nav><nav class="learning-secondary-groups" aria-label="细分类别"><button type="button" data-learning-category="" aria-pressed="'+(!category)+'">全部'+(state.kind==='words'?'单词':'情景')+'</button>'+categories.map(b=>'<button type="button" data-learning-category="'+h(b.id)+'" aria-pressed="'+(category===b.id)+'">'+h(b.title)+'</button>').join('')+(learningSettings?'<button type="button" data-create-course-group="'+state.kind+'">＋ 新建'+(state.kind==='words'?'单词分类':'对话场景')+'</button>':'')+'</nav><details class="learning-original-access"><summary>其他资料与原章节</summary><p>知识点、表格及原章节顺序保留在这里。</p><button type="button" data-learning-group="original">查看原章节</button></details>';
+ const nav='<nav class="learning-primary-groups" aria-label="内容分类">'+[['words','单词'],['dialogue','情景对话']].map(([key,title])=>'<button type="button" data-learning-group="'+key+'" aria-pressed="'+(state.kind===key)+'">'+title+'</button>').join('')+'</nav><nav class="learning-secondary-groups" aria-label="细分类别" data-category-strip="'+h(course.id)+'" data-category-kind="'+h(state.kind)+'"><button type="button" data-learning-category="" aria-pressed="'+(!category)+'">全部'+(state.kind==='words'?'单词':'情景')+'</button>'+categories.map(b=>'<button type="button" data-learning-category="'+h(b.id)+'" aria-pressed="'+(category===b.id)+'">'+h(b.title)+'</button>').join('')+(learningSettings?'<button type="button" data-create-course-group="'+state.kind+'">＋ 新建'+(state.kind==='words'?'单词分类':'对话场景')+'</button>':'')+'</nav><details class="learning-original-access"><summary>其他资料与原章节</summary><p>知识点、表格及原章节顺序保留在这里。</p><button type="button" data-learning-group="original">查看原章节</button></details>';
  return {nav,title:category?categories.find(b=>b.id===category).title:(state.kind==='words'?'全部单词':'全部情景'),sections:sections.map(s=>({...s,blocks:s.blocks.filter(b=>!category||b.id===category)})).filter(s=>s.blocks.length)};
 }
 learningPanel.addEventListener('click',async e=>{
@@ -12241,17 +12241,47 @@ function lnRestoreHome(content,loading,key){
  const status=$('#learningStatus');if(status)status.textContent='';
  return true;
 }
+const lnCategoryScroll=new Map();
+function lnCategoryStripKey(strip){
+ return JSON.stringify([workspaceName('navigation-text-v1'),strip.dataset.categoryStrip,strip.dataset.categoryKind]);
+}
+function lnRememberCategoryScroll(content){
+ const strip=content?.querySelector?.('[data-category-strip]');
+ if(strip)lnCategoryScroll.set(lnCategoryStripKey(strip),strip.scrollLeft);
+}
+function lnRestoreCategoryScroll(content){
+ const strip=content.querySelector?.('[data-category-strip]');
+ if(!strip||strip.scrollWidth<=strip.clientWidth)return;
+ strip.scrollLeft=lnCategoryScroll.get(lnCategoryStripKey(strip))||0;
+ const selected=strip.querySelector('[data-learning-category][aria-pressed="true"]');
+ if(!selected)return;
+ const viewport=strip.getBoundingClientRect(),item=selected.getBoundingClientRect();
+ if(item.left>=viewport.right||item.right<=viewport.left){
+  strip.scrollLeft+=item.left-viewport.left;
+ }
+}
 const lnPreviousRender=renderLearning;
 renderLearning=async function(...args){
  const run=++lnRun,key=lnRenderKey(),content=document.querySelector('#learningContent');
  if(learningRoute!=='lesson')content?.classList?.remove('mle-lesson');
  const loading=document.getElementById?.('learningLoading');
+ lnRememberCategoryScroll(content);
  if(lnRestoreHome(content,loading,key))return;
  const homeKey=learningRoute==='home'?lnCourseHomeKey():null;
  const changed=content&&content.dataset.navigationPage!==key&&!(learningRoute==='study'&&typeof scCanReuse==='function'&&scCanReuse(content));
+ let loadingTimer;
  if(changed){
   content.setAttribute('data-navigation-pending','true');content.setAttribute('aria-busy','true');content.inert=true;
-  if(loading){loading.hidden=false;loading.textContent='正在读取本机课程…';}
+  if(loading){
+   loading.hidden=true;
+   const showLoading=()=>{
+    if(run!==lnRun||lnRenderKey()!==key||activeView!=='learning')return;
+    loading.textContent='正在读取本机课程…';
+    loading.hidden=false;
+   };
+   if(content.childNodes.length)loadingTimer=setTimeout(showLoading,300);
+   else showLoading();
+  }
  }
  let completed=false;
  try{
@@ -12275,10 +12305,11 @@ renderLearning=async function(...args){
   }
   throw error;
  }
- finally{if(run===lnRun&&content){
+ finally{clearTimeout(loadingTimer);if(run===lnRun&&content){
   content.removeAttribute('data-navigation-pending');content.removeAttribute('aria-busy');content.inert=Boolean(changed&&!completed&&loading&&activeView==='learning');
   if(completed){
    content.dataset.navigationPage=lnRenderKey();if(loading)loading.hidden=true;
+   lnRestoreCategoryScroll(content);
    if(homeKey&&learningRoute==='home'&&homeKey===lnCourseHomeKey()&&content.querySelector?.('.learn-home-header'))lnCourseHome={key:homeKey,nodes:[...content.childNodes]};
   }
  }}

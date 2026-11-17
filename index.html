@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="51004e1e2343e2fc">
+  <meta name="lao-app-build" content="04c08e8dea17ba6c">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7728,7 +7728,9 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   const grades=()=>card.querySelectorAll('[data-recall-grade]');
   if(dictation)for(const button of grades())button.textContent=dictationRatings[button.dataset.recallGrade];
   if(listening){card.classList.add('cc-listening');$('[data-recall-play]').textContent='▶ 听单词';card.querySelector('.question-ipa').textContent='听音辨词';card.querySelector('.recall-prompt').textContent='点击播放，只凭听力回忆老挝语和含义，再揭晓';reveal.textContent='揭晓老挝语和中文';$('[data-recall-play]').hidden=false;reveal.textContent='揭晓老挝语和中文';if(dictation){card.querySelector('.question-ipa').textContent='听音写老挝语';card.querySelector('.recall-prompt').textContent='听完先写在纸上，再揭晓并自评。';}}
-  let suspended=false;
+  const autoPlay=(direction==='lao'||listening)&&typeof appPreference==='function'&&appPreference('courseCheckAutoPlay')===true;
+  if(autoPlay) $('[data-recall-play]').hidden=false;
+  let suspended=false,playbackRequest=0;
   const current=()=>!suspended&&run===courseCheckRun&&index===at&&card.isConnected!==false&&(typeof learningDialog==='undefined'||learningDialog.open);const context=listening&&typeof listeningContextPanel==='function'?listeningContextPanel(examples,{current,play:m=>saPlay(m.id,{isCurrent:current}),detail:(m,button)=>openDetail(m.id,button)}):null;if(context)card.querySelector('.study-examples').append(context.element);
   async function openDetail(target,button){
    if(!flow.revealed||!current())return;
@@ -7751,7 +7753,13 @@ function courseCheckSession(queue,course,direction,snap,options={}){
    try{await learningOpenDetail(target);if(parent)letterDetailBackButton();}
    catch(error){if(parent)letterDetailBackButton();else suspended=false;learningError(error);}
   }
-  async function play(id=r.id){if((!flow.revealed&&!listening)||!current())return;try{await saPlay(id,{isCurrent:current});}catch(e){if(current())status.textContent='暂无可播放的已保存录音，或录音需要核对。可以跳过或揭晓后补录；本次不会生成音频。';}}
+  async function play(id=r.id){
+   if((!flow.revealed&&!listening&&!autoPlay)||!current())return;
+   const request=++playbackRequest;
+   const isCurrent=()=>current()&&request===playbackRequest;
+   try{await saPlay(id,{isCurrent});}
+   catch(e){if(isCurrent())status.textContent=e?.name==='NotAllowedError'?'浏览器暂时限制播放，请轻点「播放」。':'暂无可播放的已保存录音，或录音需要核对。可以跳过或揭晓后补录。';}
+  }
   async function show(withAudio=true){if(!current())return;await flow.reveal(async()=>{
    revealedAt=at;persist(withAudio);
    card.classList.add('study-revealed');context?.element.remove();card.classList.remove('cc-listening');
@@ -7762,7 +7770,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
    reveal.hidden=true;$('[data-recall-play]').hidden=false;$('[data-recall-detail]').hidden=false;
    for(const b of grades()){b.disabled=false;b.setAttribute('aria-pressed',String(ratings.get(at)===b.dataset.recallGrade));}
    if(ratings.has(at))status.textContent='本题已保存：'+({red:'陌生',yellow:'模糊',green:'熟悉'})[ratings.get(at)]+'；可以重新选择，修改不会增加答题次数。';
-   if(withAudio&&(typeof appPreference!=='function'||appPreference('revealAudio')))await play();
+   if(withAudio&&(autoPlay||typeof appPreference!=='function'||appPreference('revealAudio')))await play();
   });}
   reveal.onclick=()=>show();
   card.onclick=e=>{if(!e.target.closest('button,a,input,select,summary,details,.practice-footer'))void show();};
@@ -7784,6 +7792,7 @@ function courseCheckSession(queue,course,direction,snap,options={}){
   $('[data-recall-next]').onclick=()=>{if(current()&&!flow.saving){index++;persist(true);draw();}};
   if(!checkpointOK)status.textContent='本机无法保存检测断点，请勿关闭本轮检测。';
   if(revealedAt===at||ratings.has(at))void show(false);
+  if(autoPlay)void play();
  }
  draw();
 }
@@ -9931,7 +9940,7 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
 const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
@@ -9997,7 +10006,10 @@ const apSelfTestDisplay=document.createElement('div');
 apSelfTestDisplay.className='ap-course-check';
 apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>';
 apGroup('自测显示',[apSelfTestDisplay]);
-apGroup('章节检测',[apCourseCheck,familiarPreference]);
+const courseCheckAudioPreference=document.createElement('label');
+courseCheckAudioPreference.className='ap-switch-row';
+courseCheckAudioPreference.innerHTML='<span><strong>进入题目时自动播放录音</strong><small>老挝语 → 中文和听音辨词适用。切题时播放一次，揭晓后再播放一次。</small></span><input type="checkbox" role="switch" data-ap-preference="courseCheckAutoPlay">';
+apGroup('章节检测',[apCourseCheck,courseCheckAudioPreference,familiarPreference]);
 apGroup('每日清单与自由练习',[apPracticeDefaults,adaptivePreference]);
 apGroup('听音辨词自动播放',[apListeningAuto]);
 for(const n of [document.querySelector('#apResetPreferences'),document.querySelector('#apPreferenceStatus')])apPrefs.append(n);

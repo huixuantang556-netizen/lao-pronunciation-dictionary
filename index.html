@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b4702cdf0a512a65">
+  <meta name="lao-app-build" content="a2f162d9ce4c2675">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -450,15 +450,22 @@
 .study-filter-select::after{content:"";position:absolute;inset-inline-end:12px;inset-block-start:calc(50% - 5px);width:6px;height:6px;border:solid #59796e;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);pointer-events:none}
 #learningPanel .study-filter-select select,#learningDialog .study-filter-select select{appearance:none;-webkit-appearance:none;width:100%;max-width:none;margin:0;padding:6px 28px 6px 10px;min-height:38px;border:1px solid #dce7df;border-radius:9px;background:#f1f6f2;color:#31584c;font:inherit;font-size:13px;line-height:1.4;cursor:pointer}
 #learningPanel .word-color-filter{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px;padding:5px 4px 2px}
-#learningDialog .word-color-detail-picker{margin:0 0 10px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
-#learningDialog .word-color-detail-picker>summary{display:inline-flex;min-height:36px;padding:4px 7px;margin:0;border:0;border-radius:7px;background:transparent;color:#46665c;font-size:13px;font-weight:500}
+#learningDialog .word-color-detail-picker{flex:0 0 auto;align-self:center;width:max-content;margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+#learningDialog .word-color-detail-picker>summary{display:grid;place-items:center;width:40px;height:40px;min-height:0;padding:0;margin:0;border:1px solid #d7e5dc;border-radius:10px;background:#f2f7f3}
 #learningDialog .word-color-detail-picker>summary::marker{content:""}
-#learningDialog .word-color-detail-picker>summary::after{content:"";width:6px;height:6px;margin:0 2px 3px 2px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
-#learningDialog .word-color-detail-picker[open]>summary::after{transform:rotate(225deg);margin-block:3px 0}
-#learningDialog .word-color-detail-picker>summary:hover,#learningDialog .word-color-detail-picker[open]>summary{background:#eef5f0}
-#learningDialog .word-color-detail-picker .word-color-options{margin:6px 0 0}
+#learningDialog .word-color-detail-picker>summary .word-color-dot{width:16px;height:16px}
+#learningDialog .word-color-detail-picker>summary:hover,#learningDialog .word-color-detail-picker[open]>summary{background:#e7f2eb;border-color:#b4d0bf}
+#learningDialog .word-color-detail-picker>summary:focus-visible{outline:2px solid #087e6e;outline-offset:2px}
+#learningDialog .word-color-detail-options{position:absolute;z-index:5;inset-block-start:calc(100% + 6px);inset-inline-start:0;width:min(265px,calc(100vw - 58px));padding:10px;background:#fcfefa;border:1px solid #d6e5da;border-radius:12px;box-shadow:0 6px 20px #163d3020}
+#learningDialog .ss-main-actions .word-color-detail-options{inset-inline:auto 0}
 @media(max-width:640px){
- #learningPanel .study-filter-select select,#learningDialog .study-filter-select select,#learningDialog .word-color-detail-picker>summary{min-height:44px}
+ #learningPanel .study-filter-select select,#learningDialog .study-filter-select select{min-height:44px}
+ #learningDialog .word-color-detail-picker>summary{width:44px;height:44px}
+}
+@media(max-width:850px){
+ #learningDialog .ss-main-actions{position:relative}
+ #learningDialog .ss-main-actions .word-color-detail-picker{position:static}
+ #learningDialog .ss-main-actions .word-color-detail-options{inset-inline:0 auto}
 }
 
 .word-color-clear-status{color:#536e63;font-size:12px;padding-inline:10px}
@@ -13958,7 +13965,9 @@ learningOpenDetail=async function(id,...args){
  const picker=wordColorPicker({target,id:m.id,lao:w?.word||m.textLao,zh:w?.meaning||m.translationZh||''});
  picker.classList.add('word-color-detail-picker');
  const actions=detail.querySelector('.ss-main-actions');
- if(actions)actions.after(picker);
+ const reference=actions?.querySelector('#learningReferenceRecord');
+ if(reference)reference.after(picker);
+ else if(actions)actions.append(picker);
  else detail.prepend(picker);
  return result;
 };
@@ -13966,17 +13975,18 @@ learningOpenDetail=async function(id,...args){
 function wordColorPicker({target,id,lao,zh},expanded=false,onSaved){
  const picker=document.createElement(expanded?'div':'details');
  picker.className='word-color-picker';
- picker.innerHTML=(expanded?'':'<summary><span class="word-color-dot" aria-hidden="true"></span>词卡颜色</summary>')+
+ picker.innerHTML=(expanded?'':'<summary aria-label="词卡颜色" title="词卡颜色"><span class="word-color-dot" data-swatch="auto" aria-hidden="true"></span></summary><div class="word-color-detail-options">')+
   '<div class="word-color-options" role="group" aria-label="词卡颜色">'+Object.entries(wordColorOptions).map(([value,label])=>'<button type="button" data-word-color-choice="'+value+'"><span class="word-color-dot" data-swatch="'+value+'" aria-hidden="true"></span>'+label+'</button>').join('')+
-  '</div><p class="word-color-hint">黄＝模糊，粉＝陌生，紫＝反应慢，绿＝熟悉。手动标记优先。</p><p role="status"></p>';
+  '</div><p class="word-color-hint">黄＝模糊，粉＝陌生，紫＝反应慢，绿＝熟悉。手动标记优先。</p><p role="status"></p>'+(expanded?'':'</div>');
  const owner=workspaceName('word-color'),buttons=[...picker.querySelectorAll('button')],status=picker.querySelector('[role=status]');
  const draw=()=>{
   if(!wordColorView)return;
   const choice=wordColorChoice(wordColorView,target,id,lao,zh);
   const summary=picker.querySelector('summary');
   if(summary){
-   summary.querySelector('.word-color-dot').dataset.swatch=choice.tone;
-   summary.title=choice.manual==='auto'?'自动 · '+wordColorOptions[choice.automatic]:wordColorOptions[choice.manual];
+   summary.querySelector('.word-color-dot').dataset.swatch=choice.tone==='plain'&&choice.manual==='auto'?'auto':choice.tone;
+   summary.title='词卡颜色 · '+(choice.manual==='auto'?'自动 · '+wordColorOptions[choice.automatic]:wordColorOptions[choice.manual]);
+   summary.setAttribute('aria-label',summary.title);
   }
   for(const button of buttons)button.setAttribute('aria-pressed',String(button.dataset.wordColorChoice===choice.manual));
  };

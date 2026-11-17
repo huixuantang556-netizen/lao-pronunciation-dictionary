@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="25f56fb2954beb12">
+  <meta name="lao-app-build" content="51004e1e2343e2fc">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9931,8 +9931,8 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
-const apPreferenceChoices={listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
+const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,key==='courseCheckDirection'&&saved?.[key]==='dictation'?'audio':saved?.[key])]));}
@@ -9966,8 +9966,8 @@ updateProfileUser=function(...args){const result=apPreviousUpdateProfile(...args
 function apOpenSettings(){try{apGuard();updateProfileUser();if(typeof appCloseMore==='function')appCloseMore();document.querySelector('#apSettingsStatus').textContent='';if(!apDialog.open){if(typeof window.laoResetSyncFeedback==='function'&&window.laoResetSyncFeedback())apSyncResult.hidden=true;apDialog.showModal();}apDialog.scrollTop=0;}catch(error){alert(error.message);}}
 accountButton.onclick=apOpenSettings;
 const apEntry=document.createElement('button');apEntry.type='button';apEntry.className='ap-more-entry';apEntry.textContent='⚙ 设置与个人中心';apEntry.onclick=apOpenSettings;if(typeof appMorePanel!=='undefined')appMorePanel.append(apEntry);
-apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
-document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
+apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(key==='selfTestDisplay'&&typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
+document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 let apTransition=false;
 apContent.addEventListener('click',async e=>{const section=e.target.closest('[data-ap-section]');if(section){document.querySelector('#'+section.dataset.apSection)?.scrollIntoView({block:'start',behavior:'smooth'});return;}const action=e.target.closest('[data-ap-action]');if(!action||apTransition)return;try{apGuard();apTransition=true;apDialog.close();if(action.dataset.apAction==='goals')await rrManage();}catch(error){if(!apDialog.open)apDialog.showModal();document.querySelector('#apSettingsStatus').textContent=error.message;}finally{apTransition=false;}});
 document.querySelector('#apDataActions').addEventListener('click',e=>{if(!e.target.closest('button'))return;try{apGuard();apDialog.close();}catch(error){e.preventDefault();e.stopImmediatePropagation();document.querySelector('#apSettingsStatus').textContent=error.message;}},true);
@@ -9975,7 +9975,7 @@ window.appMoveOfflinePanel=panel=>{panel.classList.add('ap-offline-panel');docum
 const apExistingOffline=document.querySelector('.app-offline');if(apExistingOffline)window.appMoveOfflinePanel(apExistingOffline);
 const apPreviousDetail=learningOpenDetail;
 learningOpenDetail=async function(id,...args){const result=await apPreviousDetail(id,...args);if(learningDetail===id)apApplyDetail(learningDialog.querySelector('.ss-detail'));return result;};
-window.addEventListener('storage',e=>{if(e.key===apPreferenceKey()||e.key===null){apRefreshSettings();apApplyDetail(learningDialog.querySelector('.ss-detail'));}});
+window.addEventListener('storage',e=>{if(e.key===apPreferenceKey()||e.key===null){apRefreshSettings();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));}});
 const apRefreshBeforeChoices=apRefreshSettings;
 apRefreshSettings=function(){apRefreshBeforeChoices();for(const select of apDialog.querySelectorAll('[data-ap-choice]'))select.value=appPreference(select.dataset.apChoice);};
 apRefreshSettings();
@@ -9992,7 +9992,11 @@ const apPrefs=document.querySelector('#apPreferences');
 apPrefs.querySelector('[data-ap-preference="expandExamples"]').closest('label').before(apReadingPreference);
 function apGroup(title,nodes,open=false){const fold=document.createElement('details');fold.className='ap-preference-group';fold.open=open;const summary=document.createElement('summary');summary.textContent=title;fold.append(summary);for(const n of nodes)if(n)fold.append(n);apPrefs.append(fold);return fold;}
 const apReadingRows=[...apPrefs.children].filter(n=>n.classList.contains('ap-switch-row')&&n!==familiarPreference&&n!==adaptivePreference);
-apGroup('阅读与播放',apReadingRows,true);
+apGroup('阅读与播放',apReadingRows);
+const apSelfTestDisplay=document.createElement('div');
+apSelfTestDisplay.className='ap-course-check';
+apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>';
+apGroup('自测显示',[apSelfTestDisplay]);
 apGroup('章节检测',[apCourseCheck,familiarPreference]);
 apGroup('每日清单与自由练习',[apPracticeDefaults,adaptivePreference]);
 apGroup('听音辨词自动播放',[apListeningAuto]);
@@ -10669,8 +10673,13 @@ function cfMaskRefresh(scope,changedLanguage,roots){
  for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset'){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
 }
 function cfMaskDefaults(scope,force=false){
- const key=typeof apPreferenceKey==='function'?apPreferenceKey():'local';if(!force&&scope.dataset.cfMaskWorkspace===key)return;
- scope.dataset.cfMaskWorkspace=key;scope.classList.remove('cf-hide-zh','cf-hide-lo');
+ const key=typeof apPreferenceKey==='function'?apPreferenceKey():'local';
+ const mode=scope.classList.contains('cf-self-test')&&typeof appPreference==='function'?appPreference('selfTestDisplay')||'all':'all';
+ if(!force&&scope.dataset.cfMaskWorkspace===key&&scope.dataset.cfMaskDefault===mode)return;
+ scope.dataset.cfMaskWorkspace=key;
+ scope.dataset.cfMaskDefault=mode;
+ scope.classList.toggle('cf-hide-zh',mode==='zh'||mode==='both');
+ scope.classList.toggle('cf-hide-lo',mode==='lo'||mode==='both');
  for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);const changed=mode==='reset'?undefined:mode;for(const n of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||n.dataset.cfTapeLanguage===changed)delete n.dataset.cfRevealed;cfMaskRefresh(scope,changed);b.closest('details').open=false;});

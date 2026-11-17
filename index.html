@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ba37516f34a01549">
+  <meta name="lao-app-build" content="5182465d7dc6104d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -461,6 +461,14 @@
 .word-color-tools [data-word-color-done]{order:1;background:#087e6e;color:white;border-color:#087e6e}
 .word-color-tools [role=status]{order:2;flex-basis:100%}
 .word-color-tools [role=status]:empty{display:none}
+.word-color-filter{display:grid;gap:4px;margin:6px 4px;font-size:13px;color:#46665c}
+.word-color-filter select{min-height:40px;width:100%}
+.cf-self-test[data-word-color-filter=yellow] .learn-card:not([data-word-color=yellow]),
+.cf-self-test[data-word-color-filter=pink] .learn-card:not([data-word-color=pink]),
+.cf-self-test[data-word-color-filter=lilac] .learn-card:not([data-word-color=lilac]),
+.cf-self-test[data-word-color-filter=mint] .learn-card:not([data-word-color=mint]){display:none!important}
+.chapter-listening-kind{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.chapter-listening-kind select{max-width:70%}
 </style>
 <style>
 .chapter-listening{display:grid;gap:12px}.chapter-listening .cc-review-options{margin:0}.chapter-listening summary{cursor:pointer;padding:8px 0;font-weight:650}.chapter-listening-choices{max-height:14rem;overflow:auto;margin:10px 0}.chapter-listening-choices label{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px}.chapter-listening-choices small{display:block;color:#607970}.chapter-listening-filters{display:flex;flex-wrap:wrap;gap:8px 16px}.chapter-listening-filters label{display:flex;align-items:center;gap:6px;min-height:40px}.chapter-listening-controls,.chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chapter-listening-controls .primary{grid-column:1/-1;min-height:56px}.chapter-listening-settings label{display:grid;gap:4px;min-width:0}.chapter-listening-settings :is(input,select){width:100%;min-width:0;padding:8px}.chapter-listening [data-page-status],.chapter-listening [data-cl-selection]{margin:0;color:#46665a}.cc-response-timer{display:block;text-align:center;color:#46665a}.chapter-listening [hidden]{display:none!important}
@@ -523,7 +531,7 @@
         <div class="filters"><label class="page-size">每页 <select id="pageSize" aria-label="每页显示数量"><option value="5">5 条</option><option value="10" selected>10 条</option><option value="15">15 条</option></select></label></div>
         <div class="dictionary-tag-filter"><p><strong>先选大类，再选小标签</strong></p><label>内容大类<select id="dictionaryKind"><option value="all">全部内容</option><option value="words">单词</option><option value="letters">字母／元音符号</option><option value="drills">拼读练习</option><option value="sentences">句子（含课程例句／对话）</option><option value="phrases">短语／句子</option></select></label><label>小标签分组<select id="dictionaryTagGroup"><option value="topics">生活与主题</option><option value="grammar">词性与语法</option><option value="phonetics">字母与发音</option><option value="source">教材与课次</option><option value="other">其他标签</option><option value="all">全部小标签</option></select></label><p class="tag-hint">小标签仅来自当前大类；切换大类会清空旧标签筛选。分组只整理标签显示，已选标签始终保留。</p><label>匹配方式<select id="dictionaryTagMode"><option value="any">满足任一标签（扩大范围）</option><option value="all">满足全部标签（缩小范围）</option></select></label><input type="search" id="dictionaryTagSearch" class="tag-search" placeholder="搜索标签…" aria-label="我的词典标签搜索" /><p id="dictionaryTagSearchStatus" class="tag-search-status" aria-live="polite"></p><div id="dictionaryTags" class="tag-picker"></div><button type="button" id="clearDictionaryTags" class="tag-choice">清空标签</button><p class="tag-hint">“任一”匹配其中一个即可；“全部”需同时匹配。不选标签时不限制。</p><div class="dictionary-display-filter"><p><strong>卡片显示内容（可多选）</strong></p><div id="dictionaryFields" class="tag-picker"></div><p class="tag-hint">可只保留老挝语、音标、中文或备注中的任意一项；至少保留一项。</p></div></div>
         <div id="dictionaryBatchTools" class="selection-toolbar"><button type="button" id="toggleDeleteMode" aria-pressed="false" aria-controls="selectionTools">批量删除</button></div>
-        <details class="dictionary-settings" id="speechQueueSettings"><summary>勾选生成默认发音</summary><button type="button" id="speechSelectMode">选择要生成的词条</button><section class="recording"><p id="speechQueueStatus" role="status"></p><button type="button" id="speechQueueStart">开始 / 继续</button> <button type="button" id="speechQueuePause">暂停</button> <button type="button" id="speechQueueClear">清空待办</button><p class="tag-hint">仅生成勾选内容，每次请求间隔15秒，遇限流暂停。保持页面打开和电脑唤醒；重新打开后手动继续。音频保存后可云端同步。</p></section></details><button type="button" id="closeDictionarySettings">完成设置 · 收起</button></details><p class="count" id="count"></p><div id="dictionaryLocalStatus" role="status" hidden></div><div id="selectionTools" class="hidden"><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="queueSelectedSpeech">加入发音队列</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p></div><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
+        <details class="dictionary-settings" id="speechQueueSettings"><summary>勾选生成默认发音</summary><button type="button" id="speechSelectMode">选择要生成的词条</button><section class="recording"><p id="speechQueueStatus" role="status"></p><button type="button" id="speechQueueStart">开始 / 继续</button> <button type="button" id="speechQueuePause">暂停</button> <button type="button" id="speechQueueClear">清空待办</button><p class="tag-hint">仅生成勾选内容，每次请求间隔15秒，遇限流暂停。保持页面打开和电脑唤醒；重新打开后手动继续。音频保存后可云端同步。</p></section></details><button type="button" id="closeDictionarySettings">完成设置 · 收起</button></details><p class="count" id="count"></p><div id="dictionaryLocalStatus" role="status">正在读取本机词典…</div><div id="selectionTools" class="hidden"><div class="selection-toolbar"><button type="button" id="selectPage">全选本页</button><button type="button" id="clearSelection">取消全部勾选</button><button type="button" id="queueSelectedSpeech">加入发音队列</button><button type="button" id="deleteSelected" class="danger" disabled>删除已选（0）</button></div><p class="tag-hint" id="selectionStatus" aria-live="polite">可跨页勾选；改变搜索或标签后会清空勾选。</p></div><div id="entries" class="entries"></div><div id="pagination" class="pagination" aria-label="词典翻页"></div>
       </section>
       <section class="panel practice hidden" id="practicePanel" aria-labelledby="practice-title">
         <h2 id="practice-title">多方向默写练习</h2>
@@ -1616,6 +1624,14 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
         if(activeView==='dictionary')await loadDictionaryView();
       }
     }
+    function recoverEmptyDictionary(){
+      if(document.hidden||activeView!=='dictionary'||dictionaryViewLoad||
+         $('#entries').childElementCount||$('#count').textContent||$('#dictionaryLocalStatus').querySelector('button'))return;
+      dictionaryRenderedKey=null;
+      void loadDictionaryView();
+    }
+    window.addEventListener('pageshow',recoverEmptyDictionary);
+    document.addEventListener('visibilitychange',recoverEmptyDictionary);
     window.laoLocalStartup=startLocalDictionary();
     void window.laoLocalStartup.then(()=>{
       const prepare=async()=>{
@@ -3122,7 +3138,7 @@ function learningStudyCardHtml(m,w,options={}){
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):'')+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+(typeof wordColorCardButton==='function'?wordColorCardButton(m,w,options):'')+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button></div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -4084,7 +4100,7 @@ async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop===
  if(context.token!==undefined&&(context.token!==learningRenderToken||activeView!=='learning'||learningRoute!=='lesson'||learningLesson.id!==c.id))return '';
  const wordsByRef=new Map();
  if(c.library==='communication'||visibleSections.some(s=>s.blocks.some(b=>b.contentType==='word-ref')))for(const word of words)for(const ref of syncKeys(word))if(!wordsByRef.has(ref))wordsByRef.set(ref,word);
- const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?wordsByRef.get(m.linkedWordSyncIds[0]):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||''});};
+ const card=(r,type)=>{const m=rec('item',r.itemId);if(!m)return '';const w=type==='word-ref'?wordsByRef.get(m.linkedWordSyncIds[0]):null;return learningStudyCardHtml(m,w,{text:w?.word||r.textLao||r.playableText||'',meaning:w?String(w.meaning??''):r.translationZh||'',speaker:r.speaker||'',dialogue:type==='dialogue'});};
  const teachingTools=b=>c.library==='communication'||!['word-ref','reading','sentence','dialogue'].includes(b.contentType)?'':'<details class="v2-view-options"><summary>批量处理本组</summary><button type="button" data-learn="v2-batch-grammar" data-key="'+h(b.id)+'">构词与语法</button><button type="button" data-learn="v2-batch-phonetics" data-key="'+h(b.id)+'">发音分析</button><button type="button" data-learn="v2-batch-audio" data-key="'+h(b.id)+'">生成／切分音频</button></details>';
  const block=b=>{const m=rec('block',b.id),x=b.content;
  const sceneDialogue=c.library==='communication'&&b.contentType==='dialogue';
@@ -7467,9 +7483,9 @@ batchEditor=function(){
 </style>
 <script data-learning-bundle="course-check">
 /* Course-local recall tests and precise block management. No generated audio or data deletion. */
-function courseCheckGroups(data,course,snap,words,scope,key,kind){
+function courseCheckGroups(data,course,snap,words,scope,key,kind,materialsById=new Map(snap.learningMaterials.map(m=>[m.id,m]))){
  return data.sections.filter(s=>scope!=='section'||s.id===key).flatMap(s=>s.blocks.filter(b=>scope!=='block'||b.id===key).filter(b=>['word-ref','sentence','dialogue','reading'].includes(b.contentType)).filter(b=>kind==='all'||(kind==='words')===(b.contentType==='word-ref')).map(b=>({id:b.id,title:b.title||s.title,dialogue:b.contentType==='dialogue',items:(b.content.items||[]).map(r=>{
-  const id=lessonV2Id(course.packageKey,'item',r.itemId),m=snap.learningMaterials.find(m=>m.id===id),w=b.contentType==='word-ref'&&m?learningFindWord(m.linkedWordSyncIds?.[0],words):null;
+  const id=lessonV2Id(course.packageKey,'item',r.itemId),m=materialsById.get(id),w=b.contentType==='word-ref'&&m?learningFindWord(m.linkedWordSyncIds?.[0],words):null;
   return {id,itemKind:b.contentType==='word-ref'?'word':'sentence',lao:w?String(w.word||''):r.textLao||'',zh:w?String(w.meaning||''):r.translationZh||'',learningState:w?.learningState||m?.practiceReview?.learningState||m?.learningState,...(w?{reviewWord:w}:{})};
  }).filter(r=>r.lao.trim()&&r.zh.trim())}))).filter(g=>g.items.length);
 }
@@ -12507,9 +12523,13 @@ function sfSuspendChapterPlayback(){
  if(bar?.isConnected)bar.querySelector('[data-page-status]').textContent='离开应用时已停止朗读，点播放可重新开始。';
  if($('#learningStatus')?.textContent==='正在读取本机发音…')$('#learningStatus').textContent='点播放可重新听发音。';
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden)sfSuspendChapterPlayback();});
 window.addEventListener('pagehide',sfSuspendChapterPlayback);
-function sfWarm(id){if(id&&typeof requestIdleCallback==='function')requestIdleCallback(()=>sfRead(id).catch(()=>{}),{timeout:1200});else if(id)setTimeout(()=>sfRead(id).catch(()=>{}),100);}
+function sfWarm(id){
+ if(!id||document.hidden)return;
+ const warm=()=>{if(!document.hidden)sfRead(id).catch(()=>{});};
+ if(typeof requestIdleCallback==='function')requestIdleCallback(warm,{timeout:1200});
+ else setTimeout(warm,100);
+}
 // Both close affordances inside nested details return one level, never discard the test.
 document.addEventListener('click',e=>{
  const b=e.target.closest?.('#learningDialog [data-learn="close"]');if(!b||!letterDetailParents.length)return;
@@ -13737,7 +13757,7 @@ document.addEventListener('click',async event=>{
 <script data-word-card-colors>
 /* Word-card marks are presentation preferences. Ratings remain in chapter summaries. */
 const wordColorOptions = {
- auto:'自动', plain:'原色', yellow:'淡黄', pink:'淡粉', mint:'薄荷绿', lilac:'淡紫'
+ auto:'自动', plain:'原色', yellow:'模糊', pink:'陌生', mint:'熟悉', lilac:'反应慢'
 };
 let wordColorView = null;
 let wordColorEditingChapter = '';
@@ -13752,7 +13772,9 @@ function wordColorMenuButton(bar){
  const content=bar.closest('#learningContent');
  if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-open]'))return '';
  const chapter=workspaceName('word-color')+'|'+learningLesson.id;
- return wordColorModeButton(wordColorEditingChapter===chapter);
+ return wordColorModeButton(wordColorEditingChapter===chapter)+
+  '<label class="word-color-filter">按熟悉度看卡片<select data-word-color-filter><option value="">全部卡片</option>'+
+  ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></label>';
 }
 
 function wordColorKey(id, lao, zh) {
@@ -13780,6 +13802,8 @@ function wordColorIndex(snap) {
     const state=progress.get(key)||{wrong:0,correct:0,needsPractice:false};
     state.correct=item.rating==='green'?state.correct+1:0;
     state.wrong=state.correct>=2?0:state.wrong+Number(item.rating==='red');
+    state.rating=item.rating;
+    state.slow=item.rating==='green'&&Boolean(item.slow);
     state.needsPractice=state.correct<2&&(state.needsPractice||item.rating!=='green');
     progress.set(key,state);
    }
@@ -13793,13 +13817,13 @@ function wordColorChoice(index,target,id,lao,zh){
  const state=index.progress.get(wordColorKey(target,lao,zh))||
   index.progress.get(wordColorKey('material:'+id,lao,zh));
  const mark=index.confirmed?.get(target)||index.confirmed?.get('material:'+id);
- const automatic=mark?.lao===lao&&mark.zh===zh?mark.tone:state?.wrong>=2?'pink':state?.needsPractice?'yellow':'plain';
+ const automatic=mark?.lao===lao&&mark.zh===zh?mark.tone:state?.rating==='red'?'pink':state?.rating==='yellow'?'yellow':state?.slow?'lilac':state?.correct>=2?'mint':state?.wrong>=2?'pink':state?.needsPractice?'yellow':'plain';
  return {manual,automatic,tone:manual==='auto'?automatic:manual};
 }
 
 function wordColorTarget(m,w){
  if(w?.syncId)return 'word:'+w.syncId;
- if(m.contentType==='word'||m.analysisUnitType==='word')return 'material:'+m.id;
+ if(['word','sentence','dialogue','reading_drill'].includes(m.contentType)||m.analysisUnitType==='word')return 'material:'+m.id;
  return '';
 }
 
@@ -13829,12 +13853,13 @@ function wordColorClearTargets(index){
   if(/^word-card-color:(word|material):.+/.test(id)&&color!=='auto'&&color!=='plain')targets.add(id.slice('word-card-color:'.length));
  }
  for(const [key,state] of index.progress){
-  if(!state.needsPractice&&state.wrong<2)continue;
+  if(!state.needsPractice&&state.wrong<2&&!state.slow&&state.correct<2)continue;
   const [target]=JSON.parse(key);
   if(!/^(word|material):.+/.test(target))continue;
   const color=index.manual.get('word-card-color:'+target);
   if(!color||color==='auto')targets.add(target);
  }
+ for(const [target,mark] of index.confirmed||[])if(mark.tone!=='plain')targets.add(target);
  return targets;
 }
 
@@ -13918,7 +13943,7 @@ function wordColorPicker({target,id,lao,zh},expanded=false){
  picker.className='word-color-picker';
  picker.innerHTML=(expanded?'':'<summary><span class="word-color-dot" aria-hidden="true"></span>词卡颜色</summary>')+
   '<div class="word-color-options" role="group" aria-label="词卡颜色">'+Object.entries(wordColorOptions).map(([value,label])=>'<button type="button" data-word-color-choice="'+value+'"><span class="word-color-dot" data-swatch="'+value+'" aria-hidden="true"></span>'+label+'</button>').join('')+
-  '</div><p class="word-color-hint">自动标记：拿不准或写错用淡黄，累计写错两次用淡粉。连续两次写对后恢复原色。</p><p role="status"></p>';
+  '</div><p class="word-color-hint">黄＝模糊，粉＝陌生，紫＝反应慢，绿＝熟悉。手动标记优先。</p><p role="status"></p>';
  const owner=workspaceName('word-color'),buttons=[...picker.querySelectorAll('button')],status=picker.querySelector('[role=status]');
  const draw=()=>{
   if(!wordColorView)return;
@@ -13989,6 +14014,16 @@ document.addEventListener('click',event=>{
  learningModal('词卡颜色','<p class="word-color-heading" lang="lo">'+learningEsc(data.wordColorLao)+'</p><div data-word-color-panel></div>');
  const panel=learningDialog.querySelector('[data-word-color-panel]');
  panel.append(wordColorPicker({target:data.wordColorTarget,id:data.cardId,lao:data.wordColorLao,zh:data.wordColorZh},true));
+},true);
+document.addEventListener('change',event=>{
+ const filter=event.target.closest('#learningContent [data-word-color-filter]');
+ const scope=filter?.closest('.cf-self-test');
+ if(scope)scope.dataset.wordColorFilter=filter.value;
+});
+document.addEventListener('click',event=>{
+ const card=event.target.closest?.('[data-dialogue-card]');
+ if(!card||event.detail>1||event.target.closest('button,a,input,select,textarea,label,summary,[role=button]'))return;
+ card.querySelector('[data-learn="play"]')?.click();
 },true);
 </script>
 <style data-mobile-chapter-cards>
@@ -14097,7 +14132,7 @@ document.addEventListener('click',event=>{
 <script data-chapter-listening>
 const chapterListeningLabels={red:'陌生',yellow:'模糊',green:'熟悉',slow:'反应慢'};
 function chapterListeningMarkValid(mark){
- return mark&&/^(word|material):.+/.test(mark.target)&&typeof mark.lao==='string'&&typeof mark.zh==='string'&&['yellow','pink','plain'].includes(mark.tone);
+ return mark&&/^(word|material):.+/.test(mark.target)&&typeof mark.lao==='string'&&typeof mark.zh==='string'&&['yellow','pink','lilac','plain'].includes(mark.tone);
 }
 function chapterListeningMarks(snap){
  return new Map(snap.learningMaterials.filter(row=>!row.deleted&&chapterListeningMarkValid(row.chapterListeningMark)).map(row=>[row.chapterListeningMark.target,row.chapterListeningMark]));
@@ -14107,18 +14142,12 @@ function chapterListeningRounds(snap){
   .map(row=>row.chapterResult).sort((a,b)=>a.at-b.at);
 }
 function chapterListeningSuggestions(result,snap){
- const marks=chapterListeningMarks(snap),wrong=new Map(),unique=new Map();
- for(const round of chapterListeningRounds(snap)){
-  if(round.courseId!==result.courseId||round.at>=result.at)continue;
-  const missed=new Set(round.items.filter(row=>row.rating==='red').map(row=>wordColorKey(row.target,row.lao,row.zh)));
-  for(const key of missed)wrong.set(key,(wrong.get(key)||0)+1);
- }
+ const marks=chapterListeningMarks(snap),unique=new Map();
  for(const row of result.items){
-  if(row.itemKind!=='word')continue;
   const previous=marks.get(row.target),same=previous?.lao===row.lao&&previous.zh===row.zh;
   const needsWork=row.slow||row.rating==='yellow'||row.rating==='red';
   const passed=row.rating==='green'&&Number.isFinite(row.responseMs)&&!row.slow;
-  if(needsWork)unique.set(row.target,{row,tone:row.rating==='red'&&wrong.has(wordColorKey(row.target,row.lao,row.zh))||same&&previous.tone==='pink'?'pink':'yellow'});
+  if(needsWork)unique.set(row.target,{row,tone:row.rating==='red'?'pink':row.rating==='yellow'?'yellow':'lilac'});
   else if(passed&&same&&previous.tone!=='plain')unique.set(row.target,{row,tone:'plain'});
  }
  return [...unique.values()];
@@ -14138,7 +14167,7 @@ async function chapterListeningBindResult(host,result){
   panel.innerHTML='<details class="cc-review-options chapter-listening"><summary>确认词卡标记 · '+choices.length+' 项</summary><div class="cc-pick-rows chapter-listening-choices">'+choices.map(({row,tone},index)=>{
    const why=tone==='plain'?'限时内答出，移出待巩固':[
     row.slow?'超时 '+((row.responseMs-result.responseLimit*1000)/1000).toFixed(1)+' 秒':'',
-    tone==='pink'?'多轮陌生':chapterListeningLabels[row.rating]||''
+    chapterListeningLabels[row.rating]||''
    ].filter(Boolean).join(' · ');
    return '<label><input type="checkbox" value="'+index+'" checked><span><strong lang="lo">'+h(row.lao)+'</strong> '+h(row.zh)+'<small>'+h(why)+'</small></span></label>';
   }).join('')+'</div><button type="button" data-cl-apply>确认标记</button><p role="status"></p></details>';
@@ -14149,7 +14178,7 @@ async function chapterListeningBindResult(host,result){
    button.disabled=true;
    try{
     if(owner!==workspaceName('chapter-listening'))return;
-    const rows=selected.map(({row,tone})=>({...learningBlank('chapter-listening-mark:'+row.target,'knowledge','待巩固词卡'),chapterListeningMark:{target:row.target,lao:row.lao,zh:row.zh,tone}}));
+    const rows=selected.map(({row,tone})=>({...learningBlank('chapter-listening-mark:'+row.target,'knowledge','待巩固词句卡'),chapterListeningMark:{target:row.target,lao:row.lao,zh:row.zh,tone}}));
     const current=await learningSnapshot();
     if(owner!==workspaceName('chapter-listening'))return;
     await learningWrite({learningMaterials:rows},current,{quickProgress:true});
@@ -14165,34 +14194,40 @@ async function chapterListeningBindResult(host,result){
  }catch(error){if(panel.isConnected)panel.textContent='暂时无法读取词卡标记。'+error.message;}
 }
 function chapterListeningHome(){
- return '<section class="sc-box sc-listening" aria-labelledby="scListeningTitle"><h3 id="scListeningTitle">听力列表</h3><p>跨章节选词，按熟悉程度筛选。语速、每词播放次数和词间停顿都可以调。</p><button type="button" class="primary" data-cl-open>打开听力列表</button></section>';
+ return '<section class="sc-box sc-listening" aria-labelledby="scListeningTitle"><h3 id="scListeningTitle">听力列表</h3><p>跨章节选词句，按熟悉程度筛选。语速、每项播放次数和题间停顿都可以调。</p><button type="button" class="primary" data-cl-open>打开听力列表</button></section>';
 }
 function chapterListeningMenu(){
- return '<button type="button" data-cl-chapter>听待巩固词</button>';
+ return '<button type="button" data-cl-chapter>听待巩固词句</button>';
 }
 function chapterListeningCatalog(snap,words,courses){
- const marks=chapterListeningMarks(snap),latest=new Map(),testedCourses=new Set(),catalog=[];
+ const colors=wordColorIndex(snap),latest=new Map(),catalog=[];
+ const materialsById=new Map(snap.learningMaterials.map(m=>[m.id,m]));
+ const tones={pink:'red',yellow:'yellow',mint:'green',lilac:'slow'};
  for(const round of chapterListeningRounds(snap)){
-  testedCourses.add(round.courseId);
   for(const row of round.items){
    if(row.rating!=='skipped'||row.slow)latest.set(JSON.stringify([round.courseId,row.id,row.lao,row.zh]),row);
   }
  }
  for(const course of courses){
-  if(!testedCourses.has(course.id))continue;
-  const groups=courseCheckGroups(lessonV2Export(snap,course),course,snap,words,'course','','words');
+  const groups=courseCheckGroups(lessonV2Export(snap,course),course,snap,words,'course','','all',materialsById);
   for(const row of courseCheckQueue(groups)){
    const target=row.reviewWord?'word:'+row.reviewWord.syncId:'material:'+row.id;
-   const rating=latest.get(JSON.stringify([course.id,row.id,row.lao,row.zh])),mark=marks.get(target);
+   const rating=latest.get(JSON.stringify([course.id,row.id,row.lao,row.zh]));
+   const choice=wordColorChoice(colors,target,row.id,row.lao,row.zh);
+   const mark=colors.confirmed.get(target);
    const confirmed=mark?.lao===row.lao&&mark.zh===row.zh?mark:null;
-   if(!rating&&!confirmed)continue;
    const flags=new Set();
-   if(rating&&rating.rating!=='skipped')flags.add(rating.rating);
-   if(rating?.slow)flags.add('slow');
-   const needsWork=confirmed?confirmed.tone!=='plain':flags.has('red')||flags.has('yellow')||flags.has('slow');
-   if(confirmed?.tone==='plain'){flags.clear();flags.add('green');}
-   else if(confirmed&&![...flags].some(key=>key!=='green'))flags.add('yellow');
-   catalog.push({id:row.id,word:row.lao,meaning:row.zh,courseId:course.id,needsWork,flags});
+   if(choice.manual!=='auto'||confirmed){
+    const flag=tones[choice.tone]||(confirmed&&choice.manual==='auto'?'green':'');
+    if(flag)flags.add(flag);
+   }else{
+    if(rating&&rating.rating!=='skipped')flags.add(rating.rating);
+    if(rating?.slow){flags.delete('green');flags.add('slow');}
+    if(!flags.size&&tones[choice.tone])flags.add(tones[choice.tone]);
+   }
+   if(!flags.size)continue;
+   const needsWork=flags.has('red')||flags.has('yellow')||flags.has('slow');
+   catalog.push({id:row.id,word:row.lao,meaning:row.zh,courseId:course.id,itemKind:row.itemKind,needsWork,flags});
   }
  }
  return catalog;
@@ -14213,7 +14248,7 @@ function chapterListeningPreferences(){
 async function chapterListeningOpen(courseId=''){
  const owner=workspaceName('chapter-listening'),preferenceKey=workspaceName('chapter-listening-playback'),h=learningEsc;
  const read=()=>typeof lnGetData==='function'?lnGetData():ccReadCourse();
- learningModal(courseId?'待巩固词':'听力列表','<p role="status" data-cl-loading>正在读取检测记录…</p>');
+ learningModal(courseId?'待巩固词句':'听力列表','<p role="status" data-cl-loading>正在读取章节与词句标记…</p>');
  const loading=learningDialog.querySelector('[data-cl-loading]');
  let data;
  try{data=await read();}
@@ -14224,15 +14259,16 @@ async function chapterListeningOpen(courseId=''){
  const catalog=chapterListeningCatalog(snap,words,courses);
  const available=new Set(catalog.map(row=>row.courseId));
  const options=(values,unit)=>values.map(value=>'<option value="'+value+'">'+value+unit+'</option>').join('');
- const title=courseId?'待巩固词 · '+(courses[0]?.title||'本章'):'听力列表';
+ const title=courseId?'待巩固词句 · '+(courses[0]?.title||'本章'):'听力列表';
  learningModal(title,`<section class="chapter-listening" data-page-key="chapter-listening">
-  ${courseId?'':`<details class="cc-review-options" open><summary>选章节 <span data-cl-count></span></summary><div class="cc-pick-rows chapter-listening-choices">${courses.filter(course=>available.has(course.id)).map(course=>'<label><input type="checkbox" name="cl-course" value="'+h(course.id)+'"><span>'+h(course.title)+'</span></label>').join('')||'<p>检测完成后，这里会列出有记录的章节。</p>'}</div></details>
-  <fieldset class="cc-review-options"><legend>听哪些词</legend><div class="chapter-listening-filters">${Object.entries(chapterListeningLabels).map(([key,label])=>'<label><input type="checkbox" name="cl-status" value="'+key+'" '+(key==='green'?'':'checked')+'> '+label+'</label>').join('')}</div></fieldset>`}
+  ${courseId?'':`<details class="cc-review-options" open><summary>选章节 <span data-cl-count></span></summary><div class="cc-pick-rows chapter-listening-choices">${courses.filter(course=>available.has(course.id)).map(course=>'<label><input type="checkbox" name="cl-course" value="'+h(course.id)+'"><span>'+h(course.title)+'</span></label>').join('')||'<p>标记词句或完成检测后，相关章节会列在这里。</p>'}</div></details>
+  <fieldset class="cc-review-options"><legend>按熟悉度筛选</legend><div class="chapter-listening-filters">${Object.entries(chapterListeningLabels).map(([key,label])=>'<label><input type="checkbox" name="cl-status" value="'+key+'" '+(key==='green'?'':'checked')+'> '+label+'</label>').join('')}</div></fieldset>`}
+  <label class="chapter-listening-kind">听读内容 <select name="cl-kind"><option value="all">单词和句子</option><option value="word">仅单词</option><option value="sentence">仅句子</option></select></label>
   <p data-cl-selection aria-live="polite"></p>
   <div class="chapter-listening-controls">
    <button type="button" data-cl-start class="primary">开始播放</button>
    <button type="button" data-cl-pause class="primary" data-page-action="pause" hidden><span class="page-player-label">暂停</span></button>
-   <button type="button" data-cl-previous hidden>上一词</button>
+   <button type="button" data-cl-previous hidden>上一项</button>
    <button type="button" data-cl-replay hidden>重播</button>
   </div>
   <details class="cc-review-options"><summary>播放设置</summary>
@@ -14257,16 +14293,16 @@ async function chapterListeningOpen(courseId=''){
  const gapSeconds=()=>Math.max(0,Math.min(120,Math.round(Number(gap.value)||0)));
  const checked=name=>new Set([...bar.querySelectorAll('input[name="'+name+'"]:checked')].map(input=>input.value));
  let playingIndex=0;
- const selection=()=>chapterListeningSelection(catalog,courseId?new Set([courseId]):checked('cl-course'),checked('cl-status'),Boolean(courseId));
+ const selection=()=>chapterListeningSelection(catalog.filter(row=>q('[name="cl-kind"]').value==='all'||row.itemKind===q('[name="cl-kind"]').value),courseId?new Set([courseId]):checked('cl-course'),checked('cl-status'),Boolean(courseId));
  function update(){
   const count=q('[data-cl-count]'),n=checked('cl-course').size;
   if(count)count.textContent=n?'· 已选 '+n+' 章':'';
   const items=selection();
-  q('[data-cl-selection]').textContent=items.length?'可听列表 · '+items.length+' 词':courseId?'本章暂无待巩固词。':'选择章节与词汇状态以准备播放。';
+  q('[data-cl-selection]').textContent=items.length?'可听列表 · '+items.length+' 项':courseId?'本章暂无待巩固词句。':'选择章节与熟悉度以准备播放。';
   start.disabled=!items.length;
  }
  bar.onchange=event=>{
-  if(event.target.matches('[name="cl-course"],[name="cl-status"]')){
+  if(event.target.matches('[name="cl-course"],[name="cl-status"],[name="cl-kind"]')){
    if(lessonPageBar===bar||(!start.hidden&&start.disabled&&status.textContent))stopPracticeAudio();
    start.hidden=false;
    pause.hidden=prev.hidden=replay.hidden=missing.hidden=true;
@@ -14298,12 +14334,12 @@ async function chapterListeningOpen(courseId=''){
     if(asset){playlist.push({...asset,at:items.length,count:1});items.push(row);}
     else missingRows.push(row);
    }
-   const missingLabel=missingRows.length?' · '+missingRows.length+' 词缺音':'';
-   q('[data-cl-selection]').textContent='本轮 '+items.length+' 词'+missingLabel;
+   const missingLabel=missingRows.length?' · '+missingRows.length+' 项缺音':'';
+   q('[data-cl-selection]').textContent='本轮 '+items.length+' 项'+missingLabel;
    missing.hidden=!missingRows.length;
-   missing.textContent='批量补发音 · '+missingRows.length+' 词';
+   missing.textContent='批量补发音 · '+missingRows.length+' 项';
    missing.onclick=()=>{void lessonPageSelectMissing({title,words:missingRows}).catch(error=>{status.textContent=error.message;});};
-   if(!items.length){status.textContent='所选词还没有可用的录音。';return;}
+   if(!items.length){status.textContent='所选内容还没有可用的录音。';return;}
    start.hidden=true;pause.hidden=prev.hidden=replay.hidden=false;
    await lessonQueuePlay(playlist,items.length,bar,token,items,{
     incremental:true,gapLabel:'回忆时间',gap:()=>gapSeconds()*1000,repeats:()=>Number(repeats.value),

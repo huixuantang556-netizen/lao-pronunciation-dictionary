@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="be531d598370e5b4">
+  <meta name="lao-app-build" content="f759150385f066d1">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -488,7 +488,29 @@
   cursor:pointer;touch-action:manipulation
  }
 }
-#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking{background:#e4f4ed}
+#learningPanel #learningContent [data-dialogue-card]{transition:background-color 160ms ease-out}
+#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking{background-color:#e4f4ed}
+#learningPanel #learningContent [data-dialogue-card]>.learn-card-actions{
+ position:relative;isolation:isolate;--dialogue-controls-width:104px;--dialogue-controls-height:38px
+}
+#learningPanel #learningContent [data-dialogue-card]>.learn-card-actions::before{
+ content:"";position:absolute;inset-inline-start:9px;inset-block-start:50%;
+ width:calc(var(--dialogue-controls-width) + 6px);height:var(--dialogue-controls-height);
+ transform:translateY(-50%);border-radius:12px;background:#fff;opacity:0;
+ transition:opacity 160ms ease-out;pointer-events:none
+}
+#learningPanel #learningContent [data-dialogue-card]>.learn-card-actions>button{position:relative}
+#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking>.learn-card-actions::before{opacity:1}
+@media(max-width:760px){
+ #learningPanel #learningContent [data-dialogue-card]>.learn-card-actions{
+  --dialogue-controls-width:144px;--dialogue-controls-height:50px
+ }
+ #learningPanel #learningContent [data-dialogue-card]>.learn-card-actions::before{inset-block-start:calc(50% - 2px)}
+}
+@media(prefers-reduced-motion:reduce){
+ #learningPanel #learningContent [data-dialogue-card],
+ #learningPanel #learningContent [data-dialogue-card]>.learn-card-actions::before{transition:none}
+}
 #learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking>.learn-card-main,
 #learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking>.learn-card-actions{background:transparent}
 @media (max-width:760px), (hover:none) and (pointer:coarse){
@@ -10885,10 +10907,6 @@ function cfToggleTape(event){
  if(node.dataset.cfRevealed==='true')delete node.dataset.cfRevealed;
  else node.dataset.cfRevealed='true';
  cfRefreshTape(node,scope,node.dataset.cfTapeLanguage);
- // The cover owns the original event, so route its tap to the card's playback explicitly.
- if(event.type==='click'&&event.detail<=1&&node.closest?.('.learn-card-main')){
-  node.closest('[data-dialogue-card]')?.querySelector('.learn-card-actions > [data-learn="play"]:not(.learn-card-play-area)')?.click();
- }
 }
 document.addEventListener('click',cfToggleTape,true);
 document.addEventListener('dblclick',event=>{

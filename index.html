@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="b86907b810937fb2">
+  <meta name="lao-app-build" content="da9e5ad86d64e9fc">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -470,21 +470,20 @@
 
 .word-color-clear-status{color:#536e63;font-size:12px;padding-inline:10px}
 .word-color-clear-status:empty{display:none}
-
-/* On touch layouts the existing play button also covers the open space around the controls. */
-@media (max-width:760px), (hover:none) and (pointer:coarse){
- #learningContent .learn-card:not(.learn-selectable){position:relative;isolation:isolate}
- #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions{position:static}
- #learningContent .learn-card:not(.learn-selectable)>.learn-card-main,
- #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>:not([data-learn="play"]){position:relative;z-index:2}
- #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>[data-learn="play"]{position:static;transform:none!important;filter:none!important}
- #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>[data-learn="play"]::before{
-  content:"";position:absolute;inset:0;z-index:1;cursor:pointer;touch-action:manipulation;
- }
-}
 </style>
 <style>
 .chapter-listening{display:grid;gap:12px}.chapter-listening .cc-review-options{margin:0}.chapter-listening summary{cursor:pointer;padding:8px 0;font-weight:650}.chapter-listening-choices{max-height:14rem;overflow:auto;margin:10px 0}.chapter-listening-choices label{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px}.chapter-listening-choices small{display:block;color:#607970}.chapter-listening-filters{display:flex;flex-wrap:wrap;gap:8px 16px}.chapter-listening-filters label{display:flex;align-items:center;gap:6px;min-height:40px}.chapter-listening-controls,.chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chapter-listening-controls .primary{grid-column:1/-1;min-height:56px}.chapter-listening-settings label{display:grid;gap:4px;min-width:0}.chapter-listening-settings :is(input,select){width:100%;min-width:0;padding:8px}.chapter-listening [data-page-status],.chapter-listening [data-cl-selection]{margin:0;color:#46665a}.cc-response-timer{display:block;text-align:center;color:#46665a}.chapter-listening [hidden]{display:none!important}
+</style>
+<style data-learning-card-hit-area>
+/* Keep the control-row background a native playback target, below the visible controls. */
+#learningPanel #learningContent .learn-card>.learn-card-actions{position:relative;isolation:isolate}
+#learningPanel #learningContent .learn-card>.learn-card-actions>button:not(.learn-card-play-area){position:relative;z-index:1}
+#learningPanel #learningContent .learn-card>.learn-card-actions>button.learn-card-play-area{
+ position:absolute;inset:0;z-index:0;width:100%!important;height:100%!important;
+ max-width:none!important;margin:0!important;padding:0!important;border:0!important;
+ background:transparent!important;box-shadow:none!important;transform:none!important;
+ cursor:pointer;touch-action:manipulation
+}
 </style>
 </head>
 <body>
@@ -3151,7 +3150,7 @@ function learningStudyCardHtml(m,w,options={}){
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+'</div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button><button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button></div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -10830,6 +10829,10 @@ function cfToggleTape(event){
  if(node.dataset.cfRevealed==='true')delete node.dataset.cfRevealed;
  else node.dataset.cfRevealed='true';
  cfRefreshTape(node,scope,node.dataset.cfTapeLanguage);
+ // The cover owns the original event, so route its tap to the card's playback explicitly.
+ if(event.type==='click'&&event.detail<=1&&node.closest?.('.learn-card-main')){
+  node.closest('[data-dialogue-card]')?.querySelector('.learn-card-actions > [data-learn="play"]:not(.learn-card-play-area)')?.click();
+ }
 }
 document.addEventListener('click',cfToggleTape,true);
 document.addEventListener('dblclick',event=>{

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="a2f162d9ce4c2675">
+  <meta name="lao-app-build" content="dc6007bc6d696a34">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9236,7 +9236,7 @@ function ssCompose(detail,resolved,id){
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
  const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText)quick.append(editText);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -13952,25 +13952,13 @@ learningValidateRecord=function(kind,row){
  return wordColorValidate(kind,row);
 };
 
-const wordColorPreviousDetail=learningOpenDetail;
-learningOpenDetail=async function(id,...args){
- const result=await wordColorPreviousDetail(id,...args);
- if(learningDetail!==id)return result;
- const detail=learningDialog.querySelector('.learn-detail');
- if(!detail||detail.querySelector('.word-color-detail-picker'))return result;
- const {m,w}=await learningResolve(id);
- if(learningDetail!==id||!detail.isConnected||detail.querySelector('.word-color-detail-picker'))return result;
+function wordColorDetailPicker({m,w}){
  const target=wordColorTarget(m,w);
- if(!target)return result;
+ if(!target)return null;
  const picker=wordColorPicker({target,id:m.id,lao:w?.word||m.textLao,zh:w?.meaning||m.translationZh||''});
  picker.classList.add('word-color-detail-picker');
- const actions=detail.querySelector('.ss-main-actions');
- const reference=actions?.querySelector('#learningReferenceRecord');
- if(reference)reference.after(picker);
- else if(actions)actions.append(picker);
- else detail.prepend(picker);
- return result;
-};
+ return picker;
+}
 
 function wordColorPicker({target,id,lao,zh},expanded=false,onSaved){
  const picker=document.createElement(expanded?'div':'details');

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="a70fe4db110d7ce9">
+  <meta name="lao-app-build" content="fee1f56c46e96fcb">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3626,7 +3626,17 @@ function learningMarkDialogueAudio(card,audio){
 }
 learningPanel.onclick=learningAction;learningDialog.addEventListener('click',learningAction);
 document.addEventListener('click',e=>{if(e.target.closest('[data-learn]')&&!learningPanel.contains(e.target)&&!learningDialog.contains(e.target))void learningAction(e);});
-learningPanel.ondblclick=e=>{if(learningMulti)return;const g=e.target.closest('[data-learn="glyph"]');if(g){stopPracticeAudio();void learningGlyph(g.dataset.form,true).catch(learningError);return;}const b=e.target.closest('[data-learn="play-card"]');if(b){stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);}};
+learningPanel.ondblclick=e=>{
+ if(learningMulti)return;
+ const glyph=e.target.closest('[data-learn="glyph"]');
+ if(glyph){stopPracticeAudio();void learningGlyph(glyph.dataset.form,true).catch(learningError);return;}
+ const card=e.target.closest('.learn-card[data-card-id]');
+ if(!card||e.target.closest('.cf-tape-toggle'))return;
+ const control=e.target.closest('button,input,label,a,details,summary,textarea,select,[contenteditable]');
+ if(control&&!control.matches('[data-learn="play-card"],.learn-card-play-area'))return;
+ e.preventDefault();stopPracticeAudio({preservePageQueue:true});
+ void learningOpenDetail(card.dataset.cardId).catch(learningError);
+};
 let learningPress=null,learningSuppressClick=false;
 learningPanel.addEventListener('pointerdown',e=>{if(learningMulti)return;const b=e.target.closest('[data-learn="play-card"]');if(!b||e.pointerType==='mouse')return;learningSuppressClick=false;learningPress={x:e.clientX,y:e.clientY,timer:setTimeout(()=>{learningSuppressClick=true;stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);},550)};});
 function learningCancelPress(){if(learningPress)clearTimeout(learningPress.timer);learningPress=null;}
@@ -10068,7 +10078,19 @@ let dcGeneration=0,dcLast=null,dcOpened=null;
 function dcCard(target){const card=target.closest('.entry');if(!card||!$('#entries').contains(card)||target.closest('button,input,label,a,details,summary,textarea,select,[contenteditable]'))return null;const sentence=card.querySelector('[data-dict-sentence]')?.dataset.dictSentence,word=card.querySelector('[data-learn="word-detail"][data-word]')?.dataset.word;return sentence?{card,kind:'sentence',id:sentence,key:'sentence:'+sentence}:word?{card,kind:'word',id:Number(word),key:'word:'+word}:null;}
 function dcStatus(card,message){let status=card.querySelector('.dc-status');if(!status){status=document.createElement('p');status.className='dc-status';status.setAttribute('role','status');card.firstElementChild.append(status);}status.textContent=message;}
 async function dcTarget(row){if(row.kind==='sentence')return row.id;const word=await getEntry(row.id);if(!word?.syncId)throw Error('词条已删除或尚未准备好，请刷新词典');row.word=word;return 'word:'+word.syncId;}
-async function dcDetail(row){if(dcOpened?.key===row.key&&Date.now()-dcOpened.at<700)return;if(learningHasWork()||recorder)throw Error('请先保存编辑或结束录音');dcOpened={key:row.key,at:Date.now()};dcGeneration++;stopPracticeAudio();try{const id=await dcTarget(row);if(row.card.isConnected)await learningOpenDetail(id);}catch(e){dcOpened=null;throw e;}}
+async function dcDetail(row){
+ if(dcOpened?.key===row.key&&Date.now()-dcOpened.at<700)return;
+ if(learningHasWork()||recorder)throw Error('请先保存编辑或结束录音');
+ const opening={key:row.key,at:Date.now()};
+ dcOpened=opening;dcGeneration++;stopPracticeAudio();
+ try{
+  const id=await dcTarget(row);
+  // A dictionary refresh can replace the clicked card while IndexedDB is reading.
+  // The stable word ID still belongs to the user's most recent detail request.
+  if(dcOpened!==opening||(typeof activeView!=='undefined'&&activeView!=='dictionary'))return;
+  await learningOpenDetail(id);
+ }catch(error){if(dcOpened===opening)dcOpened=null;throw error;}
+}
 async function dcPlay(row){const generation=++dcGeneration;const id=await dcTarget(row),current=()=>generation===dcGeneration&&row.card.isConnected;if(!current())return;dcStatus(row.card,'正在读取已保存发音…');try{const own=row.word&&typeof audioBlobFor==='function'?audioBlobFor(row.word):null;if(own){const manual=await recordedReferenceForWord(row.word);if(!current())return;await learningPlayBlob(manual?.blob||own,manual?.start||0,manual?.end??null);}else await saPlay(id,{isCurrent:current});if(current())dcStatus(row.card,'正在播放已保存发音');}catch(e){if(current())dcStatus(row.card,e.message);}}
 function dcDecorate(){for(const card of $('#entries').querySelectorAll('.entry')){card.tabIndex=0;card.setAttribute('aria-label',(card.querySelector('.word')?.textContent||card.querySelector('.meaning')?.textContent||'词句卡片')+'：单击点读，双击或 Shift+Enter 打开详情');}}
 $('#entries').addEventListener('click',e=>{const row=dcCard(e.target);if(!row||e.ctrlKey||e.metaKey||e.altKey)return;const twice=e.detail>1||dcLast?.key===row.key&&Date.now()-dcLast.at<320;if(!twice&&String(window.getSelection?.()||'').trim())return;dcLast=twice?null:{key:row.key,at:Date.now()};if(twice){e.preventDefault();void dcDetail(row).catch(error=>dcStatus(row.card,error.message));}else void dcPlay(row).catch(error=>dcStatus(row.card,error.message));});
@@ -10077,6 +10099,7 @@ $('#entries').addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')ret
 const dcOriginalRender=render;
 render=async function(...args){await dcOriginalRender(...args);dcDecorate();};
 dcDecorate();if(typeof MutationObserver!=='undefined')new MutationObserver(dcDecorate).observe($('#entries'),{childList:true});
+
 </script>
 <style data-learning-bundle="learning-home-refinement">
 /* Equal-height learning pathways with a shared visual hierarchy. */

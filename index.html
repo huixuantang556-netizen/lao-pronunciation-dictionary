@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="f759150385f066d1">
+  <meta name="lao-app-build" content="845c6ae5d0e23842">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -8042,7 +8042,7 @@ learningOpenDetail=async function(id){
   if(request!==selection||!panel.isConnected)return;
   for(const old of panel.querySelectorAll('.ns-number-card'))old.hidden=true;
   card.hidden=false;card.classList.remove('ns-number-card');card.innerHTML=wslCardHtml(token,target,entry,related);const close=document.createElement('button');close.type='button';close.dataset.wslCollapse='';close.textContent='收起词义';close.setAttribute('aria-label','收起当前词义卡片');close.style.cssText='float:right;font-size:13px;min-height:40px';card.prepend(close);
-  if(typeof smeEditGloss==='function'){const edit=document.createElement('button');edit.type='button';edit.textContent='修改本句词义';edit.onclick=()=>smeEditGloss(m.id,token).catch(error=>status.textContent=error.message);card.querySelector('.wsl-word-actions')?.append(edit);const dictionary=smeDictionary(token,detailWords||[]);if(dictionary){const info=document.createElement('p');info.className='tag-hint';info.textContent='词典最新释义：'+dictionary.meaning+' · '+(token.meaningSource==='dictionary'?'本句跟随词典':'本句使用独立释义');card.querySelector('.wsl-meaning')?.after(info);}}
+  if(typeof smeDictionary==='function'){const dictionary=smeDictionary(token,detailWords||[]);if(dictionary){const info=document.createElement('p');info.className='tag-hint';info.textContent='词典最新释义：'+dictionary.meaning+' · '+(token.meaningSource==='dictionary'?'本句跟随词典':'本句使用独立释义');card.querySelector('.wsl-meaning')?.after(info);}}
 
   const savedComposition=typeof clCompositionHtml==='function'?clCompositionHtml(token.lao,snap,detailWords||[]):'';if(savedComposition){const composition=document.createElement('section');composition.innerHTML=savedComposition;card.append(composition);}
   if(!savedComposition&&typeof cwSplits==='function'&&typeof cwIndex==='function'&&!token.isName&&token.kind!=='name'){
@@ -9292,7 +9292,7 @@ showView=function(view,...args){
 /* Never paint the legacy detail while asynchronous enrichers are composing it. */
 #learningDialog[data-ss-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
 #learningDialog[data-df-building]{visibility:hidden!important;animation:none!important;pointer-events:none}
-#learningDialog .ss-quick-management{display:contents}#learningDialog .ss-quick-management button{border-color:#aacdc0}#learningDialog .ss-quick-management [data-ss-regenerate]{background:#edf6f3;color:#087f70}
+#learningDialog .ss-quick-management{display:contents}#learningDialog .ss-quick-management[hidden]{display:none!important}#learningDialog .ss-quick-management button{border-color:#aacdc0}#learningDialog .ss-quick-management [data-ss-regenerate]{background:#edf6f3;color:#087f70}
 
 /* Compact mobile sentence reading cards, with one aligned row of actions. */
 @media(max-width:650px){
@@ -9319,17 +9319,17 @@ function ssGroup(title,className=''){const group=ssElement('section',className);
 function ssSetManagement(dialog,open){
  const manager=dialog.querySelector('.ss-management'),toggle=dialog.querySelector('[data-ss-manage]');if(!manager||!toggle)return false;
  if(!open&&(learningHasWork()||recorder)){const status=dialog.querySelector('.ss-play-status');if(status)status.textContent='请先保存或取消当前编辑，并完成录音，再收起设置。';return false;}
- manager.hidden=!open;const quick=dialog.querySelector('.ss-quick-management');if(quick)quick.hidden=!open;toggle.textContent=open?'完成设置':'⚙ 设置／管理';toggle.setAttribute('aria-expanded',String(open));dialog.classList.toggle('learn-settings',open||learningSettings);return true;
+ manager.hidden=!open;const quick=dialog.querySelector('.ss-quick-management');if(quick)quick.hidden=!open;toggle.textContent=open?'完成设置':'⚙ 设置';toggle.setAttribute('aria-expanded',String(open));dialog.classList.toggle('learn-settings',open||learningSettings);return true;
 }
 function ssOpenManagement(dialog,part=''){if(!ssSetManagement(dialog,true))return;const target=part==='audio'?dialog.querySelector('.ss-audio-tools'):part==='analysis'?dialog.querySelector('.ss-analysis-tools'):dialog.querySelector('.ss-management');if(target){if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView?.({block:'start',behavior:'smooth'});}}
 function ssCompose(detail,resolved,id){
  if(detail.dataset.ssLayout)return;detail.dataset.ssLayout='true';detail.dataset.ssWord=String(!!resolved.w);detail.classList.add('ss-detail');
  const {m,w}=resolved,a=m.sentenceAnalysis,trusted=!!a&&saTextKey(a.original)===saTextKey(w?.word||m.textLao)&&(!w||saTextKey(a.translation||'')===saTextKey(w.meaning||'')),existing=detail.querySelector('.sentence-analysis'),host=existing||ssElement('section','ss-root'),panel=trusted?detail.querySelector('.wsl-panel'):null,meaning=detail.querySelector('.learn-meaning'),ipa=detail.querySelector('.ipa'),audio=detail.querySelector('.learn-audio-bottom'),record=detail.querySelector('#learningRecord'),reference=detail.querySelector('#learningReferenceRecord'),draft=detail.querySelector('#learningRecordingDraft'),raw=existing?.querySelector('.sa-content'),paTools=detail.querySelector('.pa-analysis-tools'),quiz=trusted?raw?.querySelector('.sa-quiz'):null;
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
- const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 听已有录音'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置／管理'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
+ const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 播放'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
- const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText)quick.append(editText);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);if(reference)actions.append(reference);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText){if(w||m.analysisUnitType==='word')editText.textContent='修改词条';quick.append(editText);}if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -9365,7 +9365,6 @@ function ssCompose(detail,resolved,id){
  if(related&&w&&related.isConnected&&!main.contains(related)&&related.querySelector('button'))metadata.append(related);
  if(metadata.children.length>1)manager.append(metadata);
  if(!existing)detail.append(host);host.classList.add('ss-sentence-view');host.append(main,manager);
- if(learningSettings)ssSetManagement(learningDialog,true);
 }
 const ssPreviousDetail=learningOpenDetail;
 let ssDetailRenderGate=null,ssDetailRequest=0,ssDetailQueue=Promise.resolve(),ssDetailActiveId=null,ssDetailActivePromise=null;
@@ -10952,6 +10951,7 @@ async function cfRecord(target,{autoStart=true,button=null,quick=false}={}){
  if(learningDetail!==target)return;
  const control=learningDialog.querySelector('#learningReferenceRecord');
  if(!control)throw Error('录音控件未能加载，请重新打开详情');
+ if(typeof ssSetManagement==='function')ssSetManagement(learningDialog,true);
  control.scrollIntoView({block:'center'});
  if(autoStart)await learningStartRecording('reference');
 }

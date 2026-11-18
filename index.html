@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="8bbbfa2f3ac4e29f">
+  <meta name="lao-app-build" content="9e294cc70ec89891">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3272,7 +3272,9 @@ async function learningPlayBlob(blob,start=0,end=null,onComplete){
    if(end!==null)a.ontimeupdate=()=>{if(a.currentTime>=end&&practiceAudio===a){stopPracticeAudio();onComplete?.();}};
   }else a.src=practiceAudioUrl;
   a.onended=()=>{if(practiceAudio===a){stopPracticeAudio();onComplete?.();}};
+  tapAudioDiagnostic('尝试启动音频');
   await learningAudioDeadline(a.play(),'音频启动超时，请再点一次播放。',loading.signal);
+  tapAudioDiagnostic('音频已启动');
  }catch(error){
   if(generation!==playbackGeneration)return;
   stopPracticeAudio();
@@ -3442,6 +3444,35 @@ async function learningSaveMaterials(){
   await learningWrite({learningMaterials:materials,learningPlacements:places,...(asset?{learningAudio:[asset]}:{})},snap);learningDialog.close();learningDraft=null;await renderLearning();
  }catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}
 }
+let tapAudioLog=null;
+function tapAudioDiagnostic(message){
+ if(!tapAudioLog)return;
+ tapAudioLog.lines.push(message);
+ if(tapAudioLog.lines.length>12)tapAudioLog.lines.shift();
+ tapAudioLog.output.textContent=tapAudioLog.lines.join('\n');
+}
+function tapAudioCapture(event){
+ const card=event.target.closest?.('#learningContent .learn-card');
+ if(!card)return;
+ const button=event.target.closest('button');
+ const zone=button?.classList.contains('learn-card-play-area')?'白区按钮':button?.dataset.learn==='play'?'▶':button?.dataset.learn==='play-card'?'正文':button?'其他按钮':event.target.closest('.learn-card-actions')?'底栏空白':'卡片空白';
+ const area=card.querySelector('.learn-card-play-area')?.getBoundingClientRect();
+ tapAudioDiagnostic(event.type+' · '+zone+(event.type==='pointerdown'?' · 白区宽度 '+Math.round(area?.width||0)+'px':''));
+}
+function tapAudioStart(){
+ if(tapAudioLog)return;
+ const panel=document.createElement('aside');
+ panel.setAttribute('aria-label','手机点读诊断');
+ panel.style.cssText='position:fixed;top:max(8px,env(safe-area-inset-top));right:8px;z-index:9998;max-width:calc(100vw - 16px);border:1px solid #c9ddd1;border-radius:10px;padding:8px;background:#fff;color:#183c32;font:12px system-ui;box-shadow:0 2px 14px #163c3225;pointer-events:none';
+ const output=document.createElement('pre');
+ output.style.cssText='margin:3px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-width:270px';
+ const close=document.createElement('button');
+ close.type='button';close.textContent='结束诊断';close.style.cssText='pointer-events:auto;padding:3px 6px';
+ close.onclick=()=>{for(const type of ['pointerdown','pointerup','pointercancel','click'])window.removeEventListener(type,tapAudioCapture,true);tapAudioLog=null;panel.remove();};
+ panel.append(close,output);document.body.append(panel);tapAudioLog={lines:[],output};
+ tapAudioDiagnostic('请返回课程，先点白区，再点同一张卡的 ▶');
+ for(const type of ['pointerdown','pointerup','pointercancel','click'])window.addEventListener(type,tapAudioCapture,true);
+}
 function learningCardPlaybackTarget(target){
  const card=target.closest?.('.learn-card');
  if(!card||target.closest('button,a,input,select,textarea,label,summary,[role="button"],.cf-tape-toggle'))return null;
@@ -3473,7 +3504,7 @@ async function learningAction(e){
   if(a==='detail'||a==='follow'){await learningOpenDetail(id);if(a==='follow')$('#learningRecord').focus();return;}
   if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
-  if(a==='play'||a==='play-card'){$('#learningStatus').textContent='正在读取本机发音…';const result=await learningPlay(id);if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
+  if(a==='play'||a==='play-card'){tapAudioDiagnostic('交给单句播放器');$('#learningStatus').textContent='正在读取本机发音…';let result;try{result=await learningPlay(id);}catch(error){tapAudioDiagnostic('单句错误 '+error.name+' '+error.message);throw error;}tapAudioDiagnostic(result==='cancelled'?'单句请求取消':result==='review'?'需核对录音':'单句流程返回');if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
   if(a==='gemini'){const {m,w}=await learningResolve(id);await learningDefaultSpeech(m,w?.word||m.textLao);return;}
   if(a==='own'){await learningPlay(id,'user');return;}
   if(a==='audio'){await learningPlay(id,'reference',Number(b.dataset.index));return;}
@@ -4683,7 +4714,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
   };
   const playbackLabel='正在播放 '+(part.at+1)+(part.count>1?'–'+(part.at+part.count):'')+' / '+total+' 项'+(part.count>1?'（未切分整段，只能按段跳转）':'');
   status.textContent=lessonPagePaused?'已暂停':'正在准备播放…';
-  a.onplaying=()=>{if(currentPart()&&!lessonPagePaused)status.textContent=playbackLabel;};
+  a.onplaying=()=>{if(currentPart()&&!lessonPagePaused){status.textContent=playbackLabel;if(typeof tapAudioDiagnostic==='function')tapAudioDiagnostic('整页音频已启动');}};
   const update=(elapsed=Math.max(0,Math.min(durations[index]??Infinity,a.currentTime-(part.start||0))))=>{
    if(!currentPart())return;
    seek.disabled=!timelineReady;
@@ -4837,7 +4868,7 @@ document.addEventListener('click',async e=>{
 document.addEventListener('click',e=>{
  if(e.target.closest('.cf-tape')?.dataset.cfTapeLanguage)return;
  const b=e.target.closest('.learn-card [data-learn="play-card"],.learn-card [data-learn="play"]')||(typeof learningCardPlaybackTarget==='function'?learningCardPlaybackTarget(e.target):null);
- if(b&&b.closest('.learn-card')?.dataset.audioReview!=='true'&&!(b.dataset.learn==='play-card'&&e.detail>1)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(typeof learningHasWork==='function'&&learningHasWork())&&lessonPageCardJump?.(b.dataset.id,b)){e.preventDefault();e.stopImmediatePropagation();return;}
+ if(b&&b.closest('.learn-card')?.dataset.audioReview!=='true'&&!(b.dataset.learn==='play-card'&&e.detail>1)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(typeof learningHasWork==='function'&&learningHasWork())&&lessonPageCardJump?.(b.dataset.id,b)){if(typeof tapAudioDiagnostic==='function')tapAudioDiagnostic('交给整页播放器');e.preventDefault();e.stopImmediatePropagation();return;}
  const action=e.target.closest('[data-learn]');
  if(action&&['detail','word-detail','follow','close'].includes(action.dataset.learn)||b&&b.dataset.learn==='play-card'&&e.detail>1)return;
  if(action&&typeof learningDialog!=='undefined'&&learningDialog.contains(e.target)&&['play','audio','own','gemini','compare','preview-recording','word-audio'].includes(action.dataset.learn)){lessonPagePauseForDetail();return;}
@@ -10095,6 +10126,7 @@ const apSyncBadgeText=document.createElement('span'),apSyncBadgeClose=document.c
 window.laoSyncFeedback=({running,message})=>{apSyncBadge.hidden=false;apSyncBadge.dataset.running=String(running);apSyncBadgeText.textContent=running?'云端同步中，可继续浏览':message.includes('未完成')||message.includes('取消')?'同步未完成，请在设置中查看原因':'本次云端同步已结束；详情见设置';apSyncBadge.title=message;};
 for(const id of ['exportButton','importButton']){const button=document.querySelector('#'+id);if(button)document.querySelector('#apDataActions').append(button);}
 const apVersion=document.querySelector('#tagImportVersion');if(apVersion)document.querySelector('#apCompatibility').append(apVersion);
+if(typeof tapAudioStart==='function'){const tapDiagnosticButton=document.createElement('button');tapDiagnosticButton.type='button';tapDiagnosticButton.textContent='开启手机点读诊断';tapDiagnosticButton.onclick=tapAudioStart;document.querySelector('#apBuildVersion').after(tapDiagnosticButton);}
 document.querySelector('#apBuildVersion').textContent='当前程序版本：'+(document.querySelector('meta[name="lao-app-build"]')?.content||'本地源文件（安装版可检查更新）');
 function apRefreshSettings(){for(const checkbox of apDialog.querySelectorAll('[data-ap-preference]'))checkbox.checked=appPreference(checkbox.dataset.apPreference);accountButton.textContent='⚙ 设置';accountButton.setAttribute('aria-label','打开应用设置与个人中心');document.querySelector('#apAvatarFold').hidden=!window.profileUser;if(!window.profileUser)apIdentity.textContent='本机词典 · 未登录';let avatar='🌿';if(window.profileUser)try{const stored=localStorage.getItem('lao-avatar-'+window.profileUser.id);if(typeof avatarOptions!=='undefined'&&avatarOptions.includes(stored))avatar=stored;}catch(_){}apAccountSymbol.textContent=avatar;}
 const apPreviousUpdateProfile=updateProfileUser;

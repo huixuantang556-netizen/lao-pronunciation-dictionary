@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="9e294cc70ec89891">
+  <meta name="lao-app-build" content="1e79c55f54432020">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -487,6 +487,10 @@
   border-radius:0;background:none!important;box-shadow:none!important;transform:none!important;
   cursor:pointer;touch-action:manipulation
  }
+}
+#learningPanel #learningContent [data-dialogue-card]>.learn-card-actions>.learn-card-play-area:is(:active,.learn-card-play-area-flash),
+#learningPanel #learningContent [data-dialogue-card].page-audio-current>.learn-card-actions>.learn-card-play-area{
+ background:#e4f4ed!important;border-radius:9px
 }
 </style>
 </head>
@@ -3524,6 +3528,19 @@ async function learningAction(e){
   if(a==='edit-word'){if(typeof ccBeginWordEdit==='function')ccBeginWordEdit();learningDialog.close();await $('#entries').onclick({target:{closest:()=>({dataset:{edit:b.dataset.word}})}});return;}
  }catch(error){const status=learningDialog.open?$('#learningDialogStatus'):$('#learningStatus');if(status)status.textContent=error.message;const card=b?.closest?.('.learn-card');if(card){let notice=card.querySelector('[data-audio-error]');if(!notice){notice=document.createElement('small');notice.dataset.audioError='';notice.setAttribute('role','status');card.append(notice);}notice.textContent=error.message;}}
 }
+let learningPlayAreaFlash=null,learningPlayAreaTimer;
+window.addEventListener('click',event=>{
+ const area=event.target.closest?.('.learn-card-play-area');
+ if(!area)return;
+ learningPlayAreaFlash?.classList.remove('learn-card-play-area-flash');
+ clearTimeout(learningPlayAreaTimer);
+ learningPlayAreaFlash=area;
+ area.classList.add('learn-card-play-area-flash');
+ learningPlayAreaTimer=setTimeout(()=>{
+  area.classList.remove('learn-card-play-area-flash');
+  learningPlayAreaFlash=null;
+ },850);
+},true);
 learningPanel.onclick=learningAction;learningDialog.addEventListener('click',learningAction);
 document.addEventListener('click',e=>{if(e.target.closest('[data-learn]')&&!learningPanel.contains(e.target)&&!learningDialog.contains(e.target))void learningAction(e);});
 learningPanel.ondblclick=e=>{if(learningMulti)return;const g=e.target.closest('[data-learn="glyph"]');if(g){stopPracticeAudio();void learningGlyph(g.dataset.form,true).catch(learningError);return;}const b=e.target.closest('[data-learn="play-card"]');if(b){stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);}};

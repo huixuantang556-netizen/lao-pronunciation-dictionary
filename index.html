@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="5da13838a66a3280">
+  <meta name="lao-app-build" content="324526807451b4ee">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3460,8 +3460,11 @@ async function learningCompare(id){
 async function learningOpenDetail(id){
  if(typeof lessonPageBeginDetail==='function')lessonPageBeginDetail();
  const resolved=await learningResolve(id),{w,snap,words}=resolved;if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate?.cancelled)return;const place=snap.learningPlacements.find(p=>p.lessonId===learningLesson.id&&p.materialId===resolved.m.id&&!p.deleted);const m={...resolved.m,purpose:place?.purpose||resolved.m.purpose,note:place?.textbookNote||resolved.m.note,translationZh:place?.textbookMeaning||resolved.m.translationZh,tags:[...new Set([...resolved.m.tags,...(place?.tags||[])])]};learningDetail=id;learningDraft=null;learningPendingRecording=null;
- const related=w?await learningRelatedHtml(w):'',h=learningEsc;
- learningModal(w?.word||m.textLao,'<div class="learn-detail learn-detail-compact"><button class="learn-detail-play" data-learn="play" data-id="'+h(id)+'">▶ 播放</button>'+(learningAudioReviewState(m,w?.word||m.textLao).needsReview?'<p class="learn-audio-warning">文字已修改，已有发音需要核对。</p><button data-learn="v2-review-audio" data-id="'+h(id)+'">已逐一核对：现有录音仍适用</button>':'')+(m.purpose?'<p class="learn-purpose">用途：'+h(m.purpose)+'</p>':'')+'<p class="ipa">'+h(w?.ipa||'')+'</p><p class="learn-meaning">'+h(w?w.meaning:m.translationZh)+'</p>'+(w&&m.translationZh&&m.translationZh!==w.meaning?'<p class="learn-textbook-meaning">教材释义：'+h(m.translationZh)+'</p>':'')+'<div class="learn-chips">'+[...new Set([...(w?tagsFor(w):[]),...m.tags])].map(t=>'<span>'+h(t)+'</span>').join('')+'</div><p class="learn-note">'+h(w?.note||'')+'</p>'+(m.note?'<p class="learn-note">教材备注：'+h(m.note)+'</p>':'')+(w?noteImagesMarkup(w.noteImages):'')+related+'<p class="tag-hint learn-source">来源：'+h(m.source||m.sourceType)+' · '+h(m.contentType==='reading_drill'?'教材朗读练习':m.contentType==='word'?'词典词条':m.unitType==='phrase'?'短语':'句子')+'</p>'+(m.focusLetters.length||m.focusVowels.length?'<p class="learn-focus">训练重点：'+h([...m.focusLetters,...m.focusVowels].join(' · '))+'</p>':'')+'<div class="learn-related letter-examples"><p class="letter-example-status" role="status"></p>'+(m.contentType==='word'?'':'<h3>关联词条</h3><p class="tag-hint">单击听发音 · 双击打开详情（Shift+Enter 也可）</p>'+(m.pendingLinkedWords?.length?'<p class="tag-hint">待关联（词库缺少或有同名词）：'+h(m.pendingLinkedWords.join('、'))+'</p>':'')+m.linkedWordSyncIds.map(ref=>{const x=learningFindWord(ref,words);return x?'<button data-letter-example-word="'+x.id+'">'+h(x.word)+' · '+h(x.meaning)+'</button>':'<span>原关联词已删除或尚未同步</span>';}).join(''))+'</div>'+'<section class="learn-audio-bottom" aria-label="录音与音频管理"><div class="learn-toolbar"><button data-learn="gemini" data-id="'+h(id)+'">Gemini 默认发音</button><button data-learn="record" id="learningRecord">🎙 开始跟读</button>'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改文字资料</button>':'<button data-learn="edit-material" data-id="'+h(id)+'">修改材料</button>')+'</div><p class="tag-hint">手录参考发音优先；没有时复用已有音频或 Gemini 默认发音。参考音与我的跟读分别保存，支持顺序对比。</p><div class="learn-record-controls"><button data-learn="record-reference" id="learningReferenceRecord">🎙 录制参考发音</button><div id="learningRecordingDraft"><button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button></div></div><button data-learn="compare" data-id="'+h(id)+'">参考发音 → 我的跟读</button>'+await learningWordAudioManagerHtml(m,w,snap)+ (m.schemaVersion===2&&typeof lessonV2AudioControls==='function'?lessonV2AudioControls(m):'')+(place?'<button data-learn="unlink" data-id="'+h(id)+'">移除此课关联（保留原资料）</button>':'')+'</section></div>');
+ const related=w?await learningRelatedHtml(w):'',h=learningEsc,text=w?.word||m.textLao;
+ const needsReview=learningAudioReviewState(m,text).needsReview;
+ const cached=needsReview?await learningCachedSpeech(text).catch(()=>null):null;
+ if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate?.cancelled)return;
+ learningModal(w?.word||m.textLao,'<div class="learn-detail learn-detail-compact"><button class="learn-detail-play" data-learn="play" data-id="'+h(id)+'">▶ 播放</button>'+(needsReview&&!cached?.size?'<p class="learn-audio-warning" data-review-text="'+h(text)+'">文字已修改，已有发音需要核对。</p><button data-learn="review-current-audio" data-id="'+h(id)+'">核对原录音</button>':'')+(m.purpose?'<p class="learn-purpose">用途：'+h(m.purpose)+'</p>':'')+'<p class="ipa">'+h(w?.ipa||'')+'</p><p class="learn-meaning">'+h(w?w.meaning:m.translationZh)+'</p>'+(w&&m.translationZh&&m.translationZh!==w.meaning?'<p class="learn-textbook-meaning">教材释义：'+h(m.translationZh)+'</p>':'')+'<div class="learn-chips">'+[...new Set([...(w?tagsFor(w):[]),...m.tags])].map(t=>'<span>'+h(t)+'</span>').join('')+'</div><p class="learn-note">'+h(w?.note||'')+'</p>'+(m.note?'<p class="learn-note">教材备注：'+h(m.note)+'</p>':'')+(w?noteImagesMarkup(w.noteImages):'')+related+'<p class="tag-hint learn-source">来源：'+h(m.source||m.sourceType)+' · '+h(m.contentType==='reading_drill'?'教材朗读练习':m.contentType==='word'?'词典词条':m.unitType==='phrase'?'短语':'句子')+'</p>'+(m.focusLetters.length||m.focusVowels.length?'<p class="learn-focus">训练重点：'+h([...m.focusLetters,...m.focusVowels].join(' · '))+'</p>':'')+'<div class="learn-related letter-examples"><p class="letter-example-status" role="status"></p>'+(m.contentType==='word'?'':'<h3>关联词条</h3><p class="tag-hint">单击听发音 · 双击打开详情（Shift+Enter 也可）</p>'+(m.pendingLinkedWords?.length?'<p class="tag-hint">待关联（词库缺少或有同名词）：'+h(m.pendingLinkedWords.join('、'))+'</p>':'')+m.linkedWordSyncIds.map(ref=>{const x=learningFindWord(ref,words);return x?'<button data-letter-example-word="'+x.id+'">'+h(x.word)+' · '+h(x.meaning)+'</button>':'<span>原关联词已删除或尚未同步</span>';}).join(''))+'</div>'+'<section class="learn-audio-bottom" aria-label="录音与音频管理"><div class="learn-toolbar"><button data-learn="gemini" data-id="'+h(id)+'">Gemini 默认发音</button><button data-learn="record" id="learningRecord">🎙 开始跟读</button>'+(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改文字资料</button>':'<button data-learn="edit-material" data-id="'+h(id)+'">修改材料</button>')+'</div><p class="tag-hint">手录参考发音优先；没有时复用已有音频或 Gemini 默认发音。参考音与我的跟读分别保存，支持顺序对比。</p><div class="learn-record-controls"><button data-learn="record-reference" id="learningReferenceRecord">🎙 录制参考发音</button><div id="learningRecordingDraft"><button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button></div></div><button data-learn="compare" data-id="'+h(id)+'">参考发音 → 我的跟读</button>'+await learningWordAudioManagerHtml(m,w,snap)+ (m.schemaVersion===2&&typeof lessonV2AudioControls==='function'?lessonV2AudioControls(m):'')+(place?'<button data-learn="unlink" data-id="'+h(id)+'">移除此课关联（保留原资料）</button>':'')+'</section></div>');
 }
 async function learningStartRecording(role='follow'){
  if(learningRecorder&&role!==learningRecordingRole)throw new Error('请先停止当前录音。');
@@ -3470,6 +3473,11 @@ async function learningStartRecording(role='follow'){
  try{stopPracticeAudio();stream=await navigator.mediaDevices.getUserMedia({audio:true});if(session?.cancelled){stream.getTracks().forEach(t=>t.stop());return;}learningStream=stream;const chunks=[],r=learningRecorder=new MediaRecorder(stream);r.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};r.onstop=()=>{stream.getTracks().forEach(t=>t.stop());learningRecorder=null;learningStream=null;if(session?.cancelled)return;learningPendingRecording=new Blob(chunks,{type:r.mimeType||'audio/webm'});node('#learningRecord').textContent='🎙 开始跟读';node('#learningReferenceRecord').textContent='🎙 录制参考发音';node('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording">▶ 试听本次</button><button data-learn="save-recording" class="primary">保存录音</button><p class="tag-hint">本次录制：'+(learningRecordingRole==='reference'?'参考发音':'我的跟读')+'。旧音频保留。</p>';};r.start();learningRecordingRole=role;learningPendingRecording=null;node('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button>';node(role==='reference'?'#learningReferenceRecord':'#learningRecord').textContent='■ 停止录音';}catch(e){stream?.getTracks().forEach(t=>t.stop());learningRecorder=null;throw e;}finally{learningBusy=false;}
 }
 function learningRefreshAudioReview(m,text,defaultAudio=false){
+ const warning=typeof learningDialog==='undefined'?null:learningDialog.querySelector('[data-review-text]');
+ if(warning?.dataset.reviewText===text&&!learningAudioReviewState(m,text,defaultAudio).needsReview){
+  warning.remove();
+  learningDialog.querySelector('[data-learn="review-current-audio"]')?.remove();
+ }
  if(!defaultAudio&&typeof lessonPageStop==='function')lessonPageStop();
  if(typeof document==='undefined'||!document.querySelectorAll)return;
  const state=learningAudioReviewState(m,text,defaultAudio);
@@ -3575,6 +3583,7 @@ async function learningAction(e){
   if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
   if(a==='play'||a==='play-card'){tapAudioDiagnostic('交给单句播放器');$('#learningStatus').textContent='正在读取本机发音…';const card=b.closest?.('[data-dialogue-card]'),previousAudio=typeof practiceAudio==='undefined'?null:practiceAudio;let result;try{result=await learningPlay(id);if(card&&practiceAudio!==previousAudio)learningMarkDialogueAudio(card,practiceAudio);}catch(error){tapAudioDiagnostic('单句错误 '+error.name+' '+error.message);throw error;}tapAudioDiagnostic(result==='cancelled'?'单句请求取消':result==='review'?'需核对录音':'单句流程返回');if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
+  if(a==='review-current-audio'){const {m,w,snap}=await learningResolve(id);await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao},snap);return;}
   if(a==='accept-original-audio'){await learningAcceptOriginalAudio(id,b);return;}
   if(a==='gemini'){
    const {m,w}=await learningResolve(id),text=w?.word||m.textLao;
@@ -4426,7 +4435,7 @@ async function batchRestoreDraft(view=null,key=null){
  batchAudioBusy=true;
  try{stopPracticeAudio();const buffer=await batchDecode(blob),sourceHash=typeof cloudHash==='function'?await cloudHash(blob):null;
   if(sourceHash&&draft.sourceHash&&sourceHash!==draft.sourceHash)throw Error('原音已更新，旧切点不能安全复用，请从对话重新打开原音。');
-  let words=draft.words||[],dialogueGroups=draft.dialogueGroups||[];if(draft.pageMode&&typeof batchRestoreSourceWords==='function'){const inventory=await batchFreshInventory();words=batchRestoreSourceWords(words,inventory.content.sentences);dialogueGroups=dialogueGroups.filter(g=>inventory.content.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id)));}
+  let words=draft.words||[],dialogueGroups=draft.dialogueGroups||[];if(draft.pageMode&&typeof batchRestoreSourceWords==='function'){const revised=words.some(w=>w.revised),inventory=await batchFreshInventory(revised);words=batchRestoreSourceWords(words,revised?inventory.revised:inventory.content.sentences);dialogueGroups=dialogueGroups.filter(g=>inventory.content.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id)));}
   batchAudioState={...draft,words,dialogueGroups,blob,buffer,sourceHash};
   await batchFromView(view,async()=>{batchRemember();batchEditor();});
   if(!batchDialog.open)batchDialog.showModal();
@@ -4490,6 +4499,7 @@ async function batchSaveClips(clips){await new Promise((resolve,reject)=>{const 
  for(const c of clips)if(typeof qaDefaultSaved==='function')await qaDefaultSaved(c.key,c.blob);
 }
 const batchLaunch=document.createElement('button');batchLaunch.type='button';batchLaunch.textContent='音频批量生成与切分';batchLaunch.onclick=()=>openBatchAudio().catch(e=>alert(e.message));$('#dictionaryBatchTools').prepend(batchLaunch);
+
 </script>
 <script data-learning-bundle="page-audio">
 /* Page listening reuses saved audio only. Generation is an explicit settings action. */
@@ -4919,22 +4929,24 @@ async function lessonPageSelectMissing(page){
 async function lessonPagePrepare(page,fromBatch=false){
  if(batchAudioBusy||recorder||learningHasWork())throw Error('请先完成正在进行的编辑或录音，并进入课程设置。');
  if(!fromBatch&&typeof batchParentView!=='undefined')batchParentView=null;
- stopPracticeAudio();const words=await lessonPageResolve(page.words);
- batchDialog.innerHTML='<h2>本页合成与切分</h2><p>'+learningEsc(page.title)+' · '+words.length+' 项。不限 30 项，每批最多 5,000 字符。长页面分批生成，整页播放会自动按顺序衔接各段。</p><p>完整原音会保留。切分页可选择替换已有单条默认音，手录参考音不受影响；不选替换时只补充缺音。</p><label>从第 <input id="pageFrom" type="number" min="1" max="'+words.length+'" value="1"> 项</label><label>到第 <input id="pageTo" type="number" min="1" max="'+words.length+'" value="'+words.length+'"> 项</label><p><label><input id="pageForce" type="checkbox">重新生成所选整段（不用旧缓存，可能消耗额度；成功后替换整段默认音）</label></p><p><button id="pageGenerate">合成／打开已有整段并切分</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
+ stopPracticeAudio();const words=await lessonPageResolve(page.words),revised=words.some(w=>w.revised);
+ batchDialog.innerHTML='<h2>本页合成与切分</h2><p>'+learningEsc(page.title)+' · '+words.length+' 项。不限 30 项，每批最多 5,000 字符。长页面分批生成，整页播放会自动按顺序衔接各段。</p><p>完整原音会保留。切分页可选择替换已有单条默认音，手录参考音不受影响；不选替换时只补充缺音。</p><label>从第 <input id="pageFrom" type="number" min="1" max="'+words.length+'" value="1"> 项</label><label>到第 <input id="pageTo" type="number" min="1" max="'+words.length+'" value="'+words.length+'"> 项</label>'+(!revised?'<p><label><input id="pageForce" type="checkbox">重新生成所选整段（不用旧缓存，可能消耗额度；成功后替换整段默认音）</label></p>':'')+'<p><button id="pageGenerate">合成／打开已有整段并切分</button><button data-batch-close>关闭</button></p><p data-batch-status role="status"></p>';
  batchDialog.insertAdjacentHTML('beforeend','<details><summary>核对本页顺序</summary><ol>'+words.map(w=>'<li>'+learningEsc(w.word)+' · '+learningEsc(w.meaning)+'</li>').join('')+'</ol></details>');
- batchDialog.insertAdjacentHTML('afterbegin','<p><button id="pageMissingOnly">只补缺少的词句发音（可勾选）</button></p>');
- $('#pageMissingOnly').onclick=async()=>{try{await lessonPageSelectMissing(page);}catch(error){batchNotice(error.message);}};
+ if(!revised){
+  batchDialog.insertAdjacentHTML('afterbegin','<p><button id="pageMissingOnly">只补缺少的词句发音（可勾选）</button></p>');
+  $('#pageMissingOnly').onclick=async()=>{try{await lessonPageSelectMissing(page);}catch(error){batchNotice(error.message);}};
+ }
  if(!batchDialog.open)batchDialog.showModal();batchDialog.querySelector('[data-batch-close]').onclick=batchClose;
  $('#pageGenerate').onclick=async()=>{if(batchAudioBusy)return;batchAudioBusy=true;$('#pageGenerate').disabled=true;
   try{
    const from=Number($('#pageFrom').value),to=Number($('#pageTo').value);
    if(!Number.isInteger(from)||!Number.isInteger(to)||from<1||to>words.length||to<from)throw Error('请选择有效的连续项目范围');
-   const chosen=words.slice(from-1,to).map(({id,word,meaning,dialogueId})=>({id,word,meaning,dialogueId})),text=lessonPageText(chosen);
+   const chosen=words.slice(from-1,to).map(({id,word,meaning,dialogueId,revised})=>({id,word,meaning,dialogueId,...(revised?{revised:true}:{})})),text=lessonPageText(chosen);
    if(text.length>5000)throw Error('所选内容超过 5,000 字符，请缩小范围');
    if(localStorage.getItem(batchDraftKey)&&!confirm('开始这一批会替换上一次切分草稿（不会删除原音和已保存切片）。继续？'))return;
    const force=Boolean($('#pageForce')?.checked);let blob=force?null:await learningCachedSpeech(text);
    if(!force&&!blob&&page.dialogueId&&from===1&&to===words.length)blob=await learningCachedSpeech(chosen.map(w=>w.word).join('\n'));
-   if(!force&&!blob&&fromBatch)await batchAssertMissing(chosen);
+   if(fromBatch&&(chosen.some(w=>w.revised)||!force&&!blob))await batchAssertMissing(chosen);
    if(!blob){if(!confirm('将合成 '+chosen.length+' 项整段音频，发起一次请求，可能计费。继续？'))return;batchNotice('正在等待生成结果，最长约 3 分钟，请勿重复提交或关闭…');blob=await defaultSpeech(text,{batchPause:true,force});}
    const key=JSON.stringify([ttsSettings.endpoint||'',text]);await ttsCache('readwrite',key,blob);
    if(page.dialogueId&&from===1&&to===words.length){
@@ -4952,7 +4964,7 @@ async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await di
  const current=await (typeof batchResolveSourceWords==='function'?batchResolveSourceWords(s.words):lessonPageResolve(s.words));
  if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('本页文字已变化，请重新核对，未保存切片');
  const cache=await cloudCacheRows(),existing=new Set(cache.flatMap(r=>{try{return [JSON.parse(r.key)[1]];}catch(_){return [];}})),seen=new Set(),clips=[];
- current.forEach((w,i)=>{if(w.orphan||existing.has(w.word)||seen.has(w.word)||w.entry&&hasAudio(w.entry)||w.m.audioSources.some(learningIsReference))return;seen.add(w.word);clips.push({key:JSON.stringify([ttsSettings.endpoint||'',w.word]),blob:batchWav(s.buffer,...s.ranges[i])});});
+ current.forEach((w,i)=>{if(w.orphan||existing.has(w.word)||seen.has(w.word)||(w.revised?!learningAudioReviewState(w.m,w.word).needsReview:(w.entry&&hasAudio(w.entry)||w.m.audioSources.some(learningIsReference))))return;seen.add(w.word);clips.push({key:JSON.stringify([ttsSettings.endpoint||'',w.word]),blob:batchWav(s.buffer,...s.ranges[i])});});
  let savedDialogues=0;
  for(const group of s.dialogueGroups||[]){
   const indices=group.itemIds.map(id=>s.words.findIndex(w=>w.id===id&&w.dialogueId===group.id));
@@ -4962,7 +4974,10 @@ async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await di
   if(existing.has(fullText)||seen.has(fullText)||full.m.audioSources?.some(learningIsReference))continue;
   seen.add(fullText);clips.push({key:JSON.stringify([ttsSettings.endpoint||'',fullText]),blob:batchWav(s.buffer,s.ranges[indices[0]][0],s.ranges[indices.at(-1)][1])});savedDialogues++;
  }
- if(clips.length)await batchSaveClips(clips);
+ if(clips.length){
+  await batchSaveClips(clips);
+  if(current.some(w=>w.revised)&&typeof learningRefreshCachedAudioReviews==='function')learningRefreshCachedAudioReviews(document).catch(error=>console.warn('读取默认发音状态失败',error));
+ }
  localStorage.removeItem(batchDraftKey);batchNotice('已保存 '+(clips.length-savedDialogues)+' 段单条默认音频、'+savedDialogues+' 组完整对话，跳过 '+(s.words.length-clips.length+savedDialogues)+' 项已有音频／重复文本。完整原音已保留用于整页播放，请导出备份。');$('#batchSave').textContent='已保存';
 }
 document.addEventListener('click',async e=>{
@@ -5096,7 +5111,7 @@ function batchCourseContent(snap){
  }
  return {sentences,dialogues};
 }
-function batchModeButtons(){return '<nav class="batch-modes"><button data-batch-mode="words">词汇</button><button data-batch-mode="sentences">句子</button><button data-batch-mode="dialogues">完整对话</button></nav>';}
+function batchModeButtons(){return '<nav class="batch-modes"><button data-batch-mode="words">词汇</button><button data-batch-mode="sentences">句子</button><button data-batch-mode="dialogues">完整对话</button><button data-batch-mode="revised">改字待补音</button></nav>';}
 function batchSentenceReady(word,m,snap,cache){
  if(m?.deleted)return false;
  // An exact-text default clip is independent of an old reference's review flag.
@@ -5108,7 +5123,21 @@ function batchSentenceReady(word,m,snap,cache){
   return Boolean(asset?.blob?.size)&&Number.isFinite(ref.start??0)&&(ref.start??0)>=0&&(ref.end==null||Number.isFinite(ref.end)&&ref.end>(ref.start??0));
  });
 }
-function batchContentInventory(snap,cacheRows){
+function batchRevisedRows(snap,entries,cache){
+ const rows=[];
+ for(const m of snap.learningMaterials){
+  if(m.deleted||m.analysisOwner||m.phoneticProfile||!['word','sentence'].includes(m.contentType))continue;
+  if(!m.audioNeedsReview&&!(m.audioSources||[]).some(a=>a.needsReview))continue;
+  const entry=m.contentType==='word'?learningFindWord(m.linkedWordSyncIds?.[0],entries):null;
+  if(m.contentType==='word'&&!entry)continue;
+  const word=entry?.word||m.textLao;
+  if(!word?.trim()||cache.has(word)||!learningAudioReviewState(m,word).needsReview)continue;
+  if(typeof sharedWordReference==='function'){try{if(sharedWordReference({...m,textLao:word},snap))continue;}catch(_){/* A stale shared reference does not provide audio for the edited text. */}}
+  rows.push({id:m.id,word,meaning:entry?.meaning||m.translationZh||'',category:m.contentType==='word'?'词汇':'句子',revised:true});
+ }
+ return rows;
+}
+function batchContentInventory(snap,cacheRows,entries=[]){
  const content=batchCourseContent(snap),cache=new Map(cacheRows.filter(r=>r.blob?.size).flatMap(r=>{try{return [[JSON.parse(r.key)[1],r]];}catch(_){return [];}}));
  const materials=new Map(snap.learningMaterials.map(m=>[m.id,m])),byText=new Map(),covered=new Set(),states=new Map();
  for(const w of content.sentences){const m=materials.get(w.id),refs=(m?.audioSources||[]).filter(learningIsReference);if(cache.has(w.word)||refs.length)byText.set(w.word,true);}
@@ -5134,10 +5163,18 @@ function batchContentInventory(snap,cacheRows){
   states.set(d.id,{full,savedBatch,blocked:!full&&refs.length>0});
  }
  for(const d of content.dialogues){const state=states.get(d.id);state.readyCount=d.words.filter(w=>batchSentenceReady(w,materials.get(w.id),snap,cache)).length;state.completed=d.words.length>0&&state.readyCount===d.words.length;state.missing=d.words.filter(w=>!covered.has(w.word)&&!byText.has(w.word));state.selectable=!state.full&&!state.blocked&&state.missing.length===d.words.length;}
- return {content,states,missing:w=>!covered.has(w.word)&&!byText.has(w.word)};
+ return {content,states,revised:batchRevisedRows(snap,entries,cache),missing:w=>!covered.has(w.word)&&!byText.has(w.word)};
 }
-async function batchFreshInventory(){return batchContentInventory(await learningSnapshot(),await cloudCacheRows());}
+async function batchFreshInventory(includeRevised=false){
+ const [snap,cache,entries]=await Promise.all([learningSnapshot(),cloudCacheRows(),includeRevised?allEntries():[]]);
+ return batchContentInventory(snap,cache,entries);
+}
 async function batchAssertMissing(words){
+ if(words.some(w=>w.revised)){
+  const inventory=await batchFreshInventory(true),eligible=new Map(inventory.revised.map(w=>[w.id,w.word]));
+  if(words.some(w=>!w.revised||eligible.get(w.id)!==w.word))throw Error('发音状态或文字已变化，请返回“改字待补音”重新选择。');
+  return;
+ }
  const inventory=await batchFreshInventory(),current=new Map(inventory.content.sentences.map(w=>[w.id,w]));
  if(words.some(w=>current.get(w.id)?.word!==w.word))throw Error('课程文字或归属已变化，请返回列表重新选择。');
  if(words.some(w=>!inventory.missing(w)))throw Error('所选内容已有音频或待切分原音，已阻止重复生成。请返回列表使用“打开／切分”或“仅补缺句”。');
@@ -5174,14 +5211,15 @@ function batchMissingWords(inventory,ids){
 }
 async function batchOpenContent(mode,view=null){
  if(batchAudioBusy||recorder||learningHasWork())return;
- stopPracticeAudio();const inventory=await batchFreshInventory(),content=inventory.content;
- const seen=new Set(),all=mode==='dialogues'?content.dialogues:content.sentences;
+ const revised=mode==='revised';
+ stopPracticeAudio();const inventory=await batchFreshInventory(revised),content=inventory.content;
+ const seen=new Set(),all=mode==='dialogues'?content.dialogues:revised?inventory.revised:content.sentences;
  const unique=all.filter(r=>{const key=mode==='dialogues'?JSON.stringify(r.words.map(w=>w.word)):r.word;if(seen.has(key))return false;seen.add(key);return true;});
- const rows=mode==='dialogues'?unique:unique.filter(inventory.missing),selectable=r=>mode!=='dialogues'||batchRepairable(inventory.states.get(r.id));
+ const rows=mode==='dialogues'||revised?unique:unique.filter(inventory.missing),selectable=r=>mode!=='dialogues'||batchRepairable(inventory.states.get(r.id));
  let page=view?.page||0,visible=[],completionFilter='all';if(['pending','completed'].includes(view?.completionFilter))completionFilter=view.completionFilter;
  const selected=new Set((view?.selected||[]).filter(id=>rows.some(r=>r.id===id&&selectable(r)))),h=learningEsc;batchParentView=null;batchDialog.oninput=null;
  batchDialog.innerHTML='<h2>音频批量生成与切分</h2><small style="color:#647d78">对话完成总览 1016.3</small>'+batchModeButtons()+
- '<p>'+(mode==='dialogues'?'可跨页、跨课程勾选未完成对话，点击“批量仅补缺句”一次处理各组尚缺的句子；相同句子只生成一次，已有音频不覆盖。完全缺音的对话也可勾选后生成整组。已有整段或待核对／同步的原音仍使用“继续切分”，不会重复付费生成。每页30组，每批最多5,000字符。':'每页30句，可跨页、跨课程多选。隐藏已有音频／缓存或待核对、待同步的句子，已跳过 '+(all.length-rows.length)+' 项。每批最多5,000字符。')+
+ '<p>'+(mode==='dialogues'?'可跨页、跨课程勾选未完成对话，点击“批量仅补缺句”一次处理各组尚缺的句子；相同句子只生成一次，已有音频不覆盖。完全缺音的对话也可勾选后生成整组。已有整段或待核对／同步的原音仍使用“继续切分”，不会重复付费生成。每页30组，每批最多5,000字符。':revised?'只列出改过文字、尚无当前发音的词句。可跨页勾选，合成后试听切分并保存。':'每页30句，可跨页、跨课程多选。隐藏已有音频／缓存或待核对、待同步的句子，已跳过 '+(all.length-rows.length)+' 项。每批最多5,000字符。')+
  ' 完全相同的朗读内容只列一次。打开准备页不生成音频，提交前仍需确认可能消耗额度。</p><input id="batchContentSearch" type="search" placeholder="搜索课程、对话、老挝语或中文">'+
  (mode==='dialogues'?'<nav aria-label="对话完成状态" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button data-batch-completion="all">全部对话（'+rows.length+'）</button><button data-batch-completion="pending">未完成（'+rows.filter(r=>!inventory.states.get(r.id).completed).length+'）</button><button data-batch-completion="completed">已完成切分（'+rows.filter(r=>inventory.states.get(r.id).completed).length+'）</button></nav>':'')+
  '<div id="batchContentList" style="max-height:360px;overflow:auto"></div><p><button id="batchContentPrev">上一页</button><span id="batchContentCount"></span><button id="batchContentNext">下一页</button></p>'+
@@ -5220,7 +5258,7 @@ async function batchOpenContent(mode,view=null){
  $('#batchContentGo').onclick=async()=>{if(batchAudioBusy)return;if(!selected.size){batchNotice('请先勾选需要生成的内容');return;}
   try{const chosen=rows.filter(r=>selected.has(r.id));if(mode==='dialogues'&&chosen.some(r=>!inventory.states.get(r.id).selectable))throw Error('所选对话已有部分音频，请使用“批量仅补缺句”，不会重新生成整组。');
    await batchAssertMissing(mode==='dialogues'?chosen.flatMap(r=>r.words):chosen);
-   await batchFromView(origin(),()=>lessonPagePrepare(mode==='dialogues'?{title:'批量完整对话 · '+chosen.length+' 组',dialogueId:chosen.length===1?chosen[0].id:null,words:chosen.flatMap(r=>r.words.map(w=>({...w,dialogueId:r.id}))),dialogueGroups:chosen.map(r=>({id:r.id,words:r.words}))}:{title:'批量句子',words:chosen},true));
+   await batchFromView(origin(),()=>lessonPagePrepare(mode==='dialogues'?{title:'批量完整对话 · '+chosen.length+' 组',dialogueId:chosen.length===1?chosen[0].id:null,words:chosen.flatMap(r=>r.words.map(w=>({...w,dialogueId:r.id}))),dialogueGroups:chosen.map(r=>({id:r.id,words:r.words}))}:{title:revised?'改字待补音':'批量句子',words:chosen},true));
   }catch(error){batchNotice(error.message);}
  };
  $('#batchContentList').onclick=async e=>{
@@ -5262,6 +5300,7 @@ async function batchResolveSourceWords(words){
  const live=words.filter(w=>!w.orphan),resolved=await lessonPageResolve(live);let at=0;
  return words.map(w=>w.orphan?{...w,m:{audioSources:[]},entry:null}:resolved[at++]);
 }
+
 </script>
 <style data-pronunciation-bundle="styles">
 #pronunciationPanel{grid-column:1/-1}#pronunciationPanel h2{margin:12px 0 22px}#pronunciationPanel h3{font-size:17px;margin:26px 0 12px}.pron-intro,.pron-footnote,.pron-notes{color:var(--muted,#637a76);font-size:14px;line-height:1.7}.pron-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.pron-entry{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:28px!important;text-align:left;background:#edf7f3!important;border:1px solid #d8e8e3!important}.pron-entry strong{font-size:24px}.pron-entry span{font-size:15px;color:#657b76}.pron-entry small{align-self:flex-end;color:#087f6e}.pron-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#637a76;font-size:14px;margin-bottom:16px}#pronunciationPanel .pron-section-heading button,#pronunciationPanel .pron-back{font-size:14px;padding:6px 10px;min-height:34px}.pron-matrix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pron-matrix.pron-three{grid-template-columns:repeat(3,minmax(0,1fr))}.pron-column{font-size:14px;color:#637a76;padding:8px}.pron-card{position:relative;border:1px solid #dce9e5;border-radius:14px;background:#fff;overflow:hidden}.pron-card:hover{border-color:#58a798;background:#f4faf7}#pronunciationPanel .pron-card-main{display:flex;flex-direction:column;gap:15px;align-items:flex-start;text-align:left;border:0;background:transparent;width:100%;padding:19px 18px;min-height:140px}.pron-card-main span{font-size:13px;color:#637a76;padding-right:26px}.pron-card-main strong{font-size:28px;color:#087f6e}.pron-card-main small{font-size:12px;align-self:flex-end;color:#637a76}#pronunciationPanel .pron-play{position:absolute;right:10px;top:10px;padding:5px 9px;min-height:32px;font-size:14px;border:0;background:#edf7f3}.pron-notes{margin-top:20px}.pron-footnote{margin-top:26px;font-size:12px}.pron-combination{color:#637a76}.pron-rule{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-size:14px;background:#edf7f3;padding:16px;border-radius:12px}.pron-rule dt{color:#637a76;font-size:12px}.pron-rule dd{margin:8px 0 0}.pron-example{display:flex;align-items:center;gap:10px;border-bottom:1px solid #e4eeea;padding:12px 0}.pron-example>span{flex:1}.pron-example small{display:block;font-size:12px;color:#637a76;margin-bottom:5px}.pron-example b{font-size:23px;font-weight:500}#pronunciationPanel .pron-example button{padding:5px 10px;font-size:13px;min-height:32px}#pronunciationStatus{font-size:14px;color:#087f6e;line-height:1.6}#pronunciationPanel button:focus-visible{outline:3px solid #087f6e;outline-offset:2px}@media(max-width:600px){.pron-entries{grid-template-columns:1fr}.pron-entry{padding:22px!important}.pron-matrix{gap:7px}.pron-card-main span{font-size:11px;padding-right:0;padding-top:26px}#pronunciationPanel .pron-card-main{padding:12px 9px;min-height:160px}.pron-card-main strong{font-size:23px}.pron-column{font-size:12px;padding:5px}.pron-rule{grid-template-columns:repeat(2,1fr)}.pron-section-heading{align-items:flex-start}.pron-example{flex-wrap:wrap}.pron-example .pron-manage{font-size:12px!important}}

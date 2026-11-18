@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="845c6ae5d0e23842">
+  <meta name="lao-app-build" content="5da13838a66a3280">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3172,17 +3172,20 @@ learningPanel.addEventListener('change',async e=>{try{if(e.target.matches('[data
 
 function learningReferenceLinks(){return '<nav class="learn-reference-links" aria-label="字母与发音参考表"><span>字音参考</span><button type="button" data-learn="reference-alphabet">字母点读表 <span aria-hidden="true">→</span></button><button type="button" data-learn="reference-pronunciation">发音／声调表 <span aria-hidden="true">→</span></button></nav>';}
 // One card presentation for original courses and V2 courses; record IDs are unchanged.
-function learningAudioReviewState(m,text=m.textLao){
+function learningAudioReviewState(m,text=m.textLao,defaultAudio=false){
+ const refs=m.audioSources||[],current=refs.some(a=>learningCurrentAudioReference(a,text));
+ return {needsReview:!!(m.audioNeedsReview||refs.some(a=>a.needsReview))&&!current&&!defaultAudio,hasCurrentReference:current};
+}
+function learningCurrentAudioReference(ref,text){
  const key=s=>String(s||'').normalize('NFC').replace(/\s+/gu,'');
- const refs=m.audioSources||[],current=refs.some(a=>!a.needsReview&&(a.source==='textbook'||a.source==='user'&&a.role==='reference')&&key(a.recordedText||a.text)===key(text));
- return {needsReview:!!(m.audioNeedsReview||refs.some(a=>a.needsReview))&&!current,hasCurrentReference:current};
+ return !ref.needsReview&&(ref.source==='textbook'||(ref.source==='user'&&ref.role==='reference'))&&key(ref.recordedText||ref.text)===key(text);
 }
 function learningStudyCardHtml(m,w,options={}){
  const h=learningEsc,id=h(m.id),multi=!!options.multi,focused=!!(w?.needsExtraPractice||m.focused),icon=name=>typeof lessonIcon==='function'?lessonIcon(name):({play:'▶',mic:'🎙',more:'⋯'}[name]);
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice>文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice="'+h(w?.word||m.textLao)+'">文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -3251,7 +3254,7 @@ async function renderLearning(){
  }
  if(learningSettings&&['teaching','communication'].includes(learningRoute))html+=learningCourseRemovalHtml(snap,courses);
  if(learningRoute==='lesson'){learningLastCourse(learningLesson.id);html=learningQuickNav(snap)+(learningSettings&&learningLesson.schemaVersion!==2?'<div class="learn-course-tools is-settings"><button type="button" data-chapter-rewrite>整章导出／AI改编／覆盖</button></div>':'')+html;}
- if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);if(route==='lesson')rememberCurrentPage();$('#learningStatus').textContent='';}
+ if(token===learningRenderToken&&activeView==='learning'&&learningRoute===route){const content=$('#learningContent');content.classList.remove('mle-lesson');content.removeAttribute('data-mle-ready');content.innerHTML='<div class="learn-mode-bar">'+(learningSettings?'<button data-learn="package-open">＋ 整课导入</button>'+(learningRoute==='lesson'?'<button data-learn="course-delete" data-id="'+h(learningLesson.id)+'">删除本课程</button>':''):'')+'<button data-learn="settings">'+(learningSettings?'完成设置':'⚙ 课程设置')+'</button></div>'+html;if(route==='lesson'&&typeof mleCompact==='function')mleCompact(content);if(typeof mobileChapterMount==='function')mobileChapterMount(content,mobilePlan);if(route==='lesson'){rememberCurrentPage();learningRefreshCachedAudioReviews(content).catch(error=>console.warn('读取默认发音状态失败',error));}$('#learningStatus').textContent='';}
 }
 async function learningSetup(){
  const words=await allEntries();learningDraft={kind:'setup'};
@@ -3315,10 +3318,40 @@ function learningMobileChapter(){
 }
 let learningChapterTap=null;
 function learningCancelChapterTap(){learningChapterTap?.abort();learningChapterTap=null;}
-async function learningReviewChangedAudio(m){
+async function learningRefreshCachedAudioReviews(root){
+ const notices=[...root.querySelectorAll('[data-audio-review-notice]')];
+ if(!notices.length)return;
+ const keys=await learningDefaultAudioKeys(),texts=new Set();
+ for(const key of keys){
+  try{const [,text]=JSON.parse(key);if(typeof text==='string')texts.add(text);}catch(_){}
+ }
+ for(const notice of notices){
+  if(!notice.isConnected||!texts.has(notice.dataset.audioReviewNotice))continue;
+  const card=notice.closest('[data-card-id]');
+  card.dataset.audioReview='false';
+  card.querySelector('[data-audio-error]')?.remove();
+  notice.remove();
+ }
+}
+function learningReviewOriginals(m,snap){
+ return (m.audioSources||[]).map((ref,index)=>({ref,index}))
+  .filter(({ref})=>learningIsReference(ref)&&snap.learningAudio.some(a=>a.id===ref.assetId&&!a.deleted&&a.blob?.size));
+}
+async function learningReviewChangedAudio(m,snap){
  if(typeof ssCancelDetail==='function'&&typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate){ssCancelDetail();ssDetailRenderGate=null;}
- const h=learningEsc,id=h(m.id),refs=m.audioSources||[];learningDetail=m.id;learningDraft=null;
- learningModal('文字已修改 · 核对原录音','<p>录音没有丢失。请先试听，只有读音仍适用时才确认；文字确实变了可重新录制。</p><p lang="lo">当前：'+h(m.textLao)+'</p>'+refs.map((a,i)=>'<section><p>原录音文字：<span lang="lo">'+h(a.recordedText||a.text||'未记录')+'</span></p><button data-learn="audio" data-id="'+id+'" data-index="'+i+'">▶ 试听这份旧录音</button>'+(a.needsReview?'<button data-learn="v2-confirm-audio" data-id="'+id+'" data-index="'+i+'">这份录音仍适用</button>':'')+'</section>').join('')+'<button data-learn="record-card-reference" data-id="'+id+'">🎙 重新录制当前文字</button>');
+ const h=learningEsc,id=h(m.id),originals=learningReviewOriginals(m,snap);learningDetail=m.id;learningDraft=null;
+ const choices=originals.map(({ref,index})=>'<section><p>原录音文字：<span lang="lo">'+h(ref.recordedText||'未记录')+'</span></p><button data-learn="audio" data-id="'+id+'" data-index="'+index+'">▶ 试听原录音</button> <button data-learn="accept-original-audio" data-id="'+id+'" data-index="'+index+'" data-asset="'+h(ref.assetId)+'" data-current-text="'+h(m.textLao)+'">采用这份原录音</button></section>').join('');
+ learningModal('文字已修改 · 核对发音','<p lang="lo">当前文字：'+h(m.textLao)+'</p>'+(choices?'<p>请先试听。确认原录音仍适用后，即可继续使用。</p>'+choices:'<p>本机没有可采用的原录音。若录音在另一台设备，请先同步。</p>')+'<button data-learn="gemini" data-review-gemini data-id="'+id+'">Gemini 默认发音</button> <button data-learn="record-card-reference" data-id="'+id+'">🎙 重新录制当前文字</button>');
+}
+async function learningAcceptOriginalAudio(id,button){
+ const {m,w,snap}=await learningResolve(id),text=w?.word||m.textLao,index=Number(button.dataset.index);
+ const original=learningReviewOriginals(m,snap).find(row=>row.index===index&&row.ref.assetId===button.dataset.asset);
+ if(!original||button.dataset.currentText!==text)throw Error('原录音已变化或尚未同步，请重新打开核对。');
+ const {ref}=original;
+ const saved={...m,audioSources:m.audioSources.map((audio,i)=>i===index?{...audio,needsReview:false,recordedText:text}:audio),audioNeedsReview:false,defaultAudioKey:lessonV2AudioKey(ref),updatedAt:Date.now()};
+ await learningWrite({learningMaterials:[saved]},snap);
+ learningRefreshAudioReview(saved,text);
+ await learningOpenDetail(id);
 }
 async function learningPlay(id,source='reference',index=null,resolved=null){
  const chapterTap=index===null&&source==='reference'&&typeof sfRead==='function'&&learningMobileChapter();
@@ -3349,10 +3382,19 @@ async function learningPlayResolved(id,source,index,{m,w,snap},current=()=>true,
   await learningPlayBlob(asset.blob,selected.start||0,selected.end??null);return;
  }
  if(index===null&&source==='reference'&&typeof sharedWordReference==='function'){const clip=sharedWordReference({...m,textLao:text},snap);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
- if(index===null&&source==='reference'&&(m.audioNeedsReview||refs.some(a=>a.needsReview))){const key=s=>String(s||'').normalize('NFC').replace(/\s+/gu,''),current=refs.findLastIndex(a=>learningIsReference(a)&&!a.needsReview&&key(a.recordedText||a.text)===key(text));if(current>=0)return learningPlay(id,source,current,{m,w,snap});await learningReviewChangedAudio({...m,textLao:text});return 'review';}
+ if(source==='reference'&&learningAudioReviewState(m,text).needsReview){
+  const reading=learningCachedSpeech(text),cached=signal?await learningAudioDeadline(reading,'读取本机发音超时，请再点一次播放。',signal):await reading;
+  if(!current())return;
+  if(cached?.size){learningRefreshAudioReview(m,text,true);await learningPlayBlob(cached);return;}
+  await learningReviewChangedAudio({...m,textLao:text},snap);return 'review';
+ }
+ if(source==='reference'&&(m.audioNeedsReview||refs.some(a=>a.needsReview))){
+  const preferred=refs.findIndex(a=>learningCurrentAudioReference(a,text)&&lessonV2AudioKey(a)===m.defaultAudioKey);
+  const currentIndex=preferred>=0?preferred:refs.findLastIndex(a=>learningCurrentAudioReference(a,text));
+  if(currentIndex>=0)return learningPlay(id,source,currentIndex,{m,w,snap});
+ }
  if(index===null&&source==='reference'){const clip=recordedReference({...m,textLao:text},snap)||(w?(chapterTap?recordedReferenceForWordSnapshot(w,snap):await recordedReferenceForWord(w)):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
  if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred,{m,w,snap});return;}}
- if(m.audioNeedsReview&&index===null&&source==='reference')throw new Error('文字已修改，已有发音需要核对。请打开详情确认或重新录音。');
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
  if(index===null&&source==='reference'){const manual=refs.filter(a=>a.role==='reference').at(-1);if(manual){const asset=snap.learningAudio.find(a=>a.id===manual.assetId);if(!asset)throw new Error('参考发音尚未同步。');await learningPlayBlob(asset.blob,manual.start||0,manual.end??null);return;}}
  let checkedLocal=false;
@@ -3427,10 +3469,10 @@ async function learningStartRecording(role='follow'){
  learningBusy=true;let stream;const session=globalThis.learningRecordingContext,node=s=>session?session.root.querySelector('[data-cf-control="'+s.slice(1)+'"]'):$(s);
  try{stopPracticeAudio();stream=await navigator.mediaDevices.getUserMedia({audio:true});if(session?.cancelled){stream.getTracks().forEach(t=>t.stop());return;}learningStream=stream;const chunks=[],r=learningRecorder=new MediaRecorder(stream);r.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};r.onstop=()=>{stream.getTracks().forEach(t=>t.stop());learningRecorder=null;learningStream=null;if(session?.cancelled)return;learningPendingRecording=new Blob(chunks,{type:r.mimeType||'audio/webm'});node('#learningRecord').textContent='🎙 开始跟读';node('#learningReferenceRecord').textContent='🎙 录制参考发音';node('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording">▶ 试听本次</button><button data-learn="save-recording" class="primary">保存录音</button><p class="tag-hint">本次录制：'+(learningRecordingRole==='reference'?'参考发音':'我的跟读')+'。旧音频保留。</p>';};r.start();learningRecordingRole=role;learningPendingRecording=null;node('#learningRecordingDraft').innerHTML='<button data-learn="preview-recording" disabled>▶ 试听本次</button><button data-learn="save-recording" disabled>保存录音</button>';node(role==='reference'?'#learningReferenceRecord':'#learningRecord').textContent='■ 停止录音';}catch(e){stream?.getTracks().forEach(t=>t.stop());learningRecorder=null;throw e;}finally{learningBusy=false;}
 }
-function learningRefreshAudioReview(m,text){
- if(typeof lessonPageStop==='function')lessonPageStop();
+function learningRefreshAudioReview(m,text,defaultAudio=false){
+ if(!defaultAudio&&typeof lessonPageStop==='function')lessonPageStop();
  if(typeof document==='undefined'||!document.querySelectorAll)return;
- const state=learningAudioReviewState(m,text);
+ const state=learningAudioReviewState(m,text,defaultAudio);
  for(const card of document.querySelectorAll('[data-card-id]')){if(card.dataset.cardId!==m.id)continue;card.dataset.audioReview=String(state.needsReview);if(!state.needsReview){card.querySelector('[data-audio-review-notice]')?.remove();card.querySelector('[data-audio-error]')?.remove();}}
 }
 async function learningSaveRecording({closeAfterSave=false}={}){if(!learningPendingRecording?.size)throw new Error('请先录音。');const session=globalThis.learningRecordingContext,viewId=session?.target||learningDetail,resolved=await learningResolve(viewId),{m,w,snap}=learningRecordingRole==='reference'&&typeof sharedWordRecordingResolved==='function'?sharedWordRecordingResolved(resolved):resolved;if(m.deleted)throw Error('词条已移除，录音尚未保存');const asset={id:learningUid(),name:(learningRecordingRole==='reference'?'手录参考发音 ':'跟读 ')+new Date().toLocaleString(),blob:learningPendingRecording,updatedAt:Date.now()};const saved={...m,...(learningRecordingRole==='reference'?{audioNeedsReview:false}:{}),audioSources:[...m.audioSources,{source:'user',role:learningRecordingRole,recordedText:w?.word||m.textLao,assetId:asset.id,start:0,end:null}],updatedAt:Date.now()};await learningWrite({learningAudio:[asset],learningMaterials:[{...saved,...(m.schemaVersion===2&&learningRecordingRole==='reference'?{defaultAudioKey:'user:'+asset.id}:{})}]},snap,{quickAudio:true});learningRefreshAudioReview(saved,w?.word||m.textLao);if(session){session.finish(true);return;}if(closeAfterSave){learningPendingRecording=null;learningDraft=null;learningDialog.close();$('#learningStatus').textContent='参考发音已保存';return;}await learningOpenDetail(viewId);}
@@ -3533,7 +3575,16 @@ async function learningAction(e){
   if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
   if(a==='play'||a==='play-card'){tapAudioDiagnostic('交给单句播放器');$('#learningStatus').textContent='正在读取本机发音…';const card=b.closest?.('[data-dialogue-card]'),previousAudio=typeof practiceAudio==='undefined'?null:practiceAudio;let result;try{result=await learningPlay(id);if(card&&practiceAudio!==previousAudio)learningMarkDialogueAudio(card,practiceAudio);}catch(error){tapAudioDiagnostic('单句错误 '+error.name+' '+error.message);throw error;}tapAudioDiagnostic(result==='cancelled'?'单句请求取消':result==='review'?'需核对录音':'单句流程返回');if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
-  if(a==='gemini'){const {m,w}=await learningResolve(id);await learningDefaultSpeech(m,w?.word||m.textLao);return;}
+  if(a==='accept-original-audio'){await learningAcceptOriginalAudio(id,b);return;}
+  if(a==='gemini'){
+   const {m,w}=await learningResolve(id),text=w?.word||m.textLao;
+   await learningDefaultSpeech(m,text);
+   if(learningAudioReviewState(m,text).needsReview&&(await learningCachedSpeech(text))?.size){
+    learningRefreshAudioReview(m,text,true);
+    if(b.dataset.reviewGemini!==undefined&&learningDetail===id)await learningOpenDetail(id);
+   }
+   return;
+  }
   if(a==='own'){await learningPlay(id,'user');return;}
   if(a==='audio'){await learningPlay(id,'reference',Number(b.dataset.index));return;}
   if(a==='word-audio-play'){const {m,w}=await learningResolve(id);const kind=b.dataset.audioKind;if(kind==='legacy'){if(!w)throw Error('词条已不存在');await playEntrySpeech(w,'personal');}else if(kind==='default'){const blob=await learningCachedSpeech(w?.word||m.textLao);if(!blob)throw Error('这段音频已不存在，请重新打开详情');await learningPlayBlob(blob);}else if(kind==='reference')await learningPlay(id,'reference',Number(b.dataset.audioIndex));return;}
@@ -3743,6 +3794,7 @@ async function learningSeedLessonOne(){
  }catch(e){issue=e;t.abort();}};}
  try{await done;}catch(e){throw issue||e;}
 }
+
 </script>
 <script data-learning-bundle="cloud">
 /* Learning records use their own cloud table so older dictionary clients remain compatible. */
@@ -4556,7 +4608,18 @@ function lessonPageAsset(w,snap,cache){
  // A course card and its dictionary word can be different material records.
  // Resolve the same manual references used by single-word playback, before Gemini.
  if(typeof sharedWordReference==='function'){const shared=sharedWordReference({...m,textLao:w.word||m.textLao},snap);if(shared)return shared;}
- if(m.audioNeedsReview&&!refs.some(a=>a.source==='user'&&a.role==='reference'&&!a.needsReview&&a.recordedText===(w.word||m.textLao)))return null;
+ const text=w.word||m.textLao;
+ if((m.audioNeedsReview||refs.some(a=>a.needsReview))&&typeof learningAudioReviewState==='function'){
+  const state=learningAudioReviewState(m,text);
+  if(state.needsReview){const blob=cache.get(text);return blob?.size?{blob}:null;}
+  const current=refs.filter(a=>learningCurrentAudioReference(a,text)).reverse();
+  const preferred=current.find(a=>lessonV2AudioKey(a)===m.defaultAudioKey);
+  for(const ref of preferred?[preferred,...current.filter(a=>a!==preferred)]:current){
+   const asset=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted);
+   if(asset?.blob?.size)return {blob:asset.blob,start:ref.start||0,end:ref.end??null};
+  }
+  const blob=cache.get(text);return blob?.size?{blob}:null;
+ }
  const recording=(typeof recordedReference==='function'?recordedReference({...m,textLao:w.word||m.textLao},snap):null)||(w.entry&&typeof recordedReferenceForWordSnapshot==='function'?recordedReferenceForWordSnapshot(w.entry,snap):null);
  if(recording)return recording;
  if(m.audioNeedsReview)return null;
@@ -4952,6 +5015,7 @@ document.addEventListener('click',event=>{
  if(menu&&!summary)return;
  for(const open of (document.querySelectorAll?.('.page-player-controls>details[open]')||[]))if(open!==menu)open.open=false;
 });
+
 </script>
 <script data-learning-bundle="course-editor">
 /* In-place course organization; dictionary entries and audio blobs are never replaced. */
@@ -7188,10 +7252,18 @@ async function saPlay(id,options={}){
  if(blocked())throw Error('请先保存正在编辑的内容或停止正在进行的录音。');
  if(!id)throw Error('请先保存解析。');
  const {m,w,snap}=typeof sfRead==='function'?await sfRead(id):await learningResolve(id);if(!current())return;if(m.deleted)throw Error('资料已删除或尚未同步。');
+ const text=w?.word||m.textLao;
+ if((m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview))&&typeof learningAudioReviewState==='function'){
+  const cached=await learningCachedSpeech(text);if(!current())return;
+  const clip=lessonPageAsset({m,word:text,entry:w},snap,new Map([[text,cached]]));
+  if(clip){if(cached===clip.blob)learningRefreshAudioReview(m,text,true);await learningPlayBlob(clip.blob,clip.start||0,clip.end??null,options.onComplete);return;}
+  if(options.reviewDialog){await learningReviewChangedAudio({...m,textLao:text},snap);return;}
+  throw Error('音频需要核对，请打开详情。');
+ }
  const manual=recordedReference(m,snap)||(w?recordedReferenceForWordSnapshot(w,snap):null);if(!current())return;if(manual){await learningPlayBlob(manual.blob,manual.start||0,manual.end??null,options.onComplete);return;}
  if(m.audioNeedsReview)throw Error('音频需要核对，请打开详情。');
  for(const ref of (m.audioSources||[]).filter(a=>learningIsReference(a)&&!a.needsReview).slice().reverse()){const blob=snap.learningAudio.find(a=>a.id===ref.assetId&&!a.deleted)?.blob;if(blob){await learningPlayBlob(blob,ref.start||0,ref.end??null,options.onComplete);return;}}
- const text=w?.word||m.textLao,blob=await learningCachedSpeech(text);if(!current())return;if(blob){await learningPlayBlob(blob,0,null,options.onComplete);return;}
+ const blob=await learningCachedSpeech(text);if(!current())return;if(blob){await learningPlayBlob(blob,0,null,options.onComplete);return;}
  throw Error('“'+text+'”暂无可用的已保存参考音。请点“详情”录制参考发音，或主动生成默认音；不会拿整句录音代替单词。');
 }
 function saMakeWrites(data,parent,snap,words,links){
@@ -7254,6 +7326,7 @@ learningOpenDetail=async function(id){
   }catch(error){fail(error);}
  };
 };
+
 </script>
 <style>
 .dictionary-sentence-text{border:0;background:transparent;padding:0;text-align:left;white-space:normal;max-width:100%;cursor:pointer}.dictionary-sentence-text .word{font-size:24px;line-height:1.8;overflow-wrap:anywhere}.dictionary-sentence .actions button{min-height:44px}.dictionary-sentence .entry-note{white-space:pre-wrap}.dictionary-sentence-status:empty{display:none}
@@ -7436,7 +7509,7 @@ async function saRegenerate(id){
    dialog.addEventListener('cancel',e=>{e.preventDefault();cancel();});dialog.querySelector('[data-cancel]').onclick=cancel;
    dialog.querySelector('[data-save]').onclick=async()=>{if(saving)return;saving=true;try{
     const fresh=await learningResolve(id);if(fresh.m.deleted||(fresh.w?.word||fresh.m.textLao)!==text)throw Error('文字已变化，未替换旧音频。');
-    await saReplaceDefault(text,blob,expected,key);resolve();
+    await saReplaceDefault(text,blob,expected,key);learningRefreshAudioReview(fresh.m,text,true);resolve();
    }catch(e){dialog.querySelector('[role="status"]').textContent=e.message;saving=false;}};
   });
  }finally{if(dialog){dialog.querySelector('audio').pause();dialog.close();dialog.remove();}if(url)URL.revokeObjectURL(url);learningBusy=false;}
@@ -7453,6 +7526,7 @@ learningOpenDetail=async function(id){
  host.querySelector('.sa-content').before(panel);
  for(const b of panel.querySelectorAll('button'))b.onclick=async()=>{b.disabled=true;panel.querySelector('[role="status"]').textContent='正在准备音频，请勿重复提交…';try{await saAudioStart(id,b.hasAttribute('data-resume'));panel.querySelector('[role="status"]').textContent='切分操作不额外消耗生成额度。';}catch(e){panel.querySelector('[role="status"]').textContent=e.message;}finally{b.disabled=false;}};
 };
+
 </script>
 <script data-learning-bundle="dialogue-split">
 /* Split an already generated dialogue into its existing course rows. Never generates audio. */
@@ -9329,7 +9403,7 @@ function ssCompose(detail,resolved,id){
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 播放'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
  const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText){if(w||m.analysisUnitType==='word')editText.textContent='修改词条';quick.append(editText);}if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{if(m.audioNeedsReview||(m.audioSources||[]).some(a=>a.needsReview)){await learningReviewChangedAudio({...m,textLao:w?.word||m.textLao});return;}await saPlay(id);if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -9382,6 +9456,7 @@ learningOpenDetail=function(id){
  };
  const result=ssDetailQueue.catch(()=>{}).then(build);ssDetailQueue=result;ssDetailActiveId=id;ssDetailActivePromise=result;const clear=()=>{if(ssDetailActivePromise===result){ssDetailActiveId=null;ssDetailActivePromise=null;}};result.then(clear,clear);return result;
 };
+
 </script>
 <script data-learning-bundle="pending-review">
 /* Real attempts only. Reuses append-only review events and the existing scheduler. */
@@ -13265,7 +13340,7 @@ async function mtApply(id){const snap=await learningSnapshot(),m=snap.learningMa
 function mtAddTools(id,resolved){
  const detail=learningDialog.querySelector('.learn-detail');if(!detail||detail.querySelector('.mt-tools')||resolved.w||resolved.m.analysisOwner)return;
  const group=document.createElement('details');group.className='mt-tools';group.innerHTML='<summary>只更新这一句</summary><button type="button" data-mt="audio">试听／确认已有录音</button><button type="button" data-mt="keep">仅标点调整：沿用原分析</button><button type="button" data-mt="grammar">编辑本句翻译与语法</button><button type="button" data-mt="phonetics">核对本句发音分析</button><p class="tag-hint">标点、空格调整可沿用原分析；字母或声调符号改变需核对本句。录音始终保留，可先试听再决定是否沿用。</p><p data-mt-status role="status"></p>';
- (detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
+ (detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m,resolved.snap);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
 }
 const mtOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="540c476c36ce5e2c">
+  <meta name="lao-app-build" content="b86907b810937fb2">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -470,6 +470,18 @@
 
 .word-color-clear-status{color:#536e63;font-size:12px;padding-inline:10px}
 .word-color-clear-status:empty{display:none}
+
+/* On touch layouts the existing play button also covers the open space around the controls. */
+@media (max-width:760px), (hover:none) and (pointer:coarse){
+ #learningContent .learn-card:not(.learn-selectable){position:relative;isolation:isolate}
+ #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions{position:static}
+ #learningContent .learn-card:not(.learn-selectable)>.learn-card-main,
+ #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>:not([data-learn="play"]){position:relative;z-index:2}
+ #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>[data-learn="play"]{position:static;transform:none!important;filter:none!important}
+ #learningContent .learn-card:not(.learn-selectable)>.learn-card-actions>[data-learn="play"]::before{
+  content:"";position:absolute;inset:0;z-index:1;cursor:pointer;touch-action:manipulation;
+ }
+}
 </style>
 <style>
 .chapter-listening{display:grid;gap:12px}.chapter-listening .cc-review-options{margin:0}.chapter-listening summary{cursor:pointer;padding:8px 0;font-weight:650}.chapter-listening-choices{max-height:14rem;overflow:auto;margin:10px 0}.chapter-listening-choices label{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px}.chapter-listening-choices small{display:block;color:#607970}.chapter-listening-filters{display:flex;flex-wrap:wrap;gap:8px 16px}.chapter-listening-filters label{display:flex;align-items:center;gap:6px;min-height:40px}.chapter-listening-controls,.chapter-listening-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chapter-listening-controls .primary{grid-column:1/-1;min-height:56px}.chapter-listening-settings label{display:grid;gap:4px;min-width:0}.chapter-listening-settings :is(input,select){width:100%;min-width:0;padding:8px}.chapter-listening [data-page-status],.chapter-listening [data-cl-selection]{margin:0;color:#46665a}.cc-response-timer{display:block;text-align:center;color:#46665a}.chapter-listening [hidden]{display:none!important}

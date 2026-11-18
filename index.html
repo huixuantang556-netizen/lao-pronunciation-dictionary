@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="fee1f56c46e96fcb">
+  <meta name="lao-app-build" content="f526c2565571f764">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -7554,13 +7554,17 @@ async function saReplaceDefault(text,blob,expected,key){
  };
  // Blob identity is not stable across IDB reads. Byte-compare before acquiring the write transaction.
  if(!await unchanged(await cloudCacheRows()))throw Error('本条默认音频已在其他页面改变，请取消后重新生成。');
- return new Promise((resolve,reject)=>{const request=indexedDB.open(workspaceName('lao-default-speech-cache'),1);
+ const workspace=workspaceName('lao-default-speech-cache'),keys=new Set([...expected.map(row=>row.key),key]);
+ await new Promise((resolve,reject)=>{const request=indexedDB.open(workspace,1);
   request.onupgradeneeded=()=>request.result.createObjectStore('audio');request.onerror=()=>reject(request.error);
   request.onsuccess=()=>{const db=request.result,tx=db.transaction('audio','readwrite'),store=tx.objectStore('audio');
-   for(const old of expected)store.put(blob,old.key);store.put(blob,key);
+   for(const changedKey of keys)store.put(blob,changedKey);
    tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};
   };
  });
+ if(workspace===workspaceName('lao-default-speech-cache')&&typeof qaDefaultSaved==='function'){
+  for(const changedKey of keys)await qaDefaultSaved(changedKey,blob);
+ }
 }
 async function saRegenerate(id){
  if(learningHasWork()||recorder||batchAudioBusy)throw Error('请先完成编辑或录音。');
@@ -11934,21 +11938,25 @@ async function qaDependencies(uid,api,record,all){
 }
 async function qaRunJob(job,api,options={}){
  if(!options.knownPending&&!(await qaReadMeta())[qaQueueKey].some(j=>j.token===job.token))return;
- const records=await Promise.all(job.records.map(r=>qaPrepare(job.uid,r)));
+ const records=await Promise.all(job.records.map(async record=>{
+  const live=options.manual?await qaCurrent(record):record;
+  if(!live||(record.kind==='entry'&&live.row.syncId!==record.id))throw Object.assign(Error('找不到原待传资料，请完整核对'),{blocked:true});
+  return qaPrepare(job.uid,live);
+ }));
  records.sort((a,b)=>(a.kind==='learningMaterials')-(b.kind==='learningMaterials'));
  // Preflight EVERY record before uploading any blob; stale cards are never silently pushed.
  const plan=[];for(const record of records){await qaDependencies(job.uid,api,record,records);const meta=await qaReadMeta({includeOutbox:false}),remote=await qaReadRemote(job.uid,api,record),desired={deleted:false,payload:record.payload},current=await qaCurrent(record);if(!current||!cloudSame((await qaPrepare(job.uid,current)).payload,record.payload)){
    // Full sync or another edit may have made this queued version obsolete. Never replay it.
-   if(current&&cloudSame(qaRemoteValue(record,remote),{deleted:false,payload:(await qaPrepare(job.uid,current)).payload})){await qaRemove(job.token);return;}
+   if(current&&cloudSame(qaRemoteValue(record,remote),{deleted:false,payload:(await qaPrepare(job.uid,current)).payload})){if(job.token)await qaRemove(job.token);return;}
    throw Object.assign(Error('词卡在保存后又有修改，请完整同步核对；旧版本不会自动回写'),{blocked:true});
-  }const base=qaBase(meta,record),action=qaPlan(base,qaRemoteValue(record,remote),desired);qaCheckHistory(record,base,qaRemoteValue(record,remote),desired);if(action==='conflict')throw Object.assign(Error('这条资料有云端冲突，请用完整同步核对；本机录音保留'),{blocked:true});plan.push({record,remote,action});}
+  }const base=qaBase(meta,record),action=qaPlan(base,qaRemoteValue(record,remote),desired);if(!options.manual)qaCheckHistory(record,base,qaRemoteValue(record,remote),desired);if(action==='conflict')throw Object.assign(Error('这条资料有云端冲突，请用完整同步核对；本机录音保留'),{blocked:true});plan.push({record,remote,action});}
  for(const p of plan){if(!options.manual&&!qaAllowed(job.records))throw Object.assign(Error('已暂停自动上传'),{blocked:true});if(p.action==='same'){await qaAck(p.record,p.remote);continue;}await qaUploadBlob(api,job.uid,p.record,p.remote);const row={kind:p.record.kind,id:p.record.id,payload:p.record.payload,revision:p.remote?.revision??null,deleted:false};await cloudBatchWrite(job.uid,api,p.record.table,[row],()=>{});await qaAck(p.record,row.result);}
- await qaRemove(job.token);
+ if(job.token)await qaRemove(job.token);
 }
 // One-time repair for clips saved by older bulk writers without an outbox hook.
 // Read one blob at a time; never rebuild the entire dictionary or fetch audio.
 async function qaRecoverBulkClips(uid,status){
- const marker=workspaceName('bulk-audio-journal-repaired-v1');if(localStorage.getItem(marker)==='done')return;
+ const marker=workspaceName('bulk-audio-journal-repaired-v2');if(localStorage.getItem(marker)==='done')return;
  const meta=await qaReadMeta(),pending=new Set((meta[qaQueueKey]||[]).flatMap(j=>j.records.filter(r=>r.kind==='default_audio').map(r=>r.cacheKey)));
  const keys=await new Promise((resolve,reject)=>{const req=indexedDB.open(workspaceName('lao-default-speech-cache'),1);req.onupgradeneeded=()=>req.result.createObjectStore('audio');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('audio','readonly'),q=tx.objectStore('audio').getAllKeys();tx.oncomplete=()=>{db.close();resolve(q.result);};tx.onabort=()=>{db.close();reject(tx.error);};};});
  for(let i=0;i<keys.length;i++){
@@ -11961,24 +11969,69 @@ async function qaRecoverBulkClips(uid,status){
  }
  localStorage.setItem(marker,'done');
 }
-// Explicit manual upload uses only the durable outbox, never historical library scans.
+// Check local rows against the last acknowledged versions, without listing cloud
+// records or rehashing unchanged audio. The usual per-record revision checks still apply.
+async function qaLocalUpdateJobs(uid,meta,pending){
+ if(typeof learningSnapshot!=='function'||typeof allEntries!=='function')return [];
+ if(!Object.keys(meta.checkpoint).length&&!Object.keys(meta.learningCheckpoint).length)return [];
+ const [snap,entries]=await Promise.all([learningSnapshot(),allEntries()]);
+ if(uid!==cloudWorkspace)throw Error('账号已切换，同步停止');
+ const pendingKeys=new Set(pending.flatMap(job=>job.records.map(r=>r.kind+':'+r.id)));
+ const byAsset=new Map(snap.learningAudio.map(row=>[row.id,row])),referenced=new Set(),jobs=[];
+ const job=records=>({uid,records});
+ for(const row of entries){
+  if(!row.syncId||pendingKeys.has('entry:'+row.syncId))continue;
+  const base=meta.checkpoint['entry:'+row.syncId]?.value;
+  if(base?.deleted===false&&cloudSame(base.payload.entry,cloudEntryData(row)))continue;
+  jobs.push(job([{table:'lao_dictionary_records',kind:'entry',id:row.syncId,row}]));
+ }
+ const learningRecord=(kind,row)=>({table:'lao_learning_records',kind,id:row.id,row});
+ const cards=[];
+ for(const kind of ['learningMaterials','learningPlacements'])for(const row of snap[kind]){
+  const key=kind+':'+row.id;
+  if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(kind,row,uid))continue;
+  if(pendingKeys.has(key)||cloudSame(meta.learningCheckpoint[key]?.payload,row))continue;
+  const deps=[];
+  if(kind==='learningMaterials')for(const id of new Set((row.audioSources||[]).map(ref=>ref.assetId))){
+   if(!id||meta.learningCheckpoint['learningAudio:'+id])continue;
+   const asset=byAsset.get(id);
+   if(asset?.blob?.size){deps.push(learningRecord('learningAudio',asset));referenced.add(id);}
+  }
+  cards.push(job([...deps,learningRecord(kind,row)]));
+ }
+ for(const row of snap.learningAudio){
+  if(!row.blob?.size||referenced.has(row.id)||pendingKeys.has('learningAudio:'+row.id))continue;
+  const {blob,...fields}=row,base=meta.learningCheckpoint['learningAudio:'+row.id]?.payload;
+  // An unacknowledged recording travels with its changed card, not by itself.
+  if(!base)continue;
+  const {audio,...previous}=base;
+  if(cloudSame(previous,fields)&&audio?.size===blob.size&&audio?.mime===(blob.type||'audio/webm').split(';')[0].toLowerCase())continue;
+  jobs.push(job([learningRecord('learningAudio',row)]));
+ }
+ return jobs.concat(cards);
+}
+// Explicit manual upload sends local differences and never receives remote changes.
 async function qaFlushPending(uid,api,status){
  if(uid!==cloudWorkspace)throw Error('账号已切换，请重新操作');
  if(typeof indexedDB!=='undefined')await qaRecoverBulkClips(uid,status);
- const jobs=(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid);let done=0,blocked=0;
+ const meta=await qaReadMeta(),pending=meta[qaQueueKey].filter(j=>j.uid===uid);
+ status('正在核对本机修改');
+ const discovered=typeof qaLocalUpdateJobs==='function'?await qaLocalUpdateJobs(uid,meta,pending):[];
+ const jobs=[...discovered.filter(j=>j.records[0].kind==='entry'),...pending,...discovered.filter(j=>j.records[0].kind!=='entry')];
+ let done=0,blocked=0,reason='';
  if(!jobs.length){status('没有待上传的本机更新。接收其他设备的新资料请用“接收更新”；处理冲突请用“完整核对”。');return {done,blocked};}
  const run=async job=>{
   if(uid!==cloudWorkspace)throw Error('账号已切换，同步停止');
   status('正在批量上传本机更新',{done:done+blocked,total:jobs.length});
-  try{await qaRunJob(job,api,{manual:true,knownPending:true});done++;}catch(e){if(!e.blocked)throw e;await qaBlock(job.token,e.message);blocked++;}
+  try{await qaRunJob(job,api,{manual:true,knownPending:true});done++;}catch(e){if(!e.blocked)throw e;if(job.token)await qaBlock(job.token,e.message);reason||=e.message;blocked++;}
   status('正在批量上传本机更新',{done:done+blocked,total:jobs.length});
  };
  // Only independent default-audio jobs run together. Card+reference dependencies
  // and review history retain their original ordering and conflict checks.
  let audio=[];const flush=async()=>{if(typeof cloudTransferPool==='function')await cloudTransferPool(audio,run,j=>j.records.reduce((n,r)=>n+(r.blob?.size||0),0));else for(const j of audio)await run(j);audio=[];};
  for(const job of jobs){if(job.records.length===1&&job.records[0].kind==='default_audio')audio.push(job);else{await flush();await run(job);}}await flush();
- const left=(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid).length;
- status('本机更新上传完成：'+done+' 项。'+(left?'仍有 '+left+' 项需要完整核对，尚未上传，原资料保留。':'没有待传更新。')+' 本入口不接收其他设备资料。',{done:jobs.length,total:jobs.length});return {done,blocked};
+ const left=blocked+(await qaReadMeta())[qaQueueKey].filter(j=>j.uid===uid&&!jobs.some(job=>job.token===j.token)).length;
+ status('本机更新上传完成：'+done+' 项。'+(left?'仍有 '+left+' 项尚未上传。'+(reason?' '+reason:' 原资料保留。'):'没有待传更新。')+' 本入口不接收其他设备资料。',{done:jobs.length,total:jobs.length});return {done,blocked};
 }
 async function qaDrain(){
  if(typeof learningMobileChapter==='function'&&learningMobileChapter()){qaKick(15000);return;}
@@ -12009,6 +12062,7 @@ if(typeof window!=='undefined'){
  window.addEventListener('online',()=>qaKick());window.addEventListener('pageshow',()=>qaKick());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')qaKick();});
  qaMount();qaKick(1000);
 }
+
 </script>
 <script data-incremental-audio-receive>
 /* Revision-first receive: only changed records are opened; never hash the local audio library. */

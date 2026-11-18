@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="dc6007bc6d696a34">
+  <meta name="lao-app-build" content="540c476c36ce5e2c">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3427,8 +3427,13 @@ async function learningSaveMaterials(){
   await learningWrite({learningMaterials:materials,learningPlacements:places,...(asset?{learningAudio:[asset]}:{})},snap);learningDialog.close();learningDraft=null;await renderLearning();
  }catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}
 }
+function learningCardPlaybackTarget(target){
+ const card=target.closest?.('.learn-card');
+ if(!card||target.closest('button,a,input,select,textarea,label,summary,[role="button"],.cf-tape-toggle'))return null;
+ return card.querySelector('[data-learn="play-card"]');
+}
 async function learningAction(e){
- const b=e.target.closest('[data-learn]');if(!b)return;const a=b.dataset.learn,id=b.dataset.id;
+ const b=e.target.closest('[data-learn]')||learningCardPlaybackTarget(e.target);if(!b)return;const a=b.dataset.learn,id=b.dataset.id;
  if(a==='close'){learningClose();return;}if(a==='settings'){learningSettings=!learningSettings;if(!learningSettings)learningResetMulti();await renderLearning();return;}if(learningBusy)return;
  try{
   if(['play','play-card','glyph','gemini','audio','word-audio','compare'].includes(a))$('#learningStatus').textContent='🔊 正在准备发音…';
@@ -4816,12 +4821,12 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('click',e=>{
  if(e.target.closest('.cf-tape')?.dataset.cfTapeLanguage)return;
- const b=e.target.closest('.learn-card [data-learn="play-card"],.learn-card [data-learn="play"]');
+ const b=e.target.closest('.learn-card [data-learn="play-card"],.learn-card [data-learn="play"]')||(typeof learningCardPlaybackTarget==='function'?learningCardPlaybackTarget(e.target):null);
  if(b&&b.closest('.learn-card')?.dataset.audioReview!=='true'&&!(b.dataset.learn==='play-card'&&e.detail>1)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(typeof learningHasWork==='function'&&learningHasWork())&&lessonPageCardJump?.(b.dataset.id,b)){e.preventDefault();e.stopImmediatePropagation();return;}
  const action=e.target.closest('[data-learn]');
  if(action&&['detail','word-detail','follow','close'].includes(action.dataset.learn)||b&&b.dataset.learn==='play-card'&&e.detail>1)return;
  if(action&&typeof learningDialog!=='undefined'&&learningDialog.contains(e.target)&&['play','audio','own','gemini','compare','preview-recording','word-audio'].includes(action.dataset.learn)){lessonPagePauseForDetail();return;}
- if(e.target.closest('[data-learn], [data-view], [data-cf-record], [data-cf-regenerate]'))lessonPageStop();
+ if(b||e.target.closest('[data-learn], [data-view], [data-cf-record], [data-cf-regenerate]'))lessonPageStop();
 },true);
 
 let lessonPageAnchor=null,lessonPageHost=null,lessonPageFollowFrame=false,lessonPageResizeObserver=null;
@@ -14018,11 +14023,6 @@ document.addEventListener('change',event=>{
  const scope=filter?.closest('.cf-self-test');
  if(scope)scope.dataset.wordColorFilter=filter.value;
 });
-document.addEventListener('click',event=>{
- const card=event.target.closest?.('[data-dialogue-card]');
- if(!card||event.detail>1||event.target.closest('button,a,input,select,textarea,label,summary,[role=button]'))return;
- card.querySelector('[data-learn="play"]')?.click();
-},true);
 </script>
 <style data-mobile-chapter-cards>
 .mobile-chapter-more{grid-column:1/-1;min-height:44px;justify-self:stretch;margin:4px 0 12px;background:var(--soft)}

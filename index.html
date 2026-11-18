@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="1e79c55f54432020">
+  <meta name="lao-app-build" content="be531d598370e5b4">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -488,9 +488,11 @@
   cursor:pointer;touch-action:manipulation
  }
 }
-#learningPanel #learningContent [data-dialogue-card]>.learn-card-actions>.learn-card-play-area:is(:active,.learn-card-play-area-flash),
-#learningPanel #learningContent [data-dialogue-card].page-audio-current>.learn-card-actions>.learn-card-play-area{
- background:#e4f4ed!important;border-radius:9px
+#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking{background:#e4f4ed}
+#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking>.learn-card-main,
+#learningPanel #learningContent [data-dialogue-card].learn-dialogue-speaking>.learn-card-actions{background:transparent}
+@media (max-width:760px), (hover:none) and (pointer:coarse){
+ #learningPanel #learningContent [data-dialogue-card]>.learn-card-main:hover{background:transparent}
 }
 </style>
 </head>
@@ -3508,7 +3510,7 @@ async function learningAction(e){
   if(a==='detail'||a==='follow'){await learningOpenDetail(id);if(a==='follow')$('#learningRecord').focus();return;}
   if(a==='record-card-reference'){if(e.detail>1)return;if(typeof cfRecord!=='function')throw Error('录音面板尚未准备好，请刷新页面后重试');await cfRecord(id,{autoStart:true,quick:true,button:b});return;}
   if(a==='play-card'&&e.detail>1)return;
-  if(a==='play'||a==='play-card'){tapAudioDiagnostic('交给单句播放器');$('#learningStatus').textContent='正在读取本机发音…';let result;try{result=await learningPlay(id);}catch(error){tapAudioDiagnostic('单句错误 '+error.name+' '+error.message);throw error;}tapAudioDiagnostic(result==='cancelled'?'单句请求取消':result==='review'?'需核对录音':'单句流程返回');if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
+  if(a==='play'||a==='play-card'){tapAudioDiagnostic('交给单句播放器');$('#learningStatus').textContent='正在读取本机发音…';const card=b.closest?.('[data-dialogue-card]'),previousAudio=typeof practiceAudio==='undefined'?null:practiceAudio;let result;try{result=await learningPlay(id);if(card&&practiceAudio!==previousAudio)learningMarkDialogueAudio(card,practiceAudio);}catch(error){tapAudioDiagnostic('单句错误 '+error.name+' '+error.message);throw error;}tapAudioDiagnostic(result==='cancelled'?'单句请求取消':result==='review'?'需核对录音':'单句流程返回');if(result==='cancelled')return;$('#learningStatus').textContent=result==='review'?'请核对旧录音或重新录制':'🔊 正在播放整项发音';return;}
   if(a==='gemini'){const {m,w}=await learningResolve(id);await learningDefaultSpeech(m,w?.word||m.textLao);return;}
   if(a==='own'){await learningPlay(id,'user');return;}
   if(a==='audio'){await learningPlay(id,'reference',Number(b.dataset.index));return;}
@@ -3528,19 +3530,18 @@ async function learningAction(e){
   if(a==='edit-word'){if(typeof ccBeginWordEdit==='function')ccBeginWordEdit();learningDialog.close();await $('#entries').onclick({target:{closest:()=>({dataset:{edit:b.dataset.word}})}});return;}
  }catch(error){const status=learningDialog.open?$('#learningDialogStatus'):$('#learningStatus');if(status)status.textContent=error.message;const card=b?.closest?.('.learn-card');if(card){let notice=card.querySelector('[data-audio-error]');if(!notice){notice=document.createElement('small');notice.dataset.audioError='';notice.setAttribute('role','status');card.append(notice);}notice.textContent=error.message;}}
 }
-let learningPlayAreaFlash=null,learningPlayAreaTimer;
-window.addEventListener('click',event=>{
- const area=event.target.closest?.('.learn-card-play-area');
- if(!area)return;
- learningPlayAreaFlash?.classList.remove('learn-card-play-area-flash');
- clearTimeout(learningPlayAreaTimer);
- learningPlayAreaFlash=area;
- area.classList.add('learn-card-play-area-flash');
- learningPlayAreaTimer=setTimeout(()=>{
-  area.classList.remove('learn-card-play-area-flash');
-  learningPlayAreaFlash=null;
- },850);
-},true);
+const learningDialogueAudio=new WeakMap();
+function learningMarkDialogueAudio(card,audio){
+ if(!audio||audio.paused||audio.ended||!card.isConnected)return;
+ learningDialogueAudio.set(card,audio);
+ card.classList.add('learn-dialogue-speaking');
+ const clear=()=>{
+  if(learningDialogueAudio.get(card)===audio){learningDialogueAudio.delete(card);card.classList.remove('learn-dialogue-speaking');}
+  for(const type of events)audio.removeEventListener(type,clear);
+ };
+ const events=['pause','ended','error','emptied'];
+ for(const type of events)audio.addEventListener(type,clear);
+}
 learningPanel.onclick=learningAction;learningDialog.addEventListener('click',learningAction);
 document.addEventListener('click',e=>{if(e.target.closest('[data-learn]')&&!learningPanel.contains(e.target)&&!learningDialog.contains(e.target))void learningAction(e);});
 learningPanel.ondblclick=e=>{if(learningMulti)return;const g=e.target.closest('[data-learn="glyph"]');if(g){stopPracticeAudio();void learningGlyph(g.dataset.form,true).catch(learningError);return;}const b=e.target.closest('[data-learn="play-card"]');if(b){stopPracticeAudio({preservePageQueue:true});void learningOpenDetail(b.dataset.id).catch(learningError);}};
@@ -4454,7 +4455,7 @@ function lessonPagePauseForDetail(){
 }
 const lessonDurationCache=new WeakMap(),lessonDurationProbes=new Set();
 const lessonPageMarked=new Map();
-function lessonPageClearMarked(){for(const [card,previous] of lessonPageMarked){card.classList.remove('page-audio-current','page-audio-missing');if(previous===null)card.removeAttribute('aria-current');else card.setAttribute('aria-current',previous);}lessonPageMarked.clear();}
+function lessonPageClearMarked(){for(const [card,previous] of lessonPageMarked){card.classList.remove('page-audio-current','page-audio-missing','learn-dialogue-speaking');if(previous===null)card.removeAttribute('aria-current');else card.setAttribute('aria-current',previous);}lessonPageMarked.clear();}
 function lessonPageLocateMissing(word,bar){
  lessonPageClearMarked();
  if(typeof mobileChapterFind==='function')mobileChapterFind([word.id],bar.parentElement);
@@ -4688,7 +4689,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
    }finally{if(lessonPageRead===controller)lessonPageRead=null;}
   }
   const a=lessonPageAudio||(lessonPageAudio=new Audio());
-  a.onended=a.ontimeupdate=a.onloadedmetadata=a.onerror=a.onplaying=null;
+  a.onended=a.ontimeupdate=a.onloadedmetadata=a.onerror=a.onplaying=a.onpause=a.onwaiting=null;
   a.pause();
   const previousURL=lessonPageURL;
   const url=lessonPageURL=URL.createObjectURL(part.blob);
@@ -4698,7 +4699,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
   a.queueOffset=offset;a.playbackRate=Number(bar.querySelector('[data-page-speed]')?.value)||1;let advanced=false;
   const next=()=>{
    if(advanced||!currentPart())return;
-   advanced=true;a.pause();
+   advanced=true;clearDialogueHighlight();a.pause();
    if(pauseAfterReplay){
     lessonPageResumeCurrent=()=>void play(index+1);
     lessonPageSetPaused(bar,true);
@@ -4731,7 +4732,9 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
   };
   const playbackLabel='正在播放 '+(part.at+1)+(part.count>1?'–'+(part.at+part.count):'')+' / '+total+' 项'+(part.count>1?'（未切分整段，只能按段跳转）':'');
   status.textContent=lessonPagePaused?'已暂停':'正在准备播放…';
-  a.onplaying=()=>{if(currentPart()&&!lessonPagePaused){status.textContent=playbackLabel;if(typeof tapAudioDiagnostic==='function')tapAudioDiagnostic('整页音频已启动');}};
+  const clearDialogueHighlight=()=>{if(currentPart())for(const card of lessonPageMarked.keys())card.classList.remove('learn-dialogue-speaking');};
+  a.onpause=a.onwaiting=clearDialogueHighlight;
+  a.onplaying=()=>{if(currentPart()&&!lessonPagePaused&&!a.paused){for(const card of lessonPageMarked.keys())if(card.matches?.('[data-dialogue-card]'))card.classList.add('learn-dialogue-speaking');status.textContent=playbackLabel;if(typeof tapAudioDiagnostic==='function')tapAudioDiagnostic('整页音频已启动');}};
   const update=(elapsed=Math.max(0,Math.min(durations[index]??Infinity,a.currentTime-(part.start||0))))=>{
    if(!currentPart())return;
    seek.disabled=!timelineReady;
@@ -11056,7 +11059,8 @@ cfDecorate();
 [data-fv-list] .cf-library-pages{justify-content:center;font-size:13px}
 [data-fv-list] .cf-library-pages[hidden]{display:none}
 @media(max-width:640px){#learningDialog.fv-dialog{padding:16px 12px;width:calc(100% - 16px);max-height:88dvh}[data-fv-list] .fv-item strong{font-size:22px}[data-fv-list] .fv-item{padding:12px;gap:8px}[data-fv-list] .cf-library-player .cf-mask-controls{margin-left:auto}}
-#learningPanel .learn-card.page-audio-current{background:#e4f4ed;border-color:#087e6d;box-shadow:inset 0 0 0 1px #087e6d,0 3px 12px #087e6d16;transition:background-color .16s,border-color .16s}
+#learningPanel .learn-card.page-audio-current:not([data-dialogue-card]){background:#e4f4ed}
+#learningPanel .learn-card.page-audio-current{border-color:#087e6d;box-shadow:inset 0 0 0 1px #087e6d,0 3px 12px #087e6d16;transition:background-color .16s,border-color .16s}
 #learningPanel .learn-card.page-audio-current .learn-card-main{background:transparent}
 #learningPanel .learn-card.page-audio-current [data-learn="play"]{background:#087e6d;color:white}
 /* Compact, anchored playback settings; labels and chevron have independent space. */

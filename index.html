@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="c0cda25c52c7560d">
+  <meta name="lao-app-build" content="2075c6a9b8361c6f">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9489,7 +9489,21 @@ function ssCompose(detail,resolved,id){
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
  const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 播放'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
- const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText){if(w||m.analysisUnitType==='word')editText.textContent='修改词条';quick.append(editText);}if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
+ const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText){
+  editText.type='button';
+  if(w||m.analysisUnitType==='word')editText.textContent='修改词条';
+  if(editText.dataset.learn==='edit-material')editText.onclick=async event=>{
+   event.preventDefault();
+   event.stopPropagation();
+   if(learningHasWork()||recorder){status.textContent='请先完成当前保存、编辑或录音，再修改材料。';return;}
+   editText.disabled=true;
+   status.textContent='正在打开材料编辑…';
+   try{await learningEditor(id);}
+   catch(error){status.textContent=error.message;}
+   finally{editText.disabled=false;}
+  };
+  quick.append(editText);
+ }if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
  actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';

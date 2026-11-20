@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="deb38518b0c3570d">
+  <meta name="lao-app-build" content="95fa2a75d4cb3c7b">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4653,7 +4653,7 @@ function lessonPageToolbarFor(words,title,key){
  const h=learningEsc,speed=typeof appPreference==='function'?appPreference('chapterReadSpeed')||'1':'1';
  const loop=typeof appPreference==='function'&&appPreference('chapterReadLoop');
  const speeds=['0.75','1','1.25','1.5','2','3'].map(value=>'<option value="'+value+'"'+(value===speed?' selected':'')+'>'+value+'×</option>').join('');
- return '<div class="lesson-page-player" data-chapter-read-aloud data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="终止整页播放" title="终止播放并收起进度条">'+lessonIcon('stop')+'</button><details class="page-player-more"><summary>更多</summary><div><label><span>语速</span><select data-page-speed>'+speeds+'</select></label><label><span>循环播放</span><input type="checkbox" data-page-loop'+(loop?' checked':'')+'></label>'+(typeof chapterListeningMenu==='function'?chapterListeningMenu():'')+'<button data-page-action="prepare">'+lessonIcon('audio')+'音频管理</button>'+'</div></details></div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
+ return '<div class="lesson-page-player" data-chapter-read-aloud data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="终止整页播放" title="终止播放并收起进度条">'+lessonIcon('stop')+'</button><details class="page-player-more"><summary>更多</summary><div><label><span>语速</span><select data-page-speed>'+speeds+'</select></label><label><span>循环播放</span><input type="checkbox" data-page-loop'+(loop?' checked':'')+'></label>'+(typeof chapterListeningMenu==='function'?chapterListeningMenu():'')+'<button data-page-action="prepare">'+lessonIcon('audio')+'音频管理</button><button type="button" data-page-action="share-chapter-defaults">同步本章默认发音</button>'+'</div></details></div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
 }
 // Keep the existing player actions and status channel; compact labels are presentation only.
 const lessonPageFullToolbar=lessonPageToolbarFor;
@@ -4950,6 +4950,60 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
  }
  ready=true;await play(pendingIndex);lessonPageFollow();
 }
+async function lessonShareChapterDefaults(page,bar){
+ if(learningHasWork()||recorder||batchAudioBusy)throw Error('请先完成当前编辑或录音。');
+ if(!cloudWorkspace)throw Error('请先登录同步账号。');
+ const owner=cloudWorkspace,course=learningLesson,status=bar.querySelector('[data-page-status]');
+ status.textContent='正在读取本章保存的默认发音…';
+ const snap=await learningSnapshot(),ids=new Set(page.words.map(row=>row.id));
+ if(course.schemaVersion===2){
+  const data=lessonV2Export(snap,course,{navigation:true});
+  for(const section of data.sections)for(const block of section.blocks){
+   if(!['sentence','dialogue'].includes(block.contentType))continue;
+   for(const row of block.content.items||[])ids.add(lessonV2Id(course.packageKey,'item',row.itemId));
+  }
+ }else for(const place of snap.learningPlacements){
+  if(!place.deleted&&place.lessonId===course.id)ids.add(place.materialId);
+ }
+ const texts=new Set(snap.learningMaterials.filter(row=>ids.has(row.id)&&!row.deleted&&['sentence','dialogue'].includes(row.contentType)&&row.textLao?.trim()).map(row=>row.textLao));
+ if(owner!==cloudWorkspace||learningLesson.id!==course.id||!bar.isConnected)throw Error('账号或课程已切换，请重试。');
+ const keys=await learningDefaultAudioKeys();
+ const candidates=new Map(),shared=new Set();
+ for(const key of keys){
+  const item=lessonDefaultCacheIdentity(key);
+  if(!item||!texts.has(item.text))continue;
+  if(key===sharedDefaultSpeechKey(item.text)){shared.add(item.text);continue;}
+  if(!candidates.has(item.text)||item.priority>candidates.get(item.text).priority)candidates.set(item.text,{key,priority:item.priority});
+ }
+ for(const text of shared)candidates.delete(text);
+ if(!candidates.size){status.textContent='本章没有新的本机默认发音可设为两端共用。已设置 '+shared.size+' 句。';return;}
+ if(!confirm('以当前设备为准，将「'+course.title+'」中 '+candidates.size+' 句已保存的默认发音设为两端共用？请仅在发音正确的设备上操作。')){
+  status.textContent='已取消同步本章发音。';return;
+ }
+ if(owner!==cloudWorkspace||learningLesson.id!==course.id)throw Error('账号或课程已切换，请重试。');
+ const written=await withDefaultAudioStore('readwrite',store=>{
+  const results=[];
+  for(const [text,{key}] of candidates){
+   const target=sharedDefaultSpeechKey(text),check=store.get(target);
+   check.onsuccess=()=>{
+    if(check.result?.size)return;
+    const read=store.get(key);
+    read.onsuccess=()=>{if(read.result?.size){store.put(read.result,target);results.push({key:target,blob:read.result});}};
+   };
+  }
+  return results;
+ });
+ let queued=0;
+ for(const clip of written){
+  if(owner!==cloudWorkspace)throw Error('账号已切换，请回原账号上传更新。');
+  const id=await cloudHash(new Blob([clip.key]));
+  if(owner!==cloudWorkspace)throw Error('账号已切换，请回原账号上传更新。');
+  await qaEnqueue([{table:'lao_dictionary_records',kind:'default_audio',id,cacheKey:clip.key,blob:clip.blob}]);
+  queued++;
+  status.textContent='正在准备上传本章默认发音 '+queued+' / '+written.length+' 句';
+ }
+ status.textContent='已准备 '+queued+' 句。请在本机点「上传更新」，再到另一台设备点「接收更新」。';
+}
 async function lessonPageAudioMenu(page){
  if(batchAudioBusy||learningBusy||recorder||learningHasWork())throw Error('请先完成编辑、录音或音频生成');
  const snap=await learningSnapshot(),course=learningLesson,data=course.schemaVersion===2?lessonV2Export(snap,course):null,ids=new Set(page.words.map(w=>w.id));
@@ -5056,7 +5110,7 @@ async function lessonPageSaveClips(s){if(s.dialogueReplace&&s.pageMode){await di
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-page-action]');if(!button)return;
  const bar=button.closest('[data-page-key]'),page=lessonPages.get(bar.dataset.pageKey);if(!page)return;
- try{if(button.dataset.pageAction==='pause'){if(button.getAttribute?.('aria-label')==='重新播放')await lessonPageListen(page,bar);else lessonPageTogglePause(bar);}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
+ try{if(button.dataset.pageAction==='pause'){if(button.getAttribute?.('aria-label')==='重新播放')await lessonPageListen(page,bar);else lessonPageTogglePause(bar);}else if(button.dataset.pageAction==='stop'){lessonPageStop();lessonPageClearProgress(bar);bar.querySelector('[data-page-status]').textContent='已终止';}else if(button.dataset.pageAction==='play')await lessonPageListen(page,bar);else if(button.dataset.pageAction==='share-chapter-defaults'){if(button.disabled)return;button.disabled=true;try{await lessonShareChapterDefaults(page,bar);}finally{button.disabled=false;}}else await lessonPageAudioMenu(page);}catch(error){bar.querySelector('[data-page-status]').textContent=error.message;}
 });
 document.addEventListener('click',e=>{
  // The queue's capture handler runs before the self-test tap listener.

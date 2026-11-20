@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="2c422ea68a48baa4">
+  <meta name="lao-app-build" content="deb38518b0c3570d">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -12896,7 +12896,7 @@ learningCachedSpeech=async function(text,signal){
  if(typeof withDefaultAudioStore!=='function')return sfPreviousCachedSpeech(text);
  const owner=workspaceName('saved-default-key-index'),endpoint=ttsSettings.endpoint||'';
  const out=await withDefaultAudioStore('readonly',store=>{
-  const result={blob:null},exact=store.get(JSON.stringify([endpoint,text]));
+  const result={blob:null};
   const choose=index=>{const match=index.get(text);return (!endpoint&&match?.imported)||match?.first;};
   const scan=()=>{const keys=store.getAllKeys();keys.onsuccess=()=>{
    const index=new Map();
@@ -12908,10 +12908,16 @@ learningCachedSpeech=async function(text,signal){
    sfSpeechKeys={owner,at:Date.now(),index};const key=choose(index);
    if(key!==undefined){const q=store.get(key);q.onsuccess=()=>result.blob=q.result||null;}
   };};
-  exact.onsuccess=()=>{if(exact.result){result.blob=exact.result;return;}
-   const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.index):undefined;
-   if(key===undefined){scan();return;}const q=store.get(key);q.onsuccess=()=>{if(q.result)result.blob=q.result;else{sfSpeechKeys=null;scan();}};
-  };return result;
+  const readLocal=()=>{
+   const exact=store.get(JSON.stringify([endpoint,text]));
+   exact.onsuccess=()=>{if(exact.result){result.blob=exact.result;return;}
+    const key=sfSpeechKeys?.owner===owner&&Date.now()-sfSpeechKeys.at<30000?choose(sfSpeechKeys.index):undefined;
+    if(key===undefined){scan();return;}const q=store.get(key);q.onsuccess=()=>{if(q.result)result.blob=q.result;else{sfSpeechKeys=null;scan();}};
+   };
+  };
+  const shared=store.get(sharedDefaultSpeechKey(text));
+  shared.onsuccess=()=>{if(shared.result?.size)result.blob=shared.result;else readLocal();};
+  return result;
  },signal);return out.blob;
 };
 const sfChapterIndexes=new WeakMap();

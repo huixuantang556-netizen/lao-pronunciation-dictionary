@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="61b005800c8d964f">
+  <meta name="lao-app-build" content="2c422ea68a48baa4">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -859,7 +859,9 @@ async function importCodaClassroom(){
     function ttsCache(mode,key,value) {
 return new Promise((resolve,reject)=>{const open=indexedDB.open(workspaceName('lao-default-speech-cache'),1);open.onupgradeneeded=()=>open.result.createObjectStore('audio');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const cache=open.result,tx=cache.transaction('audio',mode),store=tx.objectStore('audio');let result;const req=value?store.put(value,key):store.get(key);req.onsuccess=()=>{result=req.result;};tx.oncomplete=async()=>{cache.close();if(value&&typeof qaDefaultSaved==='function')await qaDefaultSaved(key,value);resolve(result);};tx.onabort=()=>{cache.close();reject(tx.error);};tx.onerror=()=>{};};});
     }
+    function sharedDefaultSpeechKey(text){return JSON.stringify(['selected-default-v1',text]);}
     async function defaultSpeech(text,options={}) {
+      const chosen=options.force?null:await ttsCache('readonly',sharedDefaultSpeechKey(text));if(chosen?.size)return chosen;
       const key=JSON.stringify([ttsSettings.endpoint||'',text]);
       const cached=options.force?null:await ttsCache('readonly',key);if(cached instanceof Blob)return cached;
       if(!options.force&&!ttsSettings.endpoint){const imported=await ttsCache('readonly',JSON.stringify(['imported-default',text]));if(imported instanceof Blob)return imported;const saved=await findSavedAudioByText(text);if(saved instanceof Blob)return saved;}
@@ -2966,6 +2968,7 @@ async function codaShowDrill(id,manage=false){
  $('#codaContent').innerHTML='<button data-coda-tab="dead">← 返回拼读表</button><h2 class="coda-rule" lang="lo">'+d.word+'</h2><p>'+d.textbookTone+' · '+codaLabels[d.initialClass]+' · '+codaLabels[d.vowelLength]+'</p><p>使用现有录音编辑器；保存后回到“尾辅音”即可点读。示范卡按词条保存，沿用录音备份和手动云端同步。</p>'+items.map(x=>'<article class="coda-reference"><p>'+codaEscape(x.meaning||'未填写词义')+'</p><button data-coda-edit="'+x.id+'">修改 / 补录</button> '+(hasAudio(x)?'<button data-coda-personal="'+x.id+'">▶ 我的录音</button>':'')+'</article>').join('')+(!items.length?'<p>目前没有对应词卡。仅点击下方按钮时创建，不自动添加全部示例。</p><button data-coda-create="'+d.id+'">创建示范词卡并录音</button>':'');
 }
 async function codaCachedSpeech(word){
+ const chosen=await ttsCache('readonly',sharedDefaultSpeechKey(word));if(chosen?.size)return chosen;
  const exact=await ttsCache('readonly',JSON.stringify([ttsSettings.endpoint||'',word]));
  if(exact||ttsSettings.endpoint)return exact;
  const imported=await ttsCache('readonly',JSON.stringify(['imported-default',word]));
@@ -3398,7 +3401,7 @@ async function learningPlayResolved(id,source,index,{m,w,snap},current=()=>true,
   if(currentIndex>=0)return learningPlay(id,source,currentIndex,{m,w,snap});
  }
  if(index===null&&source==='reference'){const clip=recordedReference({...m,textLao:text},snap)||(w?(chapterTap?recordedReferenceForWordSnapshot(w,snap):await recordedReferenceForWord(w)):null);if(clip){referencePlaybackNotice(clip.label);await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}
- if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview){await learningPlay(id,source,preferred,{m,w,snap});return;}}
+ if(index===null&&source==='reference'&&m.defaultAudioKey&&typeof lessonV2AudioKey==='function'){const preferred=refs.findIndex(a=>lessonV2AudioKey(a)===m.defaultAudioKey);if(preferred>=0&&!refs[preferred].needsReview&&(refs[preferred].source!=='gemini'||refs[preferred].text===text)){await learningPlay(id,source,preferred,{m,w,snap});return;}}
  if(m.contentType==='word'&&!w)throw new Error('原词条已删除或尚未同步，请重新关联；不会使用旧副本生成发音。');
  if(index===null&&source==='reference'){const manual=refs.filter(a=>a.role==='reference').at(-1);if(manual){const asset=snap.learningAudio.find(a=>a.id===manual.assetId);if(!asset)throw new Error('参考发音尚未同步。');await learningPlayBlob(asset.blob,manual.start||0,manual.end??null);return;}}
  let checkedLocal=false;
@@ -3428,7 +3431,7 @@ async function learningWordAudioManagerContentsHtml(m,w,snap){
  if(defaultKeys.length)rows.push({kind:'default',key:'default',label:'Gemini／默认发音',note:m.wordAudioNotes?.default||(m.audioSources||[]).find(a=>a.source==='gemini'&&a.text===(w?.word||m.textLao))?.note||''});
  (m.audioSources||[]).forEach((a,i)=>{const asset=assets.get(a.assetId);if(a.source==='gemini'?defaultKeys.length&&a.text===(w?.word||m.textLao):Boolean(asset?.blob)){if(a.source==='gemini'){if(!rows.some(r=>r.kind==='default'))rows.push({kind:'default',key:'default',label:'Gemini／默认发音',note:a.note||m.wordAudioNotes?.default||''});}else rows.push({kind:'reference',key:String(i),label:(a.source==='textbook'?'教材原音':a.role==='reference'?'手录参考发音':'我的跟读')+' · '+(asset?.name||'录音')+((a.start||a.end!=null)?'（'+(a.start||0)+'–'+(a.end??'结尾')+' 秒）':''),note:a.note||''});}});
  if(!rows.length)return '<h3>已有音频</h3><p class="tag-hint">当前没有已保存的音频。</p>';
- return '<h3 class="learn-audio-heading">已有音频</h3><p class="tag-hint">备注保存在本机材料资料中。删除默认发音会清除相同文字的本机缓存；删除教材音频只解除当前材料关联，其他材料仍在使用时会保留音轨。</p><div class="learn-word-audio-manage">'+rows.map(r=>'<div class="learn-word-audio-row"><label class="learn-audio-select"><input type="checkbox" data-audio-delete="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'"> '+'<span>'+learningEsc(r.label)+'</span></label><button data-learn="word-audio-play" data-id="'+learningEsc(m.id)+'" data-audio-kind="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'" aria-label="播放音频">▶ 播放</button><button type="button" data-learn="word-audio-prefer" data-id="'+learningEsc(m.id)+'" data-audio-kind="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'">设为点读发音</button><label class="learn-audio-note"><span>备注</span><input type="text" maxlength="240" data-audio-note="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'" value="'+learningEsc(r.note)+'" placeholder="添加备注…"></label></div>').join('')+'</div><p class="learn-audio-actions"><button data-learn="audio-notes-save" data-id="'+learningEsc(m.id)+'">保存备注</button> <button class="danger" data-learn="audio-delete-selected" data-id="'+learningEsc(m.id)+'">删除勾选音频</button></p>';
+ return '<h3 class="learn-audio-heading">已有音频</h3><p class="tag-hint">备注保存在本机材料资料中。删除默认发音会清除相同文字的本机缓存；删除教材音频只解除当前材料关联，其他材料仍在使用时会保留音轨。</p><div class="learn-word-audio-manage">'+rows.map(r=>'<div class="learn-word-audio-row"><label class="learn-audio-select"><input type="checkbox" data-audio-delete="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'"> '+'<span>'+learningEsc(r.label)+'</span></label><button data-learn="word-audio-play" data-id="'+learningEsc(m.id)+'" data-audio-kind="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'" aria-label="播放音频">▶ 播放</button><button type="button" data-learn="word-audio-prefer" data-id="'+learningEsc(m.id)+'" data-audio-kind="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'">'+(r.kind==='default'?'在两端使用这段默认发音':'设为点读发音')+'</button><label class="learn-audio-note"><span>备注</span><input type="text" maxlength="240" data-audio-note="'+learningEsc(r.kind)+'" data-audio-index="'+learningEsc(r.key)+'" value="'+learningEsc(r.note)+'" placeholder="添加备注…"></label></div>').join('')+'</div><p class="learn-audio-actions"><button data-learn="audio-notes-save" data-id="'+learningEsc(m.id)+'">保存备注</button> <button class="danger" data-learn="audio-delete-selected" data-id="'+learningEsc(m.id)+'">删除勾选音频</button></p>';
 }
 async function learningPreferAudio(id,kind,index){
  const {m,w,snap}=await learningReadResolved(id);
@@ -3438,6 +3441,12 @@ async function learningPreferAudio(id,kind,index){
  const existing=ref&&snap.learningAudio.find(row=>row.id===ref.assetId&&!row.deleted);
  const blob=existing?.blob||(kind==='legacy'?audioBlobFor(w):kind==='default'?await learningCachedSpeech(text):null);
  if(!blob?.size)throw Error('所选音频未保存在本机，请先试听。');
+ if(kind==='default'){
+  if(!confirm('用刚才这段录音作为「'+text+'」在两端的默认发音？'))return;
+  await ttsCache('readwrite',sharedDefaultSpeechKey(text),blob);
+  const status=$('#learningDialogStatus');if(status)status.textContent='已保存这句的默认发音。请在本机上传更新，再到另一台设备接收更新。';
+  return;
+ }
  if(!confirm('将这段音频设为「'+text+'」的点读发音？同步后，其他设备也会优先播放它。'))return;
  const asset=existing||{id:learningUid(),name:'已选点读发音',blob,updatedAt:Date.now()};
  const playbackReference={text,assetId:asset.id,start:ref?.start||0,end:ref?.end??null};
@@ -4687,15 +4696,29 @@ function lessonPageAsset(w,snap,cache){
  const manual=refs.filter(a=>a.source==='user'&&a.role==='reference'&&!a.needsReview).at(-1);
  const ref=manual||preferred;
  const assetFor=r=>{if(r?.source==='gemini')return cache.has(r.text)?{blob:cache.get(r.text)}:null;const a=snap.learningAudio.find(a=>a.id===r?.assetId&&!a.deleted);return a?.blob?{blob:a.blob,start:r.start||0,end:r.end??null}:null;};
+ if(ref?.source==='gemini'&&ref.text!==(w.word||m.textLao))return cache.has(w.word||m.textLao)?{blob:cache.get(w.word||m.textLao)}:null;
  if(ref)return assetFor(ref);
  const own=w.entry&&audioBlobFor(w.entry);if(own)return {blob:own};
  if(cache.has(w.word))return {blob:cache.get(w.word)};
  return assetFor(refs.filter(a=>learningIsReference(a)&&!a.needsReview).at(-1));
 }
+function lessonDefaultCacheIdentity(key){
+ try{
+  const [provider,text]=JSON.parse(key);
+  if(typeof text!=='string')return null;
+  const preferred=typeof sharedDefaultSpeechKey==='function'&&key===sharedDefaultSpeechKey(text);
+  const currentProvider=typeof ttsSettings!=='undefined'&&(ttsSettings.endpoint||'')===provider;
+  return {text,priority:preferred?3:currentProvider?2:provider==='imported-default'?1:0};
+ }catch(_){return null;}
+}
 async function lessonPagePlaybackData(page,current,signal){
  if(typeof lnGetData!=='function'||typeof dgGetRows!=='function'||typeof withDefaultAudioStore!=='function'){
   const words=await lessonPageResolve(page.words),snap=await learningSnapshot(),cache=new Map();
-  for(const row of await cloudCacheRows())try{cache.set(JSON.parse(row.key)[1],row.blob);}catch(_){}
+  const priorities=new Map();
+  for(const row of await cloudCacheRows()){
+   const item=lessonDefaultCacheIdentity(row.key);
+   if(item&&(!priorities.has(item.text)||item.priority>priorities.get(item.text))){cache.set(item.text,row.blob);priorities.set(item.text,item.priority);}
+  }
   return {words,snap,cache};
  }
  const {snap,words:entries}=await lnGetData();
@@ -4721,10 +4744,10 @@ async function lessonPagePlaybackData(page,current,signal){
    if(!current())return;
    const selected=new Map();
    for(const key of keys.result){
-    let text;try{text=JSON.parse(key)[1];}catch(_){continue;}
-    if(wanted(text))selected.set(text,key);
+    const item=lessonDefaultCacheIdentity(key);
+    if(item&&wanted(item.text)&&(!selected.has(item.text)||selected.get(item.text).priority<item.priority))selected.set(item.text,{...item,key});
    }
-   for(const [text,key] of selected){
+   for(const [text,{key}] of selected){
     const query=store.get(key);
     query.onsuccess=()=>{if(query.result)matches.set(text,query.result);};
    }
@@ -4776,7 +4799,7 @@ async function lessonQueuePlay(playlist,total,bar,token=lessonPageRun,items=[],o
  const status=bar.querySelector('[data-page-status]');
  const current=()=>token===lessonPageRun&&bar.isConnected!==false;
  if(!current())return;lessonPageBar=bar;let ready=false,pendingIndex=0;
- lessonPageCardJump=(id,button)=>{if(!current()||!bar.parentElement?.contains(button))return false;const word=items.findIndex(w=>w.id===id);if(word<0)return false;const index=playlist.findIndex(p=>word===p.at&&p.count>=1);if(index<0)return false;if(ready)void play(index,0,false);else pendingIndex=index;return true;};
+ lessonPageCardJump=(id,button)=>{if(!current()||!bar.parentElement?.contains(button))return false;const word=items.findIndex(w=>w.id===id);if(word<0)return false;const index=playlist.findIndex(p=>word===p.at&&p.count===1);if(index<0)return false;if(ready)void play(index,0,false);else pendingIndex=index;return true;};
  const incremental=options.incremental||options.dictation||playlist.some(part=>part.loadAudio)||typeof learningMobileChapter==='function'&&learningMobileChapter();
  let durations;
  if(incremental){

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="98bdd05dbdf03679">
+  <meta name="lao-app-build" content="ab02b893e71fcb06">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1764,7 +1764,12 @@ async function cloudBatchWrite(uid,api,table,rows,status,prepare=async()=>{}){
   if(!Array.isArray(result)||result.length!==expected.length)throw Error('其他设备修改了资料或批次返回不完整；已停止，请重新同步。');
   const wanted=new Map(expected.map(r=>[key(r),r])),seen=new Set();
   for(const value of result){const k=JSON.stringify([value.record_kind,value.record_id]),r=wanted.get(k);
-   if(!r||seen.has(k)||value.owner_id!==uid||!Number.isSafeInteger(value.revision)||value.revision!==(r.revision===null?1:r.revision+1)||!cloudSame(value.payload,r.payload)||(!learning&&value.deleted!==r.deleted))throw Error('云端更新返回身份、版本或内容不符；已停止，请保留本机资料。');seen.add(k);
+   if(!r||seen.has(k)||value.owner_id!==uid)throw Error('云端更新返回的记录身份不符。待传资料保留。');
+   const label=r.kind==='default_audio'?'默认发音':r.kind==='learningAudio'?'学习录音':r.kind==='entry'?'词条':'学习资料';
+   if(!Number.isSafeInteger(value.revision)||value.revision!==(r.revision===null?1:r.revision+1))throw Error(label+'的云端版本号不符。待传资料保留。');
+   // Match the JSON that crossed the network. Local optional fields may be undefined.
+   if((!cloudSame(value.payload,r.payload)&&!cloudSame(value.payload,JSON.parse(JSON.stringify(r.payload))))||(!learning&&value.deleted!==r.deleted))throw Error(label+'的云端返回内容不符。待传资料保留。');
+   seen.add(k);
   }
   for(const value of result)wanted.get(JSON.stringify([value.record_kind,value.record_id])).result=value;
  };
@@ -12142,11 +12147,11 @@ async function qaCurrent(record){
 async function qaDescriptor(uid,blob){if(!(blob instanceof Blob)||!blob.size||blob.size>20971520)throw Error('音频为空或超过20MiB');const mime=(blob.type||'audio/webm').split(';')[0].toLowerCase();if(!qaMimes.includes(mime))throw Error('不支持的音频格式');const sha=await cloudHash(blob);return {path:uid+'/'+sha+'-'+mime.replace(/[^a-z0-9]/g,'_'),sha,mime,size:blob.size};}
 async function qaPrepare(uid,record){
  if(record.table==='lao_learning_records'){
-  const {blob,...row}=record.row;if(record.kind==='learningAudio')return {...record,payload:{...row,audio:await qaDescriptor(uid,blob)},blob};
+  const {blob,...fields}=record.row,row=JSON.parse(JSON.stringify(fields));if(record.kind==='learningAudio')return {...record,payload:{...row,audio:await qaDescriptor(uid,blob)},blob};
   return {...record,payload:row};
  }
  if(record.kind==='default_audio')return {...record,payload:{version:1,cacheKey:record.cacheKey,audio:await qaDescriptor(uid,record.blob)}};
- const blob=audioBlobFor(record.row);return {...record,payload:{version:1,entry:cloudEntryData(record.row),audio:blob?await qaDescriptor(uid,blob):null},blob};
+ const blob=audioBlobFor(record.row);return {...record,payload:{version:1,entry:JSON.parse(JSON.stringify(cloudEntryData(record.row))),audio:blob?await qaDescriptor(uid,blob):null},blob};
 }
 async function qaReadRemote(uid,api,record){
  const path='/rest/v1/'+record.table+'?select=*&owner_id=eq.'+encodeURIComponent(uid)+'&record_kind=eq.'+record.kind+'&record_id=eq.'+encodeURIComponent(record.id)+'&limit=1';
@@ -12217,7 +12222,7 @@ async function qaLocalUpdateJobs(uid,meta,pending){
  for(const row of entries){
   if(!row.syncId||pendingKeys.has('entry:'+row.syncId))continue;
   const base=meta.checkpoint['entry:'+row.syncId]?.value;
-  if(base?.deleted===false&&cloudSame(base.payload.entry,cloudEntryData(row)))continue;
+  if(base?.deleted===false&&cloudSame(base.payload.entry,JSON.parse(JSON.stringify(cloudEntryData(row)))))continue;
   jobs.push(job([{table:'lao_dictionary_records',kind:'entry',id:row.syncId,row}]));
  }
  const learningRecord=(kind,row)=>({table:'lao_learning_records',kind,id:row.id,row});
@@ -12225,7 +12230,7 @@ async function qaLocalUpdateJobs(uid,meta,pending){
  for(const kind of ['learningMaterials','learningPlacements'])for(const row of snap[kind]){
   const key=kind+':'+row.id;
   if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(kind,row,uid))continue;
-  if(pendingKeys.has(key)||cloudSame(meta.learningCheckpoint[key]?.payload,row))continue;
+  if(pendingKeys.has(key)||cloudSame(meta.learningCheckpoint[key]?.payload,JSON.parse(JSON.stringify(row))))continue;
   const deps=[];
   if(kind==='learningMaterials')for(const id of new Set((row.audioSources||[]).map(ref=>ref.assetId))){
    if(!id||meta.learningCheckpoint['learningAudio:'+id])continue;
@@ -12240,7 +12245,7 @@ async function qaLocalUpdateJobs(uid,meta,pending){
   // An unacknowledged recording travels with its changed card, not by itself.
   if(!base)continue;
   const {audio,...previous}=base;
-  if(cloudSame(previous,fields)&&audio?.size===blob.size&&audio?.mime===(blob.type||'audio/webm').split(';')[0].toLowerCase())continue;
+  if(cloudSame(previous,JSON.parse(JSON.stringify(fields)))&&audio?.size===blob.size&&audio?.mime===(blob.type||'audio/webm').split(';')[0].toLowerCase())continue;
   jobs.push(job([learningRecord('learningAudio',row)]));
  }
  return jobs.concat(cards);
@@ -12249,7 +12254,7 @@ async function qaLocalUpdateJobs(uid,meta,pending){
 async function qaFlushPending(uid,api,status){
  if(uid!==cloudWorkspace)throw Error('账号已切换，请重新操作');
  const shared=job=>job.records.length===1&&job.records[0].kind==='default_audio'&&job.records[0].cacheKey.startsWith('["selected-default-v1",');
- if(typeof cloudAudioPhoneMode==='function'&&cloudAudioPhoneMode()){
+ {
   const queued=(await qaReadMeta({keys:[qaQueueKey]}))[qaQueueKey].filter(job=>job.uid===uid&&shared(job)&&!job.blocked);
   if(queued.length){
    let done=0,blocked=0,reason='';
@@ -12259,7 +12264,7 @@ async function qaFlushPending(uid,api,status){
     try{await qaRunJob(job,api,{manual:true,knownPending:true});done++;}
     catch(error){if(!error.blocked)throw Error('已上传 '+done+' 条共用发音，后续上传中断：'+error.message,{cause:error});await qaBlock(job.token,error.message);reason=error.message;blocked++;}
    }
-   status((done?'已上传 '+done+' 条共用发音，可在电脑上接收。':'本次没有上传新的共用发音。')+(blocked?' '+blocked+' 条待处理。'+reason:'')+' 本次只处理了共用发音，其他修改可再次点上传更新。',{done:queued.length,total:queued.length});
+   status((done?'已上传 '+done+' 条共用发音，其他设备可接收。':'本次没有上传新的共用发音。')+(blocked?' '+blocked+' 条待处理。'+reason:'')+' 本次只处理了共用发音，其他修改可再次点上传更新。',{done:queued.length,total:queued.length});
    return {done,blocked};
   }
  }

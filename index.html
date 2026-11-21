@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="9713537b9e7ca6dd">
+  <meta name="lao-app-build" content="cd71d965505bc620">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3248,7 +3248,7 @@ function learningStudyCardHtml(m,w,options={}){
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+text)+'</strong><span class="learn-card-translation">'+h(meaning)+'</span>'+hintHtml+'</button>'+(needsAudioReview?'<small data-audio-review-notice="'+h(w?.word||m.textLao)+'">文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+text)+'</strong>'+hintHtml+'<span class="learn-card-translation">'+h(meaning)+'</span>'+'</button>'+(needsAudioReview?'<small data-audio-review-notice="'+h(w?.word||m.textLao)+'">文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -3768,6 +3768,10 @@ function learningValidateRecord(kind,row){
  if(kind==='learningMaterials'){
   if(row.courseOrder!==undefined&&(!Array.isArray(row.courseOrder)||row.courseOrder.length>50000||row.courseOrder.some(id=>typeof id!=='string'||id.length>512)||new Set(row.courseOrder).size!==row.courseOrder.length))throw Error('课程顺序格式无效');
   if(!['knowledge','word','reading_drill','sentence','dialogue'].includes(row.contentType)||typeof row.textLao!=='string'||(row.contentType!=='word'&&!row.textLao.trim())||typeof row.translationZh!=='string'||typeof row.note!=='string'||!strings(row.tags)||!strings(row.focusLetters)||!strings(row.focusVowels)||!strings(row.linkedWordSyncIds)||!Array.isArray(row.audioSources))throw new Error('学习材料正文或关联格式无效。');
+  if(row.syntaxHintZh?.kind==='manual'){
+   const hint=row.syntaxHintZh;
+   if(typeof hint.source!=='string'||typeof hint.translation!=='string'||typeof hint.zh!=='string'||hint.zh.length>600||/[\u0e80-\u0eff]/u.test(hint.zh))throw Error('手动语序提示格式无效');
+  }
   if(typeof paValidateRecord==='function')paValidateRecord(row);
   if(typeof scValidateRecord==='function')scValidateRecord(row);
   for(const a of row.audioSources){if(a.source==='gemini'){if(typeof a.text!=='string'||!a.text.trim())throw new Error('默认发音引用无效。');continue;}if(!['textbook','user'].includes(a.source)||typeof a.assetId!=='string')throw new Error('材料音频来源无效。');learningSegment(a.start,a.end??'');}
@@ -4100,8 +4104,8 @@ function lessonV2ValidateLinks(snap){
 }
 async function lessonV2Editor(m){
  if(m.v2Kind!=='item'||m.v2Data.itemType==='word-ref'){learningModal('修改教材内容','<p>请导出带 ID 的课程 JSON，修改后重新导入；预览会显示差异。私人词条请使用“修改文字资料”。</p>');return;}
- const h=learningEsc,r=m.v2Data;learningDraft={kind:'v2-edit',dirty:false};learningModal('修改教材项目','<form id="v2edit"><label>老挝语／表格播放文字<textarea id="v2editText">'+h(r.textLao??r.playableText??'')+'</textarea></label><label>中文<textarea id="v2editZh">'+h(r.translationZh||'')+'</textarea></label><label>备注<textarea id="v2editNote">'+h(r.note||'')+'</textarea></label><p>修改发音文字会保留全部录音，并提示核对。表格单元格、说话人和关联可通过带 ID JSON 修改。</p><button>保存</button></form>');$('#v2edit').oninput=()=>learningDraft.dirty=true;
- $('#v2edit').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{const snap=await learningSnapshot(),old=snap.learningMaterials.find(x=>x.id===m.id);if(!cloudSame(old,m))throw Error('资料已变化，请重新打开');const text=$('#v2editText').value.trim();if(!text&&r.itemType!=='table')throw Error('老挝语不能为空');const changed=text!==m.textLao,next={...m,textLao:text||'表格项目',translationZh:$('#v2editZh').value,note:$('#v2editNote').value,updatedAt:Date.now(),v2Data:{...r,[r.itemType==='table'?'playableText':'textLao']:text,translationZh:$('#v2editZh').value,note:$('#v2editNote').value}};if(changed){next.audioNeedsReview=true;next.audioSources=m.audioSources.map(a=>({...a,needsReview:true,recordedText:a.recordedText||m.textLao}));}const rows=[next];if(r.itemType==='dialogue'){const parent=snap.learningMaterials.find(x=>x.v2Kind==='block'&&x.id===m.id.replace(/:item:[^:]+$/,':block:'+r.blockId));if(parent){const prefix=m.id.slice(0,m.id.lastIndexOf(':item:')),allText=parent.v2Data.content.items.map(id=>id===r.itemId?text:snap.learningMaterials.find(x=>x.id===prefix+':item:'+id)?.textLao||'').join('\n');rows.push({...parent,textLao:allText,audioNeedsReview:changed||parent.audioNeedsReview,audioSources:changed?parent.audioSources.map(a=>({...a,needsReview:true,recordedText:a.recordedText||parent.textLao})):parent.audioSources,updatedAt:Date.now()});}}await learningWrite({learningMaterials:rows},snap);learningDraft=null;await learningOpenDetail(m.id);await renderLearning();}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
+ const h=learningEsc,r=m.v2Data;learningDraft={kind:'v2-edit',dirty:false};learningModal('修改教材项目','<form id="v2edit"><label>老挝语／表格播放文字<textarea id="v2editText">'+h(r.textLao??r.playableText??'')+'</textarea></label><label>中文<textarea id="v2editZh">'+h(r.translationZh||'')+'</textarea></label>'+(typeof syntaxHintEditorInput==='function'&&r.itemType!=='table'?syntaxHintEditorInput(m,r.textLao??m.textLao,r.translationZh??m.translationZh):'')+'<label>备注<textarea id="v2editNote">'+h(r.note||'')+'</textarea></label><p>修改发音文字会保留全部录音，并提示核对。表格单元格、说话人和关联可通过带 ID JSON 修改。</p><button>保存</button></form>');$('#v2edit').oninput=()=>learningDraft.dirty=true;
+ $('#v2edit').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{const snap=await learningSnapshot(),old=snap.learningMaterials.find(x=>x.id===m.id);if(!cloudSame(old,m))throw Error('资料已变化，请重新打开');const text=$('#v2editText').value.trim();if(!text&&r.itemType!=='table')throw Error('老挝语不能为空');const changed=text!==m.textLao,next={...m,textLao:text||'表格项目',translationZh:$('#v2editZh').value,note:$('#v2editNote').value,updatedAt:Date.now(),v2Data:{...r,[r.itemType==='table'?'playableText':'textLao']:text,translationZh:$('#v2editZh').value,note:$('#v2editNote').value}};if(changed){next.audioNeedsReview=true;next.audioSources=m.audioSources.map(a=>({...a,needsReview:true,recordedText:a.recordedText||m.textLao}));}if(typeof syntaxHintApplyEdit==='function')syntaxHintApplyEdit(next,m);const rows=[next];if(r.itemType==='dialogue'){const parent=snap.learningMaterials.find(x=>x.v2Kind==='block'&&x.id===m.id.replace(/:item:[^:]+$/,':block:'+r.blockId));if(parent){const prefix=m.id.slice(0,m.id.lastIndexOf(':item:')),allText=parent.v2Data.content.items.map(id=>id===r.itemId?text:snap.learningMaterials.find(x=>x.id===prefix+':item:'+id)?.textLao||'').join('\n');rows.push({...parent,textLao:allText,audioNeedsReview:changed||parent.audioNeedsReview,audioSources:changed?parent.audioSources.map(a=>({...a,needsReview:true,recordedText:a.recordedText||parent.textLao})):parent.audioSources,updatedAt:Date.now()});}}await learningWrite({learningMaterials:rows},snap);learningDraft=null;await learningOpenDetail(m.id);await renderLearning();}catch(e){$('#learningDialogStatus').textContent=e.message;}finally{learningBusy=false;}};
 }
 const lessonV2Clone=x=>JSON.parse(JSON.stringify(x));
 function lessonV2Id(key,kind,id){return 'v2:'+key+':'+kind+':'+id;}
@@ -4410,7 +4414,6 @@ async function lessonV2TeachingBatch(action,button){
  else await lessonPagePrepare(page);
 }
 async function lessonV2Action(a,b){if(['v2-batch-grammar','v2-batch-phonetics','v2-batch-audio'].includes(a)){await lessonV2TeachingBatch(a,b);return true;}if(a==='v2-organize'){await courseEditOpen();return true;}if(a==='v2-stop-dialogue'){stopPracticeAudio();$('#learningStatus').textContent='已停止播放';return true;}if(a==='v2-section'){lessonV2Sections.set(learningLesson.id,b.dataset.key);lessonV2Mode='order';stopPracticeAudio();await renderLearning();return true;}if(['v2-default-audio','v2-confirm-audio','v2-remove-audio'].includes(a)){const {m,snap}=await learningResolve(b.dataset.id),i=Number(b.dataset.index),ref=m.audioSources[i];if(!ref)throw Error('音频已变化');const next={...m,audioSources:m.audioSources.map(x=>({...x})),updatedAt:Date.now()};if(a==='v2-default-audio'){if(ref.needsReview)throw Error('请先核对这份录音');next.defaultAudioKey=lessonV2AudioKey(ref);}if(a==='v2-confirm-audio'){next.audioSources[i].needsReview=false;next.audioSources[i].recordedText=m.textLao;}if(a==='v2-remove-audio'){if(!confirm('只移除此项目的音频关联，保留音频文件。继续？'))return true;next.audioSources.splice(i,1);}next.audioNeedsReview=next.audioSources.some(x=>x.needsReview);await learningWrite({learningMaterials:[next]},snap);await learningOpenDetail(m.id);return true;}if(a==='v2-order'||a==='v2-category'||a==='v2-filter'){if(a==='v2-filter')lessonV2Filter=b.dataset.key;else lessonV2Mode=a==='v2-order'?'order':'category';await renderLearning();return true;}if(a==='v2-export'){const d=lessonV2Export(await learningSnapshot(),learningLesson),url=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=learningLesson.lessonId+'-v2.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);return true;}if(a==='v2-review-audio'){const {m,snap}=await learningResolve(b.dataset.id);await learningWrite({learningMaterials:[{...m,audioNeedsReview:false,audioSources:m.audioSources.map(a=>({...a,needsReview:false,recordedText:m.textLao})),updatedAt:Date.now()}]},snap);await learningOpenDetail(m.id);return true;}return false;}
-
 </script>
 <script data-learning-bundle="communication">
 let communicationFolder='',communicationScene='';
@@ -10659,11 +10662,11 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
-const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both','syntax'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
+const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',showSyntaxHints:false,chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
-function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,key==='courseCheckDirection'&&saved?.[key]==='dictation'?'audio':saved?.[key])]));}
+function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,key==='courseCheckDirection'&&saved?.[key]==='dictation'?'audio':key==='showSyntaxHints'&&saved?.showSyntaxHints===undefined&&saved?.selfTestDisplay==='syntax'?true:saved?.[key])]));}
 function appPreference(key){return apReadPreferences()[key];}
 function apSavePreferences(value){const safe=Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,value[key])]));localStorage.setItem(apPreferenceKey(),JSON.stringify({version:1,...safe}));return safe;}
 function apApplyDetail(detail){if(!detail)return;const prefs=apReadPreferences();for(const n of detail.querySelectorAll('.ss-pronunciation,.pa-word-card,.pa-segment-rules'))n.open=n.dataset.ssSentenceReading==='true'?prefs.expandSentenceReading:prefs.expandPronunciation;for(const n of detail.querySelectorAll('.ss-word-examples'))n.open=prefs.expandExamples;}
@@ -10695,7 +10698,7 @@ updateProfileUser=function(...args){const result=apPreviousUpdateProfile(...args
 function apOpenSettings(){try{apGuard();updateProfileUser();if(typeof appCloseMore==='function')appCloseMore();document.querySelector('#apSettingsStatus').textContent='';if(!apDialog.open){if(typeof window.laoResetSyncFeedback==='function'&&window.laoResetSyncFeedback())apSyncResult.hidden=true;apDialog.showModal();}apDialog.scrollTop=0;}catch(error){alert(error.message);}}
 accountButton.onclick=apOpenSettings;
 const apEntry=document.createElement('button');apEntry.type='button';apEntry.className='ap-more-entry';apEntry.textContent='⚙ 设置与个人中心';apEntry.onclick=apOpenSettings;if(typeof appMorePanel!=='undefined')appMorePanel.append(apEntry);
-apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(key==='selfTestDisplay'&&typeof cfDecorate==='function')cfDecorate();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
+apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(['selfTestDisplay','showSyntaxHints'].includes(key)&&typeof cfDecorate==='function')cfDecorate();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
 document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 let apTransition=false;
 apContent.addEventListener('click',async e=>{const section=e.target.closest('[data-ap-section]');if(section){document.querySelector('#'+section.dataset.apSection)?.scrollIntoView({block:'start',behavior:'smooth'});return;}const action=e.target.closest('[data-ap-action]');if(!action||apTransition)return;try{apGuard();apTransition=true;apDialog.close();if(action.dataset.apAction==='goals')await rrManage();}catch(error){if(!apDialog.open)apDialog.showModal();document.querySelector('#apSettingsStatus').textContent=error.message;}finally{apTransition=false;}});
@@ -10728,7 +10731,8 @@ apChapterPlayback.innerHTML='<h4>整章朗读默认设置</h4><label>播放倍�
 apGroup('阅读与播放',[...apReadingRows,apChapterPlayback]);
 const apSelfTestDisplay=document.createElement('div');
 apSelfTestDisplay.className='ap-course-check';
-apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="syntax">老挝语语序提示</option><option value="both">隐藏中文和老挝语</option></select></label>';
+apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>'+
+ '<label class="ap-switch-row"><span><strong>默认显示老挝语语序提示</strong></span><input type="checkbox" role="switch" data-ap-preference="showSyntaxHints"></label>';
 apGroup('自测显示',[apSelfTestDisplay]);
 const courseCheckAudioPreference=document.createElement('label');
 courseCheckAudioPreference.className='ap-switch-row';
@@ -11521,6 +11525,8 @@ function syntaxHintValidateFile(value){
  return [...entries];
 }
 function syntaxHintForDisplay(material,text,translation){
+ const manual=material?.syntaxHintZh;
+ if(manual?.kind==='manual'&&manual.source===text)return manual.zh?manual:null;
  if(material?.contentType!=='word'){
   const known=syntaxHintLocalRows()?.get(syntaxHintRecordKey(text,translation));
   if(known)return known;
@@ -11529,15 +11535,30 @@ function syntaxHintForDisplay(material,text,translation){
 }
 function syntaxHintHtml(hint,escape){
  if(!hint)return '';
- const note=hint.kind==='fallback'?'<i>自然译文 · 语序待核对</i>':'';
- return '<small class="learn-card-syntax">'+note+escape(hint.zh)+'</small>';
+ if(['fallback','word','fixed'].includes(hint.kind))return '';
+ return '<small class="learn-card-syntax">'+escape(hint.zh)+'</small>';
+}
+function syntaxHintEditorInput(material,text=material.textLao,translation=material.translationZh){
+ const hint=syntaxHintForDisplay(material,text,translation);
+ const value=hint&&!['fallback','word','fixed'].includes(hint.kind)?hint.zh:'';
+ return '<label>语序提示<textarea data-syntax-hint-edit rows="2" maxlength="600" placeholder="可选，例如：你 来自 省 哪个？">'+learningEsc(value)+'</textarea></label>';
+}
+function syntaxHintApplyEdit(next,old){
+ const field=learningDialog.querySelector('[data-syntax-hint-edit]');
+ if(!field)return;
+ const hint=syntaxHintForDisplay(old,old.textLao,old.translationZh);
+ const prior=hint&&!['fallback','word','fixed'].includes(hint.kind)?hint.zh:'';
+ const zh=field.value.trim(),source=next.textLao,translation=String(next.translationZh||'').trim();
+ if(zh===prior)return;
+ if(zh.length>600||/[\u0e80-\u0eff]/u.test(zh))throw Error('语序提示请填写不超过 600 字的中文提示。');
+ next.syntaxHintZh={source,translation,zh,kind:'manual'};
 }
 function syntaxHintImport(value,key){
  const rows=syntaxHintValidateFile(value);
  if(key!==workspaceName('lao-syntax-hints-v1'))throw Error('账号已变化，请重新导入。');
  if(!rows.length)throw Error('这份资料没有可导入的语序提示，之前的提示已保留。');
  localStorage.setItem(key,JSON.stringify(rows));syntaxHintImported=null;
- return '已导入 '+rows.length+' 条老挝语语序提示。请重新打开课程，在「自测显示」中选择「老挝语语序提示」。';
+ return '已导入 '+rows.length+' 条老挝语语序提示。请重新打开课程，在「自测显示」中点「显示语序提示」。';
 }
 function syntaxHintMount(){
  const host=document.querySelector('#apDataActions');if(!host)return;
@@ -11666,7 +11687,7 @@ const cfValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row.favoriteFolder!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||row.id!==row.favoriteFolder.id||!cfFolderValid(row.favoriteFolder)))throw Error('收藏文件夹格式无效');if(row.favorite?.folder!==undefined&&(typeof row.favorite.folder!=='string'||row.favorite.folder.length>100))throw Error('收藏分类格式无效');return cfValidate(kind,row);};
 async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.length>60)throw Error('文件夹名称需为 1–60 个字');learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot();if(workspace!==fvWorkspace())throw Error('账号已变化');const id='folder:'+crypto.randomUUID(),row={...learningBlank(id,'knowledge','收藏文件夹'),favoriteFolder:{id,name},updatedAt:Date.now()};await learningWrite({learningMaterials:[row]},snap);await fvRefresh();return id;}finally{learningBusy=false;}}
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
-function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="syntax" aria-pressed="false">老挝语语序提示</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
+function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="syntax" aria-pressed="false">显示语序提示</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
 const cfTapeAttributes=new WeakMap();
 function cfRefreshTape(node,scope,language){
@@ -11702,30 +11723,41 @@ function cfMaskRefresh(scope,changedLanguage,roots){
   }
  }
  if(roots)return;
- for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(['zh','lo'].includes(n.dataset.cfMask)){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
+ for(const n of scope.querySelectorAll('[data-cf-mask]')){
+  const mode=n.dataset.cfMask,active=scope.classList.contains(mode==='syntax'?'cf-show-syntax':'cf-hide-'+mode);
+  n.setAttribute('aria-pressed',String(active));
+  if(mode==='syntax')n.textContent=active?'隐藏语序提示':'显示语序提示';
+  if(['zh','lo'].includes(mode)){
+   const label=(active?'显示':'隐藏')+(mode==='zh'?'中文':'老挝语');
+   if(n.textContent!==label)n.textContent=label;
+  }
+ }
 }
 function cfMaskDefaults(scope,force=false){
  const key=typeof apPreferenceKey==='function'?apPreferenceKey():'local';
  const mode=scope.classList.contains('cf-self-test')&&typeof appPreference==='function'?appPreference('selfTestDisplay')||'all':'all';
+ const showSyntax=typeof appPreference==='function'&&appPreference('showSyntaxHints')===true;
+ if(force||scope.dataset.cfMaskWorkspace!==key||scope.dataset.cfSyntaxDefault!==String(showSyntax)){
+  scope.classList.toggle('cf-show-syntax',showSyntax);
+  scope.dataset.cfSyntaxDefault=String(showSyntax);
+ }
  if(!force&&scope.dataset.cfMaskWorkspace===key&&scope.dataset.cfMaskDefault===mode)return;
  scope.dataset.cfMaskWorkspace=key;
  scope.dataset.cfMaskDefault=mode;
  scope.classList.toggle('cf-hide-zh',mode==='zh'||mode==='both');
- scope.classList.toggle('cf-hide-lo',mode==='lo'||mode==='both'||mode==='syntax');
- scope.classList.toggle('cf-hide-syntax',mode==='syntax');
+ scope.classList.toggle('cf-hide-lo',mode==='lo'||mode==='both');
  for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;
 }
 document.addEventListener('click',event=>{
  const button=event.target.closest('[data-cf-mask]'),scope=button&&cfMaskScope(button);
  if(!scope)return;
- const mode=button.dataset.cfMask,wasSyntax=scope.classList.contains('cf-hide-syntax');
+ const mode=button.dataset.cfMask;
  if(mode==='syntax'){
-  scope.classList.remove('cf-hide-zh');scope.classList.toggle('cf-hide-lo',!wasSyntax);scope.classList.toggle('cf-hide-syntax',!wasSyntax);
- }else{
-  if(mode==='reset'||wasSyntax)scope.classList.remove('cf-hide-zh','cf-hide-lo','cf-hide-syntax');
-  if(mode!=='reset')scope.classList.toggle('cf-hide-'+mode);
+  scope.classList.toggle('cf-show-syntax');
+  cfMaskRefresh(scope);button.closest('details').open=false;return;
  }
- const changed=mode==='reset'||mode==='syntax'||wasSyntax?undefined:mode;
+ if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);
+ const changed=mode==='reset'?undefined:mode;
  for(const node of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||node.dataset.cfTapeLanguage===changed)delete node.dataset.cfRevealed;
  cfMaskRefresh(scope,changed);button.closest('details').open=false;
 });
@@ -11761,7 +11793,7 @@ fvOpen=async function(button){
  const h=learningEsc;learningModal('收藏夹','<section data-fv-list><div class="cf-library-tools"><input data-cf-search aria-label="搜索收藏" placeholder="搜索老挝语、中文或章节"><div class="cf-library-filters"><select data-cf-folder aria-label="收藏文件夹"></select><select data-cf-kind aria-label="内容类型"><option value="">全部词句</option><option value="word">单词</option><option value="sentence">句子与对话</option></select><button data-cf-create aria-label="新建收藏文件夹" title="新建文件夹">＋</button></div></div><div class="lesson-page-player cf-library-player"><div class="fv-actions"><button class="primary" data-cf-listen>▶ 播放列表</button><button data-cf-pause>暂停／继续</button><button data-cf-stop aria-label="终止播放" title="终止播放并收起进度条">□</button>'+cfMaskButtons()+'<details class="cf-library-options"><summary>播放选项</summary><label><input type="checkbox" data-page-loop>循环播放</label></details></div><p data-page-status role="status"></p></div><p class="cf-library-count" data-cf-count></p><div data-cf-rows></div><div class="fv-actions cf-library-pages"><button data-cf-prev>上一页</button><span data-cf-page></span><button data-cf-next>下一页</button></div></section>');learningDialog.classList.add('fv-dialog');if(parent)letterDetailBackButton();
  const host=learningDialog.querySelector('[data-fv-list]'),get=s=>host.querySelector(s),bar=get('.lesson-page-player');let page=0,filtered=[],seq=0;
  const options=()=>Array.from(cfFolders(fvCache.snap),([id,name])=>'<option value="'+h(id)+'">'+h(name)+'</option>').join('');const folderOptions=()=>'<option value="*">全部收藏夹</option>'+options();get('[data-cf-folder]').innerHTML=folderOptions();
- const draw=()=>{const folder=get('[data-cf-folder]').value,kind=get('[data-cf-kind]').value,q=get('[data-cf-search]').value.trim().toLowerCase();filtered=[...fvCache.model.values()].filter(v=>v.active&&(folder==='*'||(v.folder||'')===folder)&&(!kind||(kind==='word'?(v.item.kind||'word')==='word':v.item.kind!=='word'))&&(!q||[v.item.text,v.item.meaning,v.item.source].join(' ').toLowerCase().includes(q))).sort((a,b)=>b.at-a.at);page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));get('[data-cf-count]').textContent=filtered.length+' 项收藏';get('[data-cf-page]').textContent=(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/20));get('[data-cf-prev]').disabled=!page;get('[data-cf-next]').disabled=(page+1)*20>=filtered.length;get('.cf-library-pages').hidden=filtered.length<=20;get('[data-cf-rows]').innerHTML=filtered.slice(page*20,page*20+20).map((v,i)=>'<article class="fv-item"><div class="cf-item-content"><strong lang="lo">'+h(v.item.text)+'</strong><p class="cf-meaning">'+h(v.item.meaning)+'</p>'+(typeof syntaxHintForDisplay==='function'?syntaxHintHtml(syntaxHintForDisplay({contentType:v.item.kind},v.item.text,v.item.meaning),h):'')+'<small>'+h(v.item.source)+'</small></div><div class="fv-actions cf-item-actions"><button data-cf-play="'+(page*20+i)+'">▶ 播放</button><button data-cf-detail="'+(page*20+i)+'">详情</button><button type="button" class="fv-button" aria-label="取消收藏" title="取消收藏" data-cf-remove="'+(page*20+i)+'">♥</button></div><details class="cf-folder-move"><summary>'+h(cfFolders(fvCache.snap).get(v.folder||'')||'默认收藏夹')+' · 移动</summary><label>移动到<select data-cf-move="'+(page*20+i)+'">'+options()+'</select></label></details></article>').join('')||'<p class="cf-library-empty">暂无符合条件的收藏</p>';for(const n of host.querySelectorAll('[data-cf-move]'))n.value=filtered[Number(n.dataset.cfMove)].folder||'';cfMaskRefresh(host);};
+ const draw=()=>{const folder=get('[data-cf-folder]').value,kind=get('[data-cf-kind]').value,q=get('[data-cf-search]').value.trim().toLowerCase();filtered=[...fvCache.model.values()].filter(v=>v.active&&(folder==='*'||(v.folder||'')===folder)&&(!kind||(kind==='word'?(v.item.kind||'word')==='word':v.item.kind!=='word'))&&(!q||[v.item.text,v.item.meaning,v.item.source].join(' ').toLowerCase().includes(q))).sort((a,b)=>b.at-a.at);page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));get('[data-cf-count]').textContent=filtered.length+' 项收藏';get('[data-cf-page]').textContent=(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/20));get('[data-cf-prev]').disabled=!page;get('[data-cf-next]').disabled=(page+1)*20>=filtered.length;get('.cf-library-pages').hidden=filtered.length<=20;get('[data-cf-rows]').innerHTML=filtered.slice(page*20,page*20+20).map((v,i)=>'<article class="fv-item"><div class="cf-item-content"><strong lang="lo">'+h(v.item.text)+'</strong>'+(typeof syntaxHintForDisplay==='function'?syntaxHintHtml(syntaxHintForDisplay({contentType:v.item.kind},v.item.text,v.item.meaning),h):'')+'<p class="cf-meaning">'+h(v.item.meaning)+'</p>'+'<small>'+h(v.item.source)+'</small></div><div class="fv-actions cf-item-actions"><button data-cf-play="'+(page*20+i)+'">▶ 播放</button><button data-cf-detail="'+(page*20+i)+'">详情</button><button type="button" class="fv-button" aria-label="取消收藏" title="取消收藏" data-cf-remove="'+(page*20+i)+'">♥</button></div><details class="cf-folder-move"><summary>'+h(cfFolders(fvCache.snap).get(v.folder||'')||'默认收藏夹')+' · 移动</summary><label>移动到<select data-cf-move="'+(page*20+i)+'">'+options()+'</select></label></details></article>').join('')||'<p class="cf-library-empty">暂无符合条件的收藏</p>';for(const n of host.querySelectorAll('[data-cf-move]'))n.value=filtered[Number(n.dataset.cfMove)].folder||'';cfMaskRefresh(host);};
  const fail=e=>{if(host.isConnected)get('[data-page-status]').textContent=e.message;},reset=()=>{seq++;lessonPageStop();page=0;draw();};get('[data-cf-folder]').onchange=get('[data-cf-kind]').onchange=get('[data-cf-search]').oninput=reset;
  get('[data-cf-prev]').onclick=()=>{page--;draw();};get('[data-cf-next]').onclick=()=>{page++;draw();};
  get('[data-cf-create]').onclick=async()=>{const name=prompt('新文件夹名称');if(name===null)return;try{const id=await cfCreateFolder(name);if(!host.isConnected)return;get('[data-cf-folder]').innerHTML=folderOptions();get('[data-cf-folder]').value=id;page=0;draw();}catch(e){fail(e);}};
@@ -12007,11 +12039,8 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 @media(max-width:360px){#dictionaryPanel #entries .actions{gap:4px}#dictionaryPanel #entries .actions>.dict-detail{flex-basis:60px;width:60px}}
 
 .learn-card-syntax{display:none}
-.cf-hide-syntax .learn-card-main:has(>.learn-card-syntax)>.learn-card-translation{display:none}
-.cf-hide-syntax .learn-card-main>.learn-card-syntax{display:block;color:var(--muted,#526f65);font-size:inherit;line-height:1.65;text-align:start}
-.learn-card-syntax i{display:block;font-style:normal;font-size:.8em;color:var(--muted,#526f65)}
-.cf-hide-syntax .cf-item-content:has(>.learn-card-syntax)>.cf-meaning{display:none}
-.cf-hide-syntax .cf-item-content>.learn-card-syntax{display:block;line-height:1.65}
+.cf-show-syntax .learn-card-main>.learn-card-syntax{display:block;color:var(--muted,#526f65);font-size:inherit;line-height:1.65;text-align:start}
+.cf-show-syntax .cf-item-content>.learn-card-syntax{display:block;line-height:1.65}
 </style>
 <script data-learning-bundle="compound-words">
 /* Read-only lexical component links. Syllables alone are never promoted to words. */
@@ -14659,13 +14688,14 @@ learningEditor=async function(id=null){
  if(!id)return smePreviousEditor(id);
  const workspace=workspaceName('simple-edit'),resolved=await learningResolve(id),old=resolved.m;if(resolved.w||old.schemaVersion===2)return smePreviousEditor(id);
  learningDraft={kind:'single-material',dirty:false};const h=learningEsc;
- learningModal('修改学习材料','<form id="smeMaterialForm"><label>老挝语原文<textarea id="smeLao" rows="2"></textarea></label><label>中文释义／翻译<textarea id="smeZh" rows="3"></textarea></label><label>用法与备注（可换行）<textarea id="smeMaterialNote" rows="6"></textarea></label><label>来源<input id="smeMaterialSource"></label><label>标签（逗号分隔）<input id="smeTags"></label><p>每个框填写对应内容即可。备注可以换行，无需填写分隔符或重新选择录音。</p><button type="submit" class="primary">保存修改</button><button type="button" id="smeMaterialCancel">取消</button></form><p id="smeMaterialStatus" role="status"></p>');
+ learningModal('修改学习材料','<form id="smeMaterialForm"><label>老挝语原文<textarea id="smeLao" rows="2"></textarea></label><label>中文释义／翻译<textarea id="smeZh" rows="3"></textarea></label>'+(typeof syntaxHintEditorInput==='function'?syntaxHintEditorInput(old):'')+'<label>用法与备注（可换行）<textarea id="smeMaterialNote" rows="6"></textarea></label><label>来源<input id="smeMaterialSource"></label><label>标签（逗号分隔）<input id="smeTags"></label><p>每个框填写对应内容即可。备注可以换行，无需填写分隔符或重新选择录音。</p><button type="submit" class="primary">保存修改</button><button type="button" id="smeMaterialCancel">取消</button></form><p id="smeMaterialStatus" role="status"></p>');
  for(const [id,value]of [['smeLao',old.textLao],['smeZh',old.translationZh],['smeMaterialNote',old.note],['smeMaterialSource',old.source],['smeTags',(old.tags||[]).join(',')]])$('#'+id).value=value||'';
  $('#smeMaterialForm').oninput=()=>{learningDraft.dirty=true;};$('#smeMaterialCancel').onclick=()=>{learningDraft=null;return learningOpenDetail(id);};
  $('#smeMaterialForm').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{
   if(workspace!==workspaceName('simple-edit'))throw Error('账号空间已变化，请重新打开。');const snap=await learningSnapshot(),current=snap.learningMaterials.find(m=>m.id===old.id);if(!cloudSame(current,old))throw Error('材料已在其他页面修改，请重新打开。');
   const text=$('#smeLao').value.trim();if(!text)throw Error('请填写老挝语原文。');
   const next={...current,textLao:text,translationZh:$('#smeZh').value,note:$('#smeMaterialNote').value,source:$('#smeMaterialSource').value,tags:learningTags($('#smeTags').value),...(current.analysisOwner?{contextMeaningSource:'context',contextDictionaryRef:''}:{}),updatedAt:Date.now()};
+  if(typeof syntaxHintApplyEdit==='function')syntaxHintApplyEdit(next,old);
   await learningWrite({learningMaterials:[next]},snap);learningDraft=null;learningBusy=false;await learningOpenDetail(id);
  }catch(error){$('#smeMaterialStatus').textContent=error.message;}finally{learningBusy=false;}};
 };
@@ -15246,7 +15276,8 @@ async function chapterListeningOpen(courseId='',tone=''){
   </div>
   <div class="cl-list-tools">
    <label class="study-filter-select"><select name="cl-kind" aria-label="词句类型"><option value="all">词和句</option><option value="word">只看单词</option><option value="sentence">只看句子</option></select></label>
-   <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="syntax">老挝语语序提示</option><option value="both">隐藏两种语言</option></select></label>
+   <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏两种语言</option></select></label>
+   <label><input type="checkbox" name="cl-syntax" ${typeof appPreference==='function'&&appPreference('showSyntaxHints')?'checked':''}>显示语序提示</label>
    <p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button>
   </div>
   <div data-cl-list class="cl-list"></div>
@@ -15310,13 +15341,14 @@ async function chapterListeningOpen(courseId='',tone=''){
   visible=catalog.filter(row=>(!chapters.size||chapters.has(row.courseId))&&(kind==='all'||row.itemKind===kind)&&[...row.flags].some(flag=>statuses.has(flag)));
   q('[data-cl-list]').innerHTML=visible.slice(0,limit).map((row,index)=>{
    const isRevealed=revealed.has(key(row));
-   const hideLao=!isRevealed&&(display==='lo'||display==='both'||display==='syntax'),hideChinese=!isRevealed&&(display==='zh'||display==='both');
-   const hint=!isRevealed&&display==='syntax'&&typeof syntaxHintForDisplay==='function'?syntaxHintForDisplay(row.material,row.word,row.meaning):null;
+   const hideLao=!isRevealed&&(display==='lo'||display==='both'),hideChinese=!isRevealed&&(display==='zh'||display==='both');
+   const hint=q('[name="cl-syntax"]').checked&&typeof syntaxHintForDisplay==='function'?syntaxHintForDisplay(row.material,row.word,row.meaning):null;
    return `<article class="cl-row" data-cl-row="${index}">
     ${selecting?`<input type="checkbox" data-cl-item aria-label="勾选第 ${index+1} 项" ${marked.has(key(row))?'checked':''}>`:''}
     <div class="cl-row-content">
      ${hideLao?'<span class="cl-answer-mask">老挝语已隐藏</span>':hideChinese?`<strong class="cl-lao" lang="lo">${h(row.word)}</strong>`:`<button type="button" data-cl-detail lang="lo">${h(row.word)}</button>`}
-     ${hideChinese?'<span class="cl-answer-mask">中文已隐藏</span>':`<p>${hint?.kind==='fallback'?'<small>自然译文 · 语序待核对</small> ':''}${h(hint?.zh||row.meaning)}</p>`}
+     ${hint&&!['fallback','fixed','word'].includes(hint.kind)?`<p class="cl-syntax-hint">${h(hint.zh)}</p>`:''}
+     ${hideChinese?'<span class="cl-answer-mask">中文已隐藏</span>':`<p>${h(row.meaning)}</p>`}
      ${display==='all'?'':`<button type="button" data-cl-reveal aria-expanded="${isRevealed}">${isRevealed?'收起答案':'揭晓答案'}</button>`}
      <small>${h(titles.get(row.courseId))}</small><small data-cl-unavailable ${unavailable.has(key(row))?'':'hidden'}>本机暂无录音</small>
     </div>
@@ -15376,6 +15408,7 @@ async function chapterListeningOpen(courseId='',tone=''){
   }
  };
  bar.onchange=event=>{
+  if(event.target.matches('[name="cl-syntax"]')){update();return;}
   if(event.target.matches('[name="cl-display"]')){
    revealed.clear();update();
    return;

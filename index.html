@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="886715130a076e21">
+  <meta name="lao-app-build" content="ab9be3fe0504a2d3">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5412,13 +5412,16 @@ function batchDialogueBlock(id,snap){
  if(!words.length)return null;
  return {id,title:block.title,words,recordedText:material.textLao};
 }
+function batchDialogueComparable(value){return value.normalize('NFC').replace(/[\s\p{P}]+/gu,'');}
 function batchDialogueAudioTexts(dialogue){
  const words=dialogue.words,text=words.map(w=>w.word).join('\n');
- const comparable=value=>value.normalize('NFC').replace(/[\s\p{P}]+/gu,'');
  const original=dialogue.recordedText;
- return [...new Set([...(original&&comparable(original)===comparable(text)?[original]:[]),text,lessonPageText(words)])];
+ return [...new Set([...(original&&batchDialogueComparable(original)===batchDialogueComparable(text)?[original]:[]),text,lessonPageText(words)])];
 }
-async function batchOpenSavedDialogue(id,{groupOnly=false,replaceDefaults=false,sourceKey=null}={}){
+function batchDialogueSourceSetting(id){
+ return workspaceName('dialogue-saved-source-v1')+':'+id;
+}
+async function batchOpenSavedDialogue(id,{groupOnly=false,replaceDefaults=false,sourceKey=null,allowOlder=false}={}){
  if(batchAudioBusy||recorder||learningHasWork())return;
  batchAudioBusy=true;
  try{
@@ -5428,17 +5431,31 @@ async function batchOpenSavedDialogue(id,{groupOnly=false,replaceDefaults=false,
   const content=block?{dialogues:[block],sentences:block.words}:snap?batchCourseContent(snap):(inventory=await batchFreshInventory()).content;
   const d=content.dialogues.find(group=>group.id===id);
   let full;
+  if(groupOnly&&!sourceKey&&typeof workspaceName==='function'){
+   try{sourceKey=localStorage.getItem(batchDialogueSourceSetting(id));}catch(_){}
+  }
   const texts=d?batchDialogueAudioTexts(d):[],savedText=sourceKey?JSON.parse(sourceKey)[1]:null;
+  if(allowOlder&&savedText&&savedText===d?.recordedText&&!texts.includes(savedText))texts.push(savedText);
   if(texts.includes(savedText)){
    texts.splice(texts.indexOf(savedText),1);texts.unshift(savedText);
   }
   for(const text of texts){
    const savedKey=savedText===text?sourceKey:null;
-   const blob=savedKey?await ttsCache('readonly',savedKey):await learningCachedSpeech(text);
+   const savedBlob=savedKey?await ttsCache('readonly',savedKey):null;
+   const blob=savedBlob||await learningCachedSpeech(text);
    if(!blob?.size)continue;
-   const key=savedKey||(typeof learningStoredDefaultKeys==='function'?(await learningStoredDefaultKeys(text))[0]:JSON.stringify([ttsSettings.endpoint||'',text]));
+   const key=savedBlob?savedKey:typeof learningStoredDefaultKeys==='function'?(await learningStoredDefaultKeys(text))[0]:JSON.stringify([ttsSettings.endpoint||'',text]);
    full={blob,key,words:d.words.map(w=>({...w,dialogueId:id})),fresh:true};
    break;
+  }
+  if(!full&&groupOnly&&d&&typeof readDefaultAudioCandidates==='function'){
+   const match=batchDialogueComparable(d.words.map(w=>w.word).join('\n'));
+   const candidates=await readDefaultAudioCandidates(text=>batchDialogueComparable(text)===match);
+   const rows=[...candidates.values()].flat();
+   if(rows.length){
+    const blob=await chooseDefaultAudio('',rows),key=rows.find(row=>row.blob===blob)?.key;
+    if(key)full={blob,key,words:d.words,fresh:true};
+   }
   }
   if(!full){
    inventory||=await batchFreshInventory();
@@ -5446,7 +5463,7 @@ async function batchOpenSavedDialogue(id,{groupOnly=false,replaceDefaults=false,
    full=state?.full||(!groupOnly?state?.savedBatch:null);
   }
   if(!d)throw Error('找不到本组对话的句子，请回到该小节重新打开音频管理。');
-  if(!full)throw Error('本机未找到与本组当前文字匹配的整段录音。若刚刚只试听了生成结果，请先点保存；若在别的设备保存，请先接收。');
+  if(!full)throw Object.assign(Error('本机未找到与本组当前文字匹配的整段录音。'),{code:'dialogue-source-missing',recordedText:d.recordedText});
   if(!full.words)throw Error('原音属于较大的批次，请从“恢复切分草稿”打开。');
   if(groupOnly&&(full.words.length!==d.words.length||full.words.some((w,i)=>w.id!==d.words[i].id||w.word!==d.words[i].word)))throw Error('这份原音属于包含其他对话的批次。请在批量发音里打开原批次，或先保存本组的整段默认发音。');
   let draft=null;try{draft=JSON.parse(localStorage.getItem(batchDraftKey+':'+full.key)||localStorage.getItem(batchDraftKey)||'null');}catch(_){}
@@ -7844,7 +7861,14 @@ async function saRegenerate(id){
    const save=async split=>{if(saving)return;saving=true;try{
     const fresh=await learningResolve(id),live=group?batchDialogueBlock(id,await learningSnapshot()):null;
     if(fresh.m.deleted||(group?(!live||JSON.stringify(live.words.map(row=>[row.id,row.word]))!==JSON.stringify(group.words.map(row=>[row.id,row.word]))||batchDialogueAudioTexts(live)[0]!==text):(fresh.w?.word||fresh.m.textLao)!==text))throw Error('文字已变化，未替换旧音频。');
-    await saReplaceDefault(text,blob,expected,key);learningRefreshAudioReview(fresh.m,text,true);if(split)savedSplitKey=sharedDefaultSpeechKey(text);resolve();
+    await saReplaceDefault(text,blob,expected,key);
+    if(group){
+     const source=sharedDefaultSpeechKey(text);
+     if(!(await ttsCache('readonly',source))?.size)throw Error('整段发音写入后未能读回，请留在这里重试保存。');
+     try{localStorage.setItem(batchDialogueSourceSetting(id),source);}catch(_){}
+     if(split)savedSplitKey=source;
+    }
+    learningRefreshAudioReview(fresh.m,text,true);resolve();
    }catch(e){dialog.querySelector('[role="status"]').textContent=e.message;saving=false;}};
    dialog.querySelector('[data-save]').onclick=()=>save(false);
    if(group)dialog.querySelector('[data-save-split]').onclick=()=>save(true);
@@ -7870,9 +7894,33 @@ learningOpenDetail=async function(id){
 </script>
 <script data-learning-bundle="dialogue-split">
 /* Split an already generated dialogue into its existing course rows. Never generates audio. */
-async function dialogueSplit(id,sourceKey=null){
+async function dialogueSplit(id,sourceKey=null,allowOlder=false){
  if(batchAudioBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音。');
- if(await batchOpenSavedDialogue(id,{groupOnly:true,replaceDefaults:true,sourceKey})&&!batchDialog.open)batchDialog.showModal();
+ if(await batchOpenSavedDialogue(id,{groupOnly:true,replaceDefaults:true,sourceKey,allowOlder})&&!batchDialog.open)batchDialog.showModal();
+}
+async function dialogueRecoverSavedSource(id,error){
+ if(error.code!=='dialogue-source-missing'||!error.recordedText)return false;
+ const keys=await learningStoredDefaultKeys(error.recordedText);
+ if(!keys.length)return false;
+ const dialog=document.createElement('dialog'),urls=[];
+ const heading=document.createElement('h2');heading.textContent='试听本组已保存的整段录音';
+ const note=document.createElement('p');note.textContent='找到整组详情下保存的录音。请先试听，确认它和当前小节的卡片顺序一致，再切分。';
+ dialog.append(heading,note);
+ for(const key of keys){
+  const blob=await ttsCache('readonly',key);if(!blob?.size)continue;
+  const row=document.createElement('p'),play=document.createElement('audio'),select=document.createElement('button');
+  const url=URL.createObjectURL(blob);urls.push(url);play.controls=true;play.src=url;
+  select.type='button';select.textContent='确认这份录音，打开切分';
+  select.onclick=async()=>{
+   dialog.close();
+   try{await dialogueSplit(id,key,true);}catch(e){alert(e.message);}
+  };
+  row.append(play,select);dialog.append(row);
+ }
+ if(!urls.length)return false;
+ const close=document.createElement('button');close.type='button';close.textContent='关闭';close.onclick=()=>dialog.close();
+ dialog.append(close);dialog.addEventListener('close',()=>{urls.forEach(url=>URL.revokeObjectURL(url));dialog.remove();},{once:true});
+ document.body.append(dialog);dialog.showModal();return true;
 }
 function dialogueSplitOptions(s){
  if(!s.pageMode)return;
@@ -7923,7 +7971,13 @@ function showDialogueSplitControl(dialog,id){
 }
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-dialogue-split]');if(!button)return;
- button.disabled=true;try{await dialogueSplit(button.dataset.dialogueSplit);}catch(error){alert(error.message);}finally{button.disabled=false;}
+ const id=button.dataset.dialogueSplit;
+ button.disabled=true;
+ try{await dialogueSplit(id);}
+ catch(error){
+  try{if(!await dialogueRecoverSavedSource(id,error))alert(error.message+' 可展开「管理已保存音频」核对整组录音，或在原保存设备上传后接收。');}
+  catch(recoveryError){alert(recoveryError.message);}
+ }finally{button.disabled=false;}
 });
 </script>
 <script data-learning-bundle="batch-regenerate">

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="9e13f33ad623a1a0">
+  <meta name="lao-app-build" content="ae854460a31a44de">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -568,7 +568,7 @@
         </details>
       </section>
       <section data-hanzi-dictionary class="panel" id="dictionaryPanel" aria-labelledby="list-title">
-        <div class="dictionary-header"><h2 id="list-title">我的词典</h2><details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="hanzi" aria-pressed="false">显示汉字拼读</button></div></details></div>
+        <div class="dictionary-header"><h2 id="list-title">我的词典</h2><details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="hanzi" aria-pressed="false">汉字拼读</button></div></details></div>
         <div class="filters"><div class="search-input-row"><input id="search" placeholder="搜索老挝语、IPA、中文、标签或备注" aria-label="搜索" /><button type="button" id="pasteSearchButton" class="mobile-paste">粘贴</button></div></div>
         <p id="searchPasteStatus" class="tag-hint" aria-live="polite"></p>
         <details class="dictionary-settings" id="dictionarySettings"><summary>筛选与显示设置</summary>
@@ -10666,7 +10666,7 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',showSyntaxHints:false,chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',showSyntaxHints:false,showHanziReading:false,chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
 const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
@@ -10702,7 +10702,7 @@ updateProfileUser=function(...args){const result=apPreviousUpdateProfile(...args
 function apOpenSettings(){try{apGuard();updateProfileUser();if(typeof appCloseMore==='function')appCloseMore();document.querySelector('#apSettingsStatus').textContent='';if(!apDialog.open){if(typeof window.laoResetSyncFeedback==='function'&&window.laoResetSyncFeedback())apSyncResult.hidden=true;apDialog.showModal();}apDialog.scrollTop=0;}catch(error){alert(error.message);}}
 accountButton.onclick=apOpenSettings;
 const apEntry=document.createElement('button');apEntry.type='button';apEntry.className='ap-more-entry';apEntry.textContent='⚙ 设置与个人中心';apEntry.onclick=apOpenSettings;if(typeof appMorePanel!=='undefined')appMorePanel.append(apEntry);
-apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(['selfTestDisplay','showSyntaxHints'].includes(key)&&typeof cfDecorate==='function')cfDecorate();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
+apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(['selfTestDisplay','showSyntaxHints','showHanziReading'].includes(key)&&typeof cfDecorate==='function')cfDecorate();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
 document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 let apTransition=false;
 apContent.addEventListener('click',async e=>{const section=e.target.closest('[data-ap-section]');if(section){document.querySelector('#'+section.dataset.apSection)?.scrollIntoView({block:'start',behavior:'smooth'});return;}const action=e.target.closest('[data-ap-action]');if(!action||apTransition)return;try{apGuard();apTransition=true;apDialog.close();if(action.dataset.apAction==='goals')await rrManage();}catch(error){if(!apDialog.open)apDialog.showModal();document.querySelector('#apSettingsStatus').textContent=error.message;}finally{apTransition=false;}});
@@ -10736,7 +10736,8 @@ apGroup('阅读与播放',[...apReadingRows,apChapterPlayback]);
 const apSelfTestDisplay=document.createElement('div');
 apSelfTestDisplay.className='ap-course-check';
 apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>'+
- '<label class="ap-switch-row"><span><strong>默认显示老挝语语序提示</strong></span><input type="checkbox" role="switch" data-ap-preference="showSyntaxHints"></label>';
+ '<label class="ap-switch-row"><span><strong>默认显示老挝语语序提示</strong></span><input type="checkbox" role="switch" data-ap-preference="showSyntaxHints"></label>'+
+ '<label class="ap-switch-row"><span><strong>默认显示汉字拼读</strong></span><input type="checkbox" role="switch" data-ap-preference="showHanziReading"></label>';
 apGroup('自测显示',[apSelfTestDisplay]);
 const courseCheckAudioPreference=document.createElement('label');
 courseCheckAudioPreference.className='ap-switch-row';
@@ -11809,7 +11810,7 @@ const cfValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row.favoriteFolder!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||row.id!==row.favoriteFolder.id||!cfFolderValid(row.favoriteFolder)))throw Error('收藏文件夹格式无效');if(row.favorite?.folder!==undefined&&(typeof row.favorite.folder!=='string'||row.favorite.folder.length>100))throw Error('收藏分类格式无效');return cfValidate(kind,row);};
 async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.length>60)throw Error('文件夹名称需为 1–60 个字');learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot();if(workspace!==fvWorkspace())throw Error('账号已变化');const id='folder:'+crypto.randomUUID(),row={...learningBlank(id,'knowledge','收藏文件夹'),favoriteFolder:{id,name},updatedAt:Date.now()};await learningWrite({learningMaterials:[row]},snap);await fvRefresh();return id;}finally{learningBusy=false;}}
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
-function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="syntax" aria-pressed="false">显示语序提示</button><button type="button" data-cf-mask="hanzi" aria-pressed="false">显示汉字拼读</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
+function cfMaskButtons(){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu cf-mask-grid"><button type="button" data-cf-mask="lo" aria-pressed="true">老挝语</button><button type="button" data-cf-mask="zh" aria-pressed="true">中文</button><button type="button" data-cf-mask="syntax" aria-pressed="false">语序提示</button><button type="button" data-cf-mask="hanzi" aria-pressed="false">汉字拼读</button></div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test,[data-hanzi-dictionary]')||b.closest('[data-page-key]')?.parentElement;}
 const cfTapeAttributes=new WeakMap();
 function cfRefreshTape(node,scope,language){
@@ -11847,14 +11848,9 @@ function cfMaskRefresh(scope,changedLanguage,roots){
  if(typeof hanziReadingRefresh==='function')hanziReadingRefresh(scope);
  if(roots)return;
  for(const n of scope.querySelectorAll('[data-cf-mask]')){
-  const mode=n.dataset.cfMask,active=scope.classList.contains(['syntax','hanzi'].includes(mode)?'cf-show-'+mode:'cf-hide-'+mode);
-  n.setAttribute('aria-pressed',String(active));
-  if(mode==='hanzi')n.textContent=active?'隐藏汉字拼读':'显示汉字拼读';
-  if(mode==='syntax')n.textContent=active?'隐藏语序提示':'显示语序提示';
-  if(['zh','lo'].includes(mode)){
-   const label=(active?'显示':'隐藏')+(mode==='zh'?'中文':'老挝语');
-   if(n.textContent!==label)n.textContent=label;
-  }
+  const mode=n.dataset.cfMask,language=mode==='zh'||mode==='lo';
+  const visible=language?!scope.classList.contains('cf-hide-'+mode):scope.classList.contains('cf-show-'+mode);
+  n.setAttribute('aria-pressed',String(visible));
  }
 }
 function cfMaskDefaults(scope,force=false){
@@ -11865,8 +11861,12 @@ function cfMaskDefaults(scope,force=false){
   scope.classList.toggle('cf-show-syntax',showSyntax);
   scope.dataset.cfSyntaxDefault=String(showSyntax);
  }
+ const showHanzi=typeof appPreference==='function'&&appPreference('showHanziReading')===true;
+ if(force||scope.dataset.cfMaskWorkspace!==key||scope.dataset.cfHanziDefault!==String(showHanzi)){
+  scope.classList.toggle('cf-show-hanzi',showHanzi);
+  scope.dataset.cfHanziDefault=String(showHanzi);
+ }
  if(!force&&scope.dataset.cfMaskWorkspace===key&&scope.dataset.cfMaskDefault===mode)return;
- if(scope.dataset.cfMaskWorkspace!==key)scope.classList.remove('cf-show-hanzi');
  scope.dataset.cfMaskWorkspace=key;
  scope.dataset.cfMaskDefault=mode;
  scope.classList.toggle('cf-hide-zh',mode==='zh'||mode==='both');
@@ -11876,15 +11876,12 @@ function cfMaskDefaults(scope,force=false){
 document.addEventListener('click',event=>{
  const button=event.target.closest('[data-cf-mask]'),scope=button&&cfMaskScope(button);
  if(!scope)return;
- const mode=button.dataset.cfMask;
- if(['syntax','hanzi'].includes(mode)){
-  scope.classList.toggle('cf-show-'+mode);
-  cfMaskRefresh(scope);button.closest('details').open=false;return;
+ const mode=button.dataset.cfMask,language=mode==='zh'||mode==='lo';
+ scope.classList.toggle((language?'cf-hide-':'cf-show-')+mode);
+ if(language){
+  for(const node of scope.querySelectorAll('[data-cf-revealed]'))if(node.dataset.cfTapeLanguage===mode)delete node.dataset.cfRevealed;
  }
- if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);
- const changed=mode==='reset'?undefined:mode;
- for(const node of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||node.dataset.cfTapeLanguage===changed)delete node.dataset.cfRevealed;
- cfMaskRefresh(scope,changed);button.closest('details').open=false;
+ cfMaskRefresh(scope,language?mode:undefined);
 });
 function cfToggleTape(event){
  const node=event.target.closest('.cf-tape-toggle');
@@ -11977,9 +11974,21 @@ function cfDictionaryRecordHtml(target){const h=learningEsc,icon=typeof lessonIc
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-record],[data-cf-regenerate],[data-dict-record]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(b.disabled||e.detail>1)return;b.disabled=true;void (b.dataset.dictRecord?cfRecord(b.dataset.dictRecord,{button:b,quick:true}):b.dataset.cfRecord?cfRecord(b.dataset.cfRecord,{button:b}):saRegenerate(b.dataset.cfRegenerate)).catch(error=>alert(error.message)).finally(()=>b.disabled=false);},true);
 function cfDecorate(){
  if(typeof ssDetailRenderGate!=='undefined'&&ssDetailRenderGate)return;
- for(const bar of document.querySelectorAll('[data-page-key]:not(.chapter-listening)')){if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons(typeof wordColorMenuButton==='function'?wordColorMenuButton(bar):''));if(!bar.parentElement.classList.contains('cf-self-test')){const content=bar.nextElementSibling,scope=document.createElement('section');scope.className='cf-self-test';bar.before(scope);scope.append(bar);if(content?.matches('.v2-section,.comm-detail'))scope.append(content);}}
+ for(const bar of document.querySelectorAll('[data-page-key]:not(.chapter-listening)')){
+  if(!bar.querySelector('.cf-mask-controls'))(bar.querySelector('.page-player-controls')||bar).insertAdjacentHTML('beforeend',cfMaskButtons());
+  const more=bar.querySelector('.page-player-more>div');
+  if(more&&!more.querySelector('[data-word-color-filter]')&&typeof wordColorMenuButton==='function'){
+   const controls=wordColorMenuButton(bar);
+   if(controls)more.insertAdjacentHTML('beforeend',controls);
+  }
+  if(!bar.parentElement.classList.contains('cf-self-test')){
+   const content=bar.nextElementSibling,scope=document.createElement('section');
+   scope.className='cf-self-test';bar.before(scope);scope.append(bar);
+   if(content?.matches('.v2-section,.comm-detail'))scope.append(content);
+  }
+ }
  for(const cell of document.querySelectorAll('.cf-self-test .v2-table-scroll td'))if(!cell.childElementCount){cell.classList.toggle('cf-table-lo',/[\u0e80-\u0eff]/u.test(cell.textContent));cell.classList.toggle('cf-table-zh',/[\u3400-\u9fff]/u.test(cell.textContent));}
- for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
+ for(const scope of document.querySelectorAll('.cf-self-test,[data-fv-list],[data-hanzi-dictionary]')){cfMaskDefaults(scope);cfMaskRefresh(scope);}
  for(const fold of document.querySelectorAll('.pa-segment-rules'))if(!fold.dataset.cfPreference){fold.dataset.cfPreference='true';fold.open=!!appPreference('expandPronunciation');}
 }
 function cfHasNewContent(records){
@@ -12023,14 +12032,18 @@ cfDecorate();
 .cf-tape{visibility:visible!important;background:#dbe7df!important;border-radius:5px;cursor:pointer!important;box-decoration-break:clone;-webkit-box-decoration-break:clone;outline-offset:3px}
 .cf-tape-toggle{cursor:pointer}
 .cf-tape-toggle:focus-visible{outline:2px solid #087e6d;outline-offset:3px}
-.cf-mask-controls button[aria-pressed="true"]{background:#deeee6;border-color:#078578}
 [data-fv-list] .lesson-page-player{position:static;display:block}[data-fv-list] select{max-width:100%;min-width:0}
 [data-fv-list] .fv-filters{align-items:end}[data-fv-list] .fv-item{gap:1rem}[data-fv-list] .fv-actions label{max-width:180px}
 @media(max-width:640px){.page-progress button{flex:1}.page-progress label{order:3;flex-basis:100%}.fv-item{display:block!important}.fv-actions{flex-wrap:wrap}}
 .cf-mask-controls{display:inline-block;position:relative;margin:0;flex:0 0 auto;font-size:13px;color:#537368}
 .cf-mask-controls>summary{cursor:pointer;list-style:none;padding:8px 4px;white-space:nowrap}.cf-mask-controls>summary::-webkit-details-marker{display:none}.cf-mask-controls>summary::after{content:'⌄';margin-left:6px}
 .cf-mask-menu{position:absolute;right:0;top:100%;z-index:100;min-width:150px;padding:6px;background:#fff;border:1px solid #d6e7df;border-radius:10px;box-shadow:0 6px 22px #143d3420;display:grid;gap:2px}
-.cf-mask-menu button,#learningPanel .cf-mask-menu button{width:100%;justify-content:flex-start;border:0;background:none;font-size:13px;padding:8px 10px;min-height:36px;margin:0;border-radius:6px;text-align:left}
+.cf-mask-menu button,#learningPanel .cf-mask-menu button{display:flex;align-items:center;gap:7px;width:100%;justify-content:flex-start;border:1px solid transparent;background:#f4f7f5;color:#506a5f;font-size:13px;padding:7px 9px;min-height:44px;margin:0;border-radius:7px;text-align:left;box-shadow:none}
+.cf-mask-menu button::before{content:'';flex:0 0 13px;width:13px;height:13px;box-sizing:border-box;border:1px solid #789487;border-radius:4px}
+.cf-mask-menu button[aria-pressed="true"],#learningPanel .cf-mask-menu button[aria-pressed="true"]{background:#e3f0e8;border-color:#c5ddd0;color:#165949}
+.cf-mask-menu button[aria-pressed="true"]::before{content:'✓';background:#137565;border-color:#137565;color:#fff;font-size:10px;line-height:11px;text-align:center}
+.cf-mask-menu button:focus-visible{outline:2px solid #087e6d;outline-offset:-2px}
+.cf-mask-menu.cf-mask-grid{grid-template-columns:repeat(2,minmax(0,1fr));min-width:224px;gap:4px}
 .page-progress{flex:1 0 100%;width:100%;min-width:0;margin:2px 0 0;gap:10px;flex-wrap:nowrap}
 .page-progress label{margin:0;min-width:0;font-size:12px;color:#698077;flex:1}.page-progress input{accent-color:#087e6d;cursor:pointer;height:18px;margin:3px 0 0}
 .page-progress button,#learningPanel .page-progress button{width:30px;min-width:30px;min-height:30px;height:30px;padding:0;flex:0 0 30px;font-size:24px;border:0;background:transparent;color:#087e6d;border-radius:6px}
@@ -13422,6 +13435,7 @@ function ccFastContext(queue,course,direction,snap){
 #learningPanel .mle-lesson .lesson-page-player .page-player-more select{flex:0 0 94px;width:94px;min-width:94px;max-width:94px;height:36px;min-height:36px;margin:0;font-size:12px}
 #learningPanel .mle-lesson .lesson-page-player .page-player-more input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0}
 #learningPanel .mle-lesson .lesson-page-player .page-player-more>div>button{min-height:40px;width:100%;padding:8px 10px!important;font-size:12px!important;border:0;border-radius:8px;background:#edf4ee;justify-content:center}
+#learningPanel .mle-lesson .lesson-page-player .cf-mask-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 #learningPanel .mle-lesson .lesson-page-player .cf-mask-menu button{width:100%;min-width:0;min-height:40px;padding:8px 10px!important;font-size:12px!important;white-space:normal}
 </style>
 <script data-navigation-fast="navigation-fast.js">
@@ -14950,7 +14964,7 @@ let wordColorClearing = false;
 function wordColorMenuButton(bar){
  const content=bar.closest('#learningContent');
  if(!content||learningRoute!=='lesson'||!content.querySelector('[data-word-color-target]'))return '';
- return '<label class="word-color-filter"><span>按熟悉度看卡片</span><span class="study-filter-select"><select data-word-color-filter><option value="">全部卡片</option>'+
+ return '<label class="word-color-filter"><span>卡片熟悉度</span><span class="study-filter-select"><select data-word-color-filter><option value="">全部卡片</option>'+
   ['yellow','pink','lilac','mint'].map(tone=>'<option value="'+tone+'">'+wordColorOptions[tone]+'</option>').join('')+'</select></span></label><button type="button" data-word-color-clear>清除全部颜色</button><span class="word-color-clear-status" role="status"></span>';
 }
 
@@ -15406,7 +15420,7 @@ async function chapterListeningOpen(courseId='',tone=''){
    <label class="study-filter-select"><select name="cl-kind" aria-label="词句类型"><option value="all">词和句</option><option value="word">只看单词</option><option value="sentence">只看句子</option></select></label>
    <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏两种语言</option></select></label>
    <label><input type="checkbox" name="cl-syntax" ${typeof appPreference==='function'&&appPreference('showSyntaxHints')?'checked':''}>显示语序提示</label>
-   <label><input type="checkbox" name="cl-hanzi">显示汉字拼读</label>
+   <label><input type="checkbox" name="cl-hanzi" ${typeof appPreference==='function'&&appPreference('showHanziReading')?'checked':''}>显示汉字拼读</label>
    <p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button>
   </div>
   <div data-cl-list class="cl-list"></div>

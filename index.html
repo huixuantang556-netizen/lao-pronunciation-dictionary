@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ecf34c5b0730b13d">
+  <meta name="lao-app-build" content="9e13f33ad623a1a0">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1923,6 +1923,7 @@ function cloudDownloadDecision(local,remote){return remote?(cloudSame(local,remo
 function cloudKnownRows(uid,table,base,revisions={}){
  const out=new Map(),learning=table==='lao_learning_records';
  for(const [key,b] of Object.entries(base||{})){const at=key.indexOf(':'),revision=learning?revisions[key]:b?.revision,value=learning?b:b?.value;if(at<0||!value||!Number.isSafeInteger(revision)||revision<1)continue;
+  if(learning&&typeof hanziSyncIsRecord==='function'&&hanziSyncIsRecord(key.slice(0,at),key.slice(at+1)))continue;
   out.set(key,{owner_id:uid,record_kind:key.slice(0,at),record_id:key.slice(at+1),revision,payload:value.payload,...(!learning?{deleted:!!value.deleted}:{})});
  }return out;
 }
@@ -1943,7 +1944,7 @@ async function cloudReadRemote(uid,api,table,known,status){
   let index;if(capabilities.get(table)===false)index=await restIndex();else try{index=await api('/rest/v1/rpc/lao_sync_index_v1',{method:'POST',body:{target_table:table}});capabilities.set(table,true);}catch(error){if(!cloudReadFallback(error))throw error;status('云端查询接口暂不可用，正在改用分页读取…');capabilities.set(table,false);index=await restIndex();}
   if(!Array.isArray(index)||index.length>100000)throw Error('云端版本索引无效或过大。');
   const out=new Map(),changed=[],seen=new Set();
-  for(const row of index){const key=identity(row);if(seen.has(key))throw Error('云端版本索引有重复编号。');seen.add(key);const cached=known.get(key);if(cached&&cached.revision===row.revision){validate(cached);out.set(key,cached);}else changed.push(row);}
+  for(const row of index){const key=identity(row);if(learning&&typeof hanziSyncIsRecord==='function'&&hanziSyncIsRecord(row.record_kind,row.record_id))continue;if(seen.has(key))throw Error('云端版本索引有重复编号。');seen.add(key);const cached=known.get(key);if(cached&&cached.revision===row.revision){validate(cached);out.set(key,cached);}else changed.push(row);}
   for(const key of known.keys())if(!seen.has(key))throw Error('云端缺少以前同步过的记录，已停止，避免误删。');
   const batches=[];for(let i=0;i<changed.length;i+=100)batches.push(changed.slice(i,i+100));let done=0;
   status('云端有 '+changed.length+' 项变化，其余 '+out.size+' 项复用上次版本',{done,total:changed.length});
@@ -2405,7 +2406,7 @@ async function cloudReadRemote(uid,api,table,known,status){
         if(busy)throw Error('正在同步，请等待结束');if(!session||session.user.id!==cloudWorkspace)throw Error('请先登录并进入账号词典');
         busy=true;updateUI();beginProgress();
         try{const uid=session.user.id,api=(path,options={})=>syncRequest(uid,path,options);return await qaWithManualSync(uid,async()=>{
-          const hints=typeof syntaxSyncReceive==='function'?await syntaxSyncReceive(uid,api,status):null;
+          const hints=typeof hintSyncPending==='function'?await hintSyncPending(uid,api,status,'receive'):null;
           return hints||qiReceive(uid,api,status);
         });}
         catch(e){status('接收未完成：'+e.message+'。已保存的录音保留，可以重试；本次没有上传。');throw e;}
@@ -2416,7 +2417,7 @@ async function cloudReadRemote(uid,api,table,known,status){
         if(!session||session.user.id!==cloudWorkspace)throw Error('请先登录并进入此账号词典');
         busy=true;updateUI();beginProgress();
         try{const uid=session.user.id,api=(path,options={})=>syncRequest(uid,path,options);return await qaWithManualSync(uid,async()=>{
-          const hints=typeof syntaxSyncUpload==='function'?await syntaxSyncUpload(uid,api,status):null;
+          const hints=typeof hintSyncPending==='function'?await hintSyncPending(uid,api,status,'upload'):null;
           return hints||qaFlushPending(uid,api,status);
         });}
         catch(error){status('本机更新未全部上传：'+error.message+'。待传任务保留；没有执行整库同步。');throw error;}
@@ -3953,6 +3954,7 @@ async function learningCloudSync(uid,api,status,options={}){
   const localTotal=learningStores.reduce((n,k)=>n+snap[k].length,0);let prepared=0;
   const d=await openDB(),saved=await new Promise((resolve,reject)=>{const t=d.transaction('cloud_meta','readonly'),s=t.objectStore('cloud_meta'),r=s.get('learningCheckpoint'),v=s.get('learningServerRevisions');t.oncomplete=()=>resolve({base:r.result||{},revisions:v.result||{}});t.onabort=()=>reject(t.error);}),base=saved.base;
   for(const kind of learningStores)for(const row of snap[kind]){
+   if(typeof hanziSyncIsRecord==='function'&&hanziSyncIsRecord(kind,row.id)){prepared++;continue;}
    if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(kind,row,uid)){privateLocal.push(row);prepared++;continue;}
    status('正在检查本机学习资料与音频',{done:prepared,total:localTotal});
    if(prepared%50===0)await new Promise(resolve=>setTimeout(resolve,0));
@@ -11644,7 +11646,7 @@ function hanziReadingImport(pack,key){
  localStorage.setItem(key,JSON.stringify({format:pack.format,syllables:pack.syllables,rows:pack.rows}));
  hanziReadingCache=null;
  for(const scope of document.querySelectorAll('.cf-show-hanzi'))hanziReadingRefresh(scope);
- return '已导入 '+pack.rows.length+' 条词句拼读。在「自测显示」中打开「显示汉字拼读」。';
+ return '已导入 '+pack.rows.length+' 条词句拼读。在「自测显示」中打开「显示汉字拼读」。同账号的其他设备可通过「上传更新」与「接收更新」取得资料。';
 }
 function hanziReadingMount(){
  const host=document.querySelector('#apDataActions');
@@ -11666,20 +11668,34 @@ function hanziReadingMount(){
 if(typeof document!=='undefined')hanziReadingMount();
 </script>
 <script data-syntax-hint-sync>
-/* Sync imported prompts through the account's existing revisioned learning records. */
-const syntaxSyncTable='lao_learning_records',syntaxSyncManifest='syntax-hints-v1:manifest';
-const syntaxSyncChunkSize=56000,syntaxSyncMaxChunks=32;
-function syntaxSyncKeys(uid){
- if(uid!==cloudWorkspace)throw Error('账号已切换，请重新同步语序提示。');
- return {data:workspaceName('lao-syntax-hints-v1'),receipt:workspaceName('lao-syntax-hints-cloud-v1')};
+/* Account-scoped hint packs share the revisioned learning-record transport. */
+const hintSyncTable='lao_learning_records',hintSyncChunkSize=56000,hintSyncMaxChunks=32;
+const syntaxSyncPack={
+ prefix:'syntax-hints-v1',storage:'lao-syntax-hints-v1',receipt:'lao-syntax-hints-cloud-v1',
+ label:'语序提示',field:'syntaxHintSync',count:raw=>syntaxSyncParse(raw).length,refresh:()=>{syntaxHintImported=null;}
+};
+const hanziSyncPack={
+ prefix:'hanzi-reading-v1',storage:'lao-hanzi-reading-v1',receipt:'lao-hanzi-reading-cloud-v1',
+ label:'汉字拼读',field:'hanziReadingSync',count:raw=>hanziReadingValidate(JSON.parse(raw)).rows.length,
+ refresh:()=>{
+  hanziReadingCache=null;
+  for(const scope of document.querySelectorAll('.cf-show-hanzi'))hanziReadingRefresh(scope);
+ }
+};
+function hanziSyncIsRecord(kind,id){
+ return kind==='learningMaterials'&&typeof id==='string'&&id.startsWith(hanziSyncPack.prefix+':');
 }
-function syntaxSyncChunkId(digest,index){return 'syntax-hints-v1:'+digest+':'+index;}
-function syntaxSyncRead(uid,api,id){return qaReadRemote(uid,api,{table:syntaxSyncTable,kind:'learningMaterials',id});}
-function syntaxSyncManifestData(row){
+function hintSyncKeys(pack,uid){
+ if(uid!==cloudWorkspace)throw Error('账号已切换，请重新同步'+pack.label+'。');
+ return {data:workspaceName(pack.storage),receipt:workspaceName(pack.receipt)};
+}
+function hintSyncChunkId(pack,digest,index){return pack.prefix+':'+digest+':'+index;}
+function hintSyncRead(uid,api,id){return qaReadRemote(uid,api,{table:hintSyncTable,kind:'learningMaterials',id});}
+function hintSyncManifestData(pack,row){
  if(!row)return null;
- const data=row.payload?.syntaxHintSync;
- if(!data||data.version!==1||!(/^[a-f0-9]{64}$/u.test(data.digest))||
-  !Number.isInteger(data.chunks)||data.chunks<1||data.chunks>syntaxSyncMaxChunks)throw Error('云端语序提示索引无效，本机提示保留。');
+ const data=row.payload?.[pack.field];
+ if(row.payload?.id!==row.record_id||!data||data.version!==1||typeof data.digest!=='string'||!(/^[a-f0-9]{64}$/u.test(data.digest))||
+  !Number.isInteger(data.chunks)||data.chunks<1||data.chunks>hintSyncMaxChunks)throw Error('云端'+pack.label+'索引无效，本机资料保留。');
  return data;
 }
 function syntaxSyncParse(raw){
@@ -11696,75 +11712,93 @@ function syntaxSyncParse(raw){
  }
  return rows;
 }
-function syntaxSyncRow(id,data,revision=null){
- return {kind:'learningMaterials',id,revision,payload:{...learningBlank(id,'knowledge','老挝语语序提示'),updatedAt:0,syntaxHintSync:data}};
+function hintSyncRow(pack,id,data,revision=null){
+ return {kind:'learningMaterials',id,revision,payload:{...learningBlank(id,'knowledge','老挝语'+pack.label),updatedAt:0,[pack.field]:data}};
 }
-async function syntaxSyncUpload(uid,api,status){
- const keys=syntaxSyncKeys(uid),raw=localStorage.getItem(keys.data);
+async function hintSyncUpload(pack,uid,api,status){
+ const keys=hintSyncKeys(pack,uid),raw=localStorage.getItem(keys.data);
  if(!raw)return null;
  const digest=await cloudHash(new Blob([raw])),receipt=localStorage.getItem(keys.receipt);
+ hintSyncKeys(pack,uid);
  if(digest===receipt)return null;
- const rows=syntaxSyncParse(raw);
- const parts=[];
+ const count=pack.count(raw),parts=[];
  for(let start=0;start<raw.length;){
-  let end=Math.min(start+syntaxSyncChunkSize,raw.length);
+  let end=Math.min(start+hintSyncChunkSize,raw.length);
   if(end<raw.length&&/[\ud800-\udbff]/u.test(raw[end-1]))end--;
   parts.push(raw.slice(start,end));start=end;
  }
  const chunks=parts.length;
- if(chunks>syntaxSyncMaxChunks)throw Error('本机语序提示资料过大，无法同步。');
- status('正在核对账号里的语序提示…');
- const remote=await syntaxSyncRead(uid,api,syntaxSyncManifest),prior=syntaxSyncManifestData(remote);
- syntaxSyncKeys(uid);
+ if(chunks>hintSyncMaxChunks)throw Error('本机'+pack.label+'资料过大，无法同步。');
+ status('正在核对账号里的'+pack.label+'…');
+ const id=pack.prefix+':manifest',remote=await hintSyncRead(uid,api,id),prior=hintSyncManifestData(pack,remote);
+ hintSyncKeys(pack,uid);
  if(prior?.digest!==digest){
-  if(prior&&prior.digest!==receipt&&!confirm('云端已有另一份语序提示。用本机这份作为两端共用版本？旧云端文件与本机词条、录音都会保留。')){
-   status('已取消上传语序提示，本机和云端资料保留。');return {cancelled:true};
+  if(prior&&prior.digest!==receipt&&!confirm('云端已有另一份'+pack.label+'。要用本机这份作为两端共用版本吗？')){
+   status('已取消上传'+pack.label+'。');return {cancelled:true};
   }
   const changes=[];
-  for(let index=0;index<chunks;index++){
-   const id=syntaxSyncChunkId(digest,index),data={version:1,digest,index,text:parts[index]};
-   const part=await syntaxSyncRead(uid,api,id);syntaxSyncKeys(uid);
-   if(part){if(!cloudSame(part.payload?.syntaxHintSync,data))throw Error('云端语序提示分段校验失败。');}
-   else changes.push(syntaxSyncRow(id,data));
-  }
-  if(localStorage.getItem(keys.data)!==raw)throw Error('本机刚导入了其他提示，请重新上传。');
-  await cloudBatchWrite(uid,api,syntaxSyncTable,changes,status);
-  syntaxSyncKeys(uid);
-  const manifest=syntaxSyncRow(syntaxSyncManifest,{version:1,digest,chunks},remote?.revision??null);
-  await cloudBatchWrite(uid,api,syntaxSyncTable,[manifest],status);
+  await cloudSyncPool(parts.map((text,index)=>({text,index})),3,async({text,index})=>{
+   const chunkId=hintSyncChunkId(pack,digest,index),data={version:1,digest,index,text};
+   const part=await hintSyncRead(uid,api,chunkId);hintSyncKeys(pack,uid);
+   if(part){
+    if(part.payload?.id!==chunkId||!cloudSame(part.payload?.[pack.field],data))throw Error('云端'+pack.label+'分段校验失败。');
+   }else changes.push(hintSyncRow(pack,chunkId,data));
+  });
+  if(localStorage.getItem(keys.data)!==raw)throw Error('本机刚导入了其他'+pack.label+'，请重新上传。');
+  await cloudBatchWrite(uid,api,hintSyncTable,changes,status);
+  hintSyncKeys(pack,uid);
+  if(localStorage.getItem(keys.data)!==raw)throw Error('本机刚导入了其他'+pack.label+'，请重新上传。');
+  await cloudBatchWrite(uid,api,hintSyncTable,[hintSyncRow(pack,id,{version:1,digest,chunks},remote?.revision??null)],status);
  }
- syntaxSyncKeys(uid);
- if(localStorage.getItem(keys.data)===raw)localStorage.setItem(keys.receipt,digest);
- status('已上传 '+rows.length+' 条老挝语语序提示。其他设备登录同一账号后点「接收更新」。');
- return {done:rows.length};
+ hintSyncKeys(pack,uid);
+ if(localStorage.getItem(keys.data)!==raw)throw Error('本机刚导入了其他'+pack.label+'，请重新上传。');
+ localStorage.setItem(keys.receipt,digest);
+ return {label:pack.label,count};
 }
-async function syntaxSyncReceive(uid,api,status){
- const keys=syntaxSyncKeys(uid),local=localStorage.getItem(keys.data),receipt=localStorage.getItem(keys.receipt);
- const manifest=syntaxSyncManifestData(await syntaxSyncRead(uid,api,syntaxSyncManifest));
- if(!manifest)return null;
- syntaxSyncKeys(uid);
- if(receipt===manifest.digest&&local)return null;
+async function hintSyncReceive(pack,uid,api,status){
+ const keys=hintSyncKeys(pack,uid),local=localStorage.getItem(keys.data),receipt=localStorage.getItem(keys.receipt);
+ const manifest=hintSyncManifestData(pack,await hintSyncRead(uid,api,pack.prefix+':manifest'));
+ hintSyncKeys(pack,uid);
+ if(!manifest||(receipt===manifest.digest&&local))return null;
  const localDigest=local&&await cloudHash(new Blob([local]));
- if(localDigest===manifest.digest){syntaxSyncKeys(uid);if(localStorage.getItem(keys.data)===local)localStorage.setItem(keys.receipt,manifest.digest);return null;}
- if(local&&localDigest!==receipt&&!confirm('本机有尚未上传的语序提示。要用云端版本替换本机提示吗？选择取消可保留本机版本。')){
-  status('已取消接收语序提示，本机资料保留。');return {cancelled:true};
+ hintSyncKeys(pack,uid);
+ if(localStorage.getItem(keys.data)!==local)throw Error('本机'+pack.label+'刚有修改，请重新接收。');
+ if(localDigest===manifest.digest){localStorage.setItem(keys.receipt,manifest.digest);return null;}
+ if(local&&localDigest!==receipt&&!confirm('本机有尚未上传的'+pack.label+'。要用云端版本替换这份提示吗？')){
+  status('已取消接收'+pack.label+'。');return {cancelled:true};
  }
- status('正在接收语序提示…');
- const parts=[];
- for(let index=0;index<manifest.chunks;index++){
-  const record=await syntaxSyncRead(uid,api,syntaxSyncChunkId(manifest.digest,index)),data=record?.payload?.syntaxHintSync;
-  syntaxSyncKeys(uid);
-  if(!data||data.version!==1||data.digest!==manifest.digest||data.index!==index||typeof data.text!=='string'||data.text.length>syntaxSyncChunkSize)throw Error('云端语序提示尚未完整接收，请重试。');
-  parts.push(data.text);
- }
+ status('正在接收'+pack.label+'…');
+ const parts=new Array(manifest.chunks);
+ await cloudSyncPool(Array.from({length:manifest.chunks},(_,index)=>index),3,async index=>{
+  const id=hintSyncChunkId(pack,manifest.digest,index);
+  const record=await hintSyncRead(uid,api,id),data=record?.payload?.[pack.field];
+  hintSyncKeys(pack,uid);
+  if(record?.payload?.id!==id||!data||data.version!==1||data.digest!==manifest.digest||data.index!==index||
+   typeof data.text!=='string'||!data.text.length||data.text.length>hintSyncChunkSize)throw Error('云端'+pack.label+'尚未完整接收，请重试。');
+  parts[index]=data.text;
+ });
  const raw=parts.join('');
- if(await cloudHash(new Blob([raw]))!==manifest.digest)throw Error('云端语序提示校验失败，本机资料保留。');
- const rows=syntaxSyncParse(raw);
- syntaxSyncKeys(uid);
- if(localStorage.getItem(keys.data)!==local)throw Error('本机提示刚有修改，请重新接收。');
- localStorage.setItem(keys.data,raw);localStorage.setItem(keys.receipt,manifest.digest);syntaxHintImported=null;
- status('已接收 '+rows.length+' 条老挝语语序提示。重新打开课程即可使用。');
- return {received:rows.length};
+ if(await cloudHash(new Blob([raw]))!==manifest.digest)throw Error('云端'+pack.label+'校验失败，本机资料保留。');
+ const count=pack.count(raw);
+ hintSyncKeys(pack,uid);
+ if(localStorage.getItem(keys.data)!==local)throw Error('本机'+pack.label+'刚有修改，请重新接收。');
+ localStorage.setItem(keys.data,raw);pack.refresh();localStorage.setItem(keys.receipt,manifest.digest);
+ return {label:pack.label,count};
+}
+async function hintSyncPending(uid,api,status,direction){
+ const upload=direction==='upload',sync=upload?hintSyncUpload:hintSyncReceive;
+ const completed=[];
+ for(const pack of [hanziSyncPack,syntaxSyncPack]){
+  const result=await sync(pack,uid,api,status);
+  if(result?.cancelled)return result;
+  if(result)completed.push(result);
+ }
+ if(!completed.length)return null;
+ const count=completed.reduce((total,item)=>total+item.count,0);
+ const summary=completed.map(item=>item.label+' '+item.count+' 条').join('、');
+ status(upload?'已上传'+summary+'。其他设备登录同一账号后点「接收更新」。如还有其他本机修改，可再点一次上传。':
+   '已接收'+summary+'。打开「自测显示」即可使用。如还有词条或录音更新，可再点一次接收。');
+ return upload?{done:count}:{received:count};
 }
 </script>
 <script data-learning-bundle="study-comfort">
@@ -12798,6 +12832,7 @@ async function qaLocalUpdateJobs(uid,meta,pending){
  const cards=[];
  for(const kind of ['learningMaterials','learningPlacements'])for(const row of snap[kind]){
   const key=kind+':'+row.id;
+  if(typeof hanziSyncIsRecord==='function'&&hanziSyncIsRecord(kind,row.id))continue;
   if(typeof pxIsForeignProfile==='function'&&pxIsForeignProfile(kind,row,uid))continue;
   if(pendingKeys.has(key)||cloudSame(meta.learningCheckpoint[key]?.payload,JSON.parse(JSON.stringify(row))))continue;
   const deps=[];

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ab9be3fe0504a2d3">
+  <meta name="lao-app-build" content="74346ce80317ab70">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -3230,10 +3230,13 @@ function learningCurrentAudioReference(ref,text){
 }
 function learningStudyCardHtml(m,w,options={}){
  const h=learningEsc,id=h(m.id),multi=!!options.multi,focused=!!(w?.needsExtraPractice||m.focused),icon=name=>typeof lessonIcon==='function'?lessonIcon(name):({play:'▶',mic:'🎙',more:'⋯'}[name]);
+ const text=options.text??w?.word??m.textLao,meaning=options.meaning??w?.meaning??m.translationZh??'';
+ const hint=typeof syntaxHintForDisplay==='function'?syntaxHintForDisplay(m,text,meaning):null;
+ const hintHtml=hint?syntaxHintHtml(hint,h):'';
  const needsAudioReview=learningAudioReviewState(m,w?.word||m.textLao).needsReview;
  const selection=multi?'<div class="learn-select-row"><label><input type="checkbox" data-learn="select-card" data-id="'+id+'" '+(learningSelected.has(m.id)?'checked':'')+'> 勾选</label><button type="button" class="learn-drag-handle" data-drag-id="'+id+'" aria-label="拖动排序">⠿</button></div>':'';
  const management=learningSettings?(w?'<button data-learn="edit-word" data-word="'+w.id+'">修改</button>':'<button data-learn="edit-material" data-id="'+id+'">修改</button>')+'<button data-learn="focus" data-id="'+id+'" aria-label="标记重点" aria-pressed="'+focused+'">'+(focused?'★':'☆')+'</button>':'';
- return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+(options.text??w?.word??m.textLao))+'</strong><span>'+h(options.meaning??w?.meaning??m.translationZh??'')+'</span></button>'+(needsAudioReview?'<small data-audio-review-notice="'+h(w?.word||m.textLao)+'">文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
+ return '<article class="learn-card'+(multi?' learn-selectable':'')+'" data-card-id="'+id+'"'+(options.dialogue&&!multi?' data-dialogue-card':'')+(typeof wordColorCardAttributes==='function'?wordColorCardAttributes(m,w,options):'')+' data-audio-review="'+needsAudioReview+'" data-card-group="'+h(options.group||'all')+'">'+selection+'<button class="learn-card-main" data-learn="'+(multi?'select-card':'play-card')+'" data-id="'+id+'"><strong lang="lo">'+h((options.speaker?options.speaker+'：':'')+text)+'</strong><span class="learn-card-translation">'+h(meaning)+'</span>'+hintHtml+'</button>'+(needsAudioReview?'<small data-audio-review-notice="'+h(w?.word||m.textLao)+'">文字已修改，发音需核对</small>':'')+(multi?'':'<div class="learn-card-actions">'+management+'<button data-learn="play" data-id="'+id+'" aria-label="播放" title="播放">'+icon('play')+'</button><button data-learn="record-card-reference" data-id="'+id+'" aria-label="录制参考发音" title="录制参考发音">'+icon('mic')+'</button><button data-learn="detail" data-id="'+id+'" aria-label="音频与详情" title="音频与详情">'+icon('more')+'</button>'+(options.dialogue?'<button type="button" class="learn-card-play-area" data-learn="play" data-id="'+id+'" tabindex="-1" aria-hidden="true"></button>':'')+'</div>')+'</article>';
 }
 function learningLegacySectionHtml(rows,words,title,key,empty,mobilePlan){
  const h=learningEsc,linked=new Map();for(const word of words)for(const ref of syncKeys(word))if(!linked.has(ref))linked.set(ref,word);
@@ -10645,7 +10648,7 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
 const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
-const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
+const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both','syntax'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,key==='courseCheckDirection'&&saved?.[key]==='dictation'?'audio':saved?.[key])]));}
@@ -10713,7 +10716,7 @@ apChapterPlayback.innerHTML='<h4>整章朗读默认设置</h4><label>播放倍�
 apGroup('阅读与播放',[...apReadingRows,apChapterPlayback]);
 const apSelfTestDisplay=document.createElement('div');
 apSelfTestDisplay.className='ap-course-check';
-apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>';
+apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="syntax">老挝语语序提示</option><option value="both">隐藏中文和老挝语</option></select></label>';
 apGroup('自测显示',[apSelfTestDisplay]);
 const courseCheckAudioPreference=document.createElement('label');
 courseCheckAudioPreference.className='ap-switch-row';
@@ -10723,7 +10726,6 @@ apGroup('每日清单与自由练习',[apPracticeDefaults,adaptivePreference]);
 apGroup('听音辨词自动播放',[apListeningAuto]);
 for(const n of [document.querySelector('#apResetPreferences'),document.querySelector('#apPreferenceStatus')])apPrefs.append(n);
 apRefreshSettings();
-
 </script>
 <style data-learning-bundle="app-settings">
 #personalCenter.ap-settings{width:min(960px,calc(100vw - 32px));max-width:960px;max-height:90dvh;padding:0 28px 24px;box-sizing:border-box;background:#f6f9f5;border-radius:22px;overflow:auto}#personalCenter .ap-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0 14px;background:#f6f9f5}#personalCenter .ap-header h2{font-size:25px;margin:0}#personalCenter .ap-header button{float:none;min-width:44px;min-height:44px;margin:0}#personalCenter .ap-intro{font-size:13px;color:#708279;margin:0 0 16px;line-height:1.7}#personalCenter .ap-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}#personalCenter .ap-wide,#personalCenter .ap-sections,#apSettingsStatus{grid-column:1/-1}#personalCenter .ap-sections{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 2px}#personalCenter .ap-sections button{font-size:13px;min-height:44px;padding:8px 18px;border-radius:24px;background:#e9f2eb;border:0;color:#3e6b59}#personalCenter .ap-card{min-width:0;scroll-margin-top:86px;background:#fff;border:1px solid #dce7dd;border-radius:16px;padding:20px}#personalCenter .ap-card h3{font-size:17px;margin:0 0 14px;color:#234c40}#personalCenter .ap-card h3:not(:first-child){margin-top:24px}#personalCenter .ap-note{font-size:12px;color:#6d7e72;line-height:1.8;overflow-wrap:anywhere;margin:12px 0 0}#personalCenter .ap-account-identity p{font-size:17px;margin:0 0 8px;overflow-wrap:anywhere;color:#275848}#personalCenter .ap-card details{margin-top:14px;padding-top:12px;border-top:1px solid #e7eee7}#personalCenter .ap-card summary{font-size:14px;line-height:1.7;min-height:40px;color:#335f4e;cursor:pointer}#personalCenter .ap-card p,#personalCenter .ap-card label{max-width:100%;overflow-wrap:anywhere}#personalCenter .ap-card button{min-height:44px}#personalCenter .ap-card input:not([type=checkbox]),#personalCenter .ap-card select{max-width:100%;box-sizing:border-box;font-size:16px}#personalCenter .ap-switch-row{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0;padding:14px 0;border-bottom:1px solid #e8eee7}#personalCenter .ap-switch-row span{min-width:0}#personalCenter .ap-switch-row strong{display:block;font-size:15px;font-weight:550;line-height:1.6}#personalCenter .ap-switch-row small{display:block;font-size:12px;color:#758378;line-height:1.7;margin-top:5px}#personalCenter .ap-switch-row input{appearance:auto;-webkit-appearance:checkbox;width:22px;height:22px;min-height:22px;flex:0 0 22px;margin:0;accent-color:#087f70;cursor:pointer}#personalCenter .ap-secondary{margin-top:14px;font-size:12px;padding:8px 10px;background:#f5f8f3;color:#587363;border-color:#dce7dd}#personalCenter .ap-link-row{display:flex;width:100%;justify-content:space-between;align-items:center;gap:16px;text-align:left;border:0;background:#edf5ef;padding:14px;border-radius:12px}#personalCenter .ap-link-row strong{display:block;font-size:14px;font-weight:550}#personalCenter .ap-link-row small{display:block;font-size:12px;line-height:1.7;color:#6d8072;margin-top:6px}#personalCenter .ap-data-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}#personalCenter .ap-data-actions button{font-size:14px;padding:10px 14px;background:#f4f8f2;color:#305c48;border-color:#c9ddce}#personalCenter #avatarChoices button{min-width:44px;min-height:44px;font-size:25px}#personalCenter #avatarSection h3{display:none}#personalCenter #apPreferenceStatus,#personalCenter #apSettingsStatus{font-size:13px;color:#087f70;line-height:1.8;white-space:pre-wrap}#personalCenter #apCompatibility{font-size:12px}#personalCenter [hidden]{display:none!important}.ap-more-entry{display:block;width:100%;margin-top:12px;text-align:left;font-size:14px;min-height:44px}#personalCenter .ap-card #cloudAccountPanel{margin-top:8px}#personalCenter .ap-card #cloudAccountPanel button{font-size:13px;padding:8px 11px}#personalCenter #cloudAccountPanel .cloud-actions{flex-wrap:wrap}
@@ -11348,6 +11350,196 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!fvBusy&&
 .fv-button{display:inline-flex!important;align-items:center;justify-content:center;box-sizing:border-box;width:36px!important;height:36px;min-width:36px!important;max-width:36px;flex:0 0 36px;padding:0!important;font-size:21px!important;line-height:1;margin:0}
 .learn-card-actions{flex-wrap:wrap}.learn-card-actions>.fv-button{margin:0 0 0 auto!important}
 </style>
+<script data-syntax-hints>
+/* Chinese prompts aligned to the visible Lao source, independent of audio and translations. */
+const syntaxHintExamples=new Map(Object.entries({
+ 'ຂໍໂທດເດີເຈົ້າເປັນຄົນຈີນບໍ':'对不起，你 是 人 中国 吗？',
+ 'ແມ່ນແລ້ວຂ້ອຍເປັນຄົນຈີນ':'是的，我 是 人 中国。',
+ 'ເຈົ້າມາແຕ່ແຂວງໃດ':'你 来自 省 哪个？',
+ 'ຂ້ອຍມາແຕ່ແຂວງເສສວນ':'我 来自 省 四川。',
+ 'ເຈົ້າເປັນຄົນຫຍັງ':'你 是 人 哪里？',
+ 'ຂ້ອຍເປັນຄົນລາວ':'我 是 人 老挝。',
+ 'ເຈົ້າມາແຕ່ເມືອງໃດ':'你 来自 城市 哪个？',
+ 'ຂ້ອຍມາແຕ່ເມືອງຫຼວງພະບາງ':'我 来自 城市 琅勃拉邦。',
+ 'ພົບກັນໃໝ່':'见面 一起 再。',
+ 'ຂອບໃຈຫຼາຍໆ':'谢谢 很多。',
+ 'ຂ້ອຍຈະໄປຊື້ເຄື່ອງຢູ່Itecc':'我 要 去 买东西 在 Itecc。',
+ 'ມີຢູ່ທາງຂ້າງMinimart':'有，在 旁边 便利店。',
+ 'ຂ້ອຍເຮັດວຽກຢູ່ບໍລິສັດETLເຈົ້າເດ':'我 工作 在 公司 ETL，你 呢？',
+ 'ພາສາ手表ແປວ່າຫຍັງ':'手表 意思是 什么？',
+ 'ພາສາລາວ手表ແປວ່າໂມງ':'老挝语 手表 意思是 钟表。',
+ 'ຂ້ອຍຮູ້ສຶກວ່າໂຕດກັບໂຕບອອກສຽງຍາກແທ້ໆ':'我 觉得 字母 d 和 字母 b 发音 难 真的！',
+ 'ຄຳວ່າສິບລ້ານຮ້ອຍລ້ານແລະຕື້ໃຊ້ເວລາອ່ານຈຳນວນຫຼາຍ':'词 千万 一亿 和 十亿，用 在读 大数 的时候。',
+ 'ລະວີວັນຊິມາຄົວກິນຈັກໂມງ':'Lavivanh 要 来 做饭 几 点？',
+ 'ຊິມາແຕ່ຖ້າຝົນຕົກໜັກກໍຄົງບໍ່ມາ':'会 来。但 如果 雨 下 得大，就 可能 不 来。',
+ 'ຊັ້ນກິນຢາແກ້ໃຂ້ຫວັດກ່ອນແລະພັກຜ່ອນຫລາຍຫລາຍຖ້າມື້ອື່ນຍັງບໍ່ເຊົາກໍ່ຊິພາເຈົ້າໄປກວດຢູ່ໂຮງຫມໍ':'那么 吃 感冒药 先，和 休息 多多。如果 明天 还 没好，就 要 带 你 去 检查 在 医院。',
+ 'ໂດຍມີເຮົາມີຫ້ອງຕຽງໃຫຍ່ກັບຫ້ອງຕຽງຄູ່ທ່ານຕ້ອງການແບບໃດ':'是的，有。我们 有 房间 大床 和 房间 双床。您 想要 类型 哪种？',
+ 'ໂດຍນີ້ແມ່ໃບທະບຽນລົດບັດແຂງກັບປຶ້ມເຫລືອງກັບໃບກວດເຕັກນິກນີ້ແມ່ນປະກັນໄພນີ້ແມ່ນໃບຂັບຂີ່':'好的，这 是 车辆登记证（硬卡 和 黄本 和 年检证）。这 是 保险，这 是 驾照。',
+ 'ມື້ຮີຝົນຊີຕົກບໍ':'后天 雨 会 下 吗？',
+ 'ໄປທ່ຽວໃນເມືອງນີ້ຍ່າງໄປກໍໄດ້ແຕ່ຖ້າວ່າຈະໄປທີ່ຖ້ຳຕິ່ງຕ້ອງຂີ່ເຮືອໄປຫຼືຈະໄປຕາດກວາງຊີຕ້ອງຂີ່ລົດໄປ':'去 游览 在 城市 这，走路 去 也 可以。但 如果 要 去 帕乌洞，得 坐 船 去。或者 要 去 光西瀑布，得 坐 车 去。',
+ 'ໄປໝົດຊູ່ຄົນນອກຈາກອ້າຍວັນໄຊລາວຊິຢູ່ເຝົ້າເຮືອນ':'去 全部 每个人，除了 哥哥 万赛。他 要 留下 看 家。',
+ 'ພວກເຮົາຊິຈັດກິນລ້ຽງສົ່ງທ້າວຈັນທະວົງຢາກເຊີນພວກເຈົ້າໝົດຊູ່ຄົນ':'我们 要 办 宴席 送别 先生 占塔翁，想 邀请 你们 全部 每个人。'
+}));
+const syntaxHintNumbers=new Map(Object.entries({
+ 'ສູນ':'零','ໜຶ່ງ':'一','ໝຶ່ງ':'一','ສອງ':'二','ສາມ':'三','ສີ່':'四','ຫ້າ':'五','ຫົກ':'六','ເຈັດ':'七',
+ 'ແປດ':'八','ເກົ້າ':'九','ສິບ':'十','ຮ້ອຍ':'百','ພັນ':'千','ໝື່ນ':'万','ແສນ':'十万','ລ້ານ':'百万','ຕື້':'十亿','ຊາວ':'二十'
+}));
+const syntaxHintFixed=new Set(['ສະບາຍດີ','ລາກ່ອນ','ເຈົ້າ','ຂອບໃຈ','ໄດ້','ແມ່ນແລ້ວ','ໂດຍ','ຫວານ','ໄປ','ບໍ່ເປັນຫຍັງ','ໃສ່','ເປັນຫຍັງ']);
+const syntaxHintCompounds=new Map(Object.entries({
+ 'ສະໜາມບິນ':'机场','ສະຫນາມບິນ':'机场','ໂຮງໝໍ':'医院','ໂຮງຫມໍ':'医院','ສູບຢາ':'抽烟',
+ 'ອອກສຽງ':'发音','ເຮັດວຽກ':'工作','ຊື້ເຄື່ອງ':'买东西','ເຂົ້າຜັດ':'饭 炒','ບໍລິສັດ':'公司',
+ 'ພວກເຂົາ':'他们','ພວກເຮົາ':'我们','ພວກເຈົ້າ':'你们','ຈັກໂມງ':'几 点','ອາກາດ':'天气'
+}));
+const syntaxHintCore=new Map(Object.entries({
+ 'ຂ້ອຍ':'我','ເຮົາ':'我','ເຈົ້າ':'你','ລາວ':'他','ຄູ':'老师','ບໍ':'吗','ບໍ່':'不','ກໍ':'也','ຢ່າ':'别',
+ 'ຈະ':'要','ຊິ':'要','ມີ':'有','ຢູ່':'在','ໄປ':'去','ມາ':'来','ເອົາ':'要','ກິນ':'吃','ດື່ມ':'喝','ແລ້ວ':'了',
+ 'ໃດ':'哪个','ຫຍັງ':'什么','ໃສ':'哪里','ໃຜ':'谁','ນຳ':'一起','ທີ່':'（修饰）','ຂອງ':'的','ແຕ່':'但',
+ 'ເດ':'呢','ເດີ':'呀','ນີ້':'这','ນັ້ນ':'那','ເປັນ':'是','ຄົນ':'人','ແລະ':'和'
+}));
+function syntaxHintNormalize(text){
+ return String(text||'').normalize('NFC').replace(/ໍາ/gu,'ຳ').replace(/[\s\p{P}\u200b-\u200d]+/gu,'');
+}
+function syntaxHintGloss(value){
+ const clean=String(value||'').replace(/[（(][^）)]*[）)]/gu,'').split(/[；;\/／、]/u)[0].trim();
+ return /\p{Script=Han}/u.test(clean)&&!/[\u0e80-\u0eff\u0e00-\u0e7f]/u.test(clean)&&clean.length<=28?clean:'';
+}
+function syntaxHintTokens(analysis,source){
+ if(!analysis||syntaxHintNormalize(analysis.original)!==source||!Array.isArray(analysis.segments))return [];
+ return analysis.segments.flatMap(segment=>Array.isArray(segment.words)?segment.words:[])
+  .map(row=>[syntaxHintNormalize(row?.lao),syntaxHintGloss(row?.meaning)])
+  .filter(([text,meaning])=>text&&meaning&&/[\u0e80-\u0eff]/u.test(text));
+}
+function syntaxHintFor(material,text,translation,lexicon){
+ const source=syntaxHintNormalize(text),original=String(translation||'').trim();
+ const maskedChinese=original.replace(/[\u0e80-\u0eff]+/gu,'〔老挝语〕');
+ if(!source||!/[\u0e80-\u0eff]/u.test(source))return null;
+ if(syntaxHintExamples.has(source))return {zh:syntaxHintExamples.get(source),kind:'example'};
+ if(syntaxHintNumbers.has(source)&&!original)return {zh:syntaxHintNumbers.get(source),kind:'fixed'};
+ const stored=material?.syntaxHintZh;
+ if(stored?.source===text&&stored.translation===original&&typeof stored.zh==='string'&&stored.zh.length<=600)return stored;
+ if(material?.contentType==='word')return original?{zh:maskedChinese,kind:'word'}:null;
+ if(syntaxHintFixed.has(source)&&original)return {zh:maskedChinese,kind:'fixed'};
+ const tokens=syntaxHintTokens(material?.sentenceAnalysis,source);
+ const terms=new Map(syntaxHintCore);
+ for(const [from,to] of tokens)if(!terms.has(from)||!['ໃດ','ບໍ','ບໍ່'].includes(from))terms.set(from,to);
+ const picks=[];
+ let position=0;
+ for(const [from,to] of tokens){
+  const at=source.indexOf(from,position);
+  if(at<0)continue;
+  if(at===0&&from===source&&tokens.length===1)break;
+  picks.push({at,from,to:terms.get(from)||to});position=at+from.length;
+ }
+ const ranges=[];
+ for(const [from,to] of syntaxHintCompounds){
+  for(let at=source.indexOf(from);at>=0;at=source.indexOf(from,at+from.length)){
+   if(picks.some(p=>p.at<at&&p.at+p.from.length>at||p.at<at+from.length&&p.at+p.from.length>at+from.length))continue;
+   ranges.push({at,from,to});
+  }
+ }
+ for(const range of ranges){
+  for(let i=picks.length-1;i>=0;i--)if(picks[i].at>=range.at&&picks[i].at<range.at+range.from.length)picks.splice(i,1);
+  picks.push(range);
+ }
+ picks.sort((a,b)=>a.at-b.at);
+ const parts=[];
+ const breaks=new Map();
+ for(const mark of String(text).matchAll(/[，,。.!！?？;；]/gu)){
+  if(/[.,]/u.test(mark[0])&&/\d/u.test(text[mark.index-1]||'')&&/\d/u.test(text[mark.index+1]||''))continue;
+  const at=syntaxHintNormalize(text.slice(0,mark.index)).length;
+  if(at>0&&at<source.length)breaks.set(at,({'?':'？','!':'！',',':'，','.':'。',';':'；'})[mark[0]]||mark[0]);
+ }
+ const addPart=(at,part)=>{if(breaks.has(at))parts.push(breaks.get(at));parts.push(part);};
+ const gap=(start,end)=>{
+  while(start<end){
+   const number=source.slice(start,end).match(/^\d+/u)?.[0];
+   if(number){addPart(start,number);start+=number.length;continue;}
+   let found=false;
+   for(let size=Math.min(24,end-start);size>0;size--){
+    const term=source.slice(start,start+size),gloss=terms.get(term)||lexicon?.get(term);
+    if(!gloss)continue;
+    addPart(start,gloss);start+=size;found=true;break;
+   }
+   if(!found)return false;
+  }
+  return true;
+ };
+ let end=0;
+ for(const pick of picks){
+  if(!gap(end,pick.at))return original?{zh:maskedChinese,kind:'fallback'}:null;
+  addPart(pick.at,pick.to);end=pick.at+pick.from.length;
+ }
+ if(!gap(end,source.length)||parts.length<2)return original?{zh:maskedChinese,kind:'fallback'}:null;
+ const merged=[];
+ for(let i=0;i<parts.length;i++){
+  if(parts[i]==='来'&&['从','来自'].includes(parts[i+1])){merged.push('来自');i++;}
+  else merged.push(parts[i]);
+ }
+ const punctuation=/[？?]\s*$/u.test(original)||/[？?]\s*$/u.test(text)?'？':/[！!]\s*$/u.test(original)?'！':'。';
+ const zh=merged.map(part=>/^[，。；？！]$/u.test(part)?part:part.replace(/[。？！!?]+$/u,'')).join(' ').replace(/ ([，。；？！])/gu,'$1');
+ return {zh:zh+punctuation,kind:'ordered'};
+}
+if(typeof module!=='undefined'&&module.exports)module.exports={syntaxHintFor,syntaxHintNormalize,syntaxHintTokens,syntaxHintGloss};
+
+function syntaxHintRecordKey(text,meaning){return JSON.stringify([text,String(meaning||'').trim()]);}
+let syntaxHintImported=null;
+function syntaxHintLocalRows(){
+ if(typeof workspaceName!=='function'||typeof localStorage==='undefined')return null;
+ const key=workspaceName('lao-syntax-hints-v1');
+ if(syntaxHintImported?.key!==key){
+  let entries=[];try{entries=JSON.parse(localStorage.getItem(key)||'[]');}catch(_){}
+  syntaxHintImported={key,rows:new Map(Array.isArray(entries)?entries:[])};
+ }
+ return syntaxHintImported.rows;
+}
+function syntaxHintValidateFile(value){
+ if(value?.format!=='lao-syntax-hints-v1'||!Array.isArray(value.rows)||value.rows.length>40000)throw Error('请选择老挝语语序提示资料。');
+ const entries=new Map();
+ for(const row of value.rows){
+  if(!row||typeof row.lao!=='string'||row.lao.length>2000||typeof row.originalZh!=='string'||row.originalZh.length>2000||
+   (row.hintZh!==null&&(typeof row.hintZh!=='string'||row.hintZh.length>600||/[\u0e80-\u0eff]/u.test(row.hintZh)))||
+   !['example','ordered','fixed','word','fallback','unavailable'].includes(row.kind))throw Error('语序提示资料中有无效词句。');
+  if(row.kind==='ordered'||row.kind==='example'){
+   const key=syntaxHintRecordKey(row.lao,row.originalZh),old=entries.get(key);
+   if(old&&old.zh!==row.hintZh)throw Error('语序提示资料有不一致的重复词句。');
+   if(!row.hintZh)throw Error('语序提示为空。');
+   entries.set(key,{zh:row.hintZh,kind:row.kind});
+  }
+ }
+ return [...entries];
+}
+function syntaxHintForDisplay(material,text,translation){
+ if(material?.contentType!=='word'){
+  const known=syntaxHintLocalRows()?.get(syntaxHintRecordKey(text,translation));
+  if(known)return known;
+ }
+ return syntaxHintFor(material,text,translation);
+}
+function syntaxHintHtml(hint,escape){
+ if(!hint)return '';
+ const note=hint.kind==='fallback'?'<i>自然译文 · 语序待核对</i>':'';
+ return '<small class="learn-card-syntax">'+note+escape(hint.zh)+'</small>';
+}
+function syntaxHintMount(){
+ const host=document.querySelector('#apDataActions');if(!host)return;
+ const fold=document.createElement('details');fold.innerHTML='<summary>导入老挝语语序提示</summary><p>只添加中文语序提示。导入后，重新打开正在学习的章节即可查看。</p><input type="file" accept=".json,application/json" aria-label="选择语序提示资料"><p role="status"></p>';
+ host.after(fold);
+ const input=fold.querySelector('input'),status=fold.querySelector('[role=status]');
+ input.onchange=async()=>{
+  const file=input.files?.[0];if(!file)return;
+  const key=workspaceName('lao-syntax-hints-v1');input.disabled=true;
+  try{
+   if(file.size>15000000)throw Error('请选择语序提示资料文件。');
+   const rows=syntaxHintValidateFile(JSON.parse(await file.text()));
+   if(key!==workspaceName('lao-syntax-hints-v1'))throw Error('账号已变化，请重新导入。');
+   localStorage.setItem(key,JSON.stringify(rows));syntaxHintImported=null;
+   status.textContent='已导入 '+rows.length+' 条不同词句的语序提示。';
+  }catch(error){status.textContent=error.message;}
+  finally{input.value='';input.disabled=false;}
+ };
+}
+if(typeof document!=='undefined')syntaxHintMount();
+</script>
 <script data-learning-bundle="study-comfort">
 /* Shared favorites organization, self-test display and inline reference recording. */
 function cfFolders(snap){const folders=new Map([['','默认收藏夹']]);for(const r of [...snap.learningMaterials].sort((a,b)=>a.updatedAt-b.updatedAt||a.id.localeCompare(b.id)))if(!r.deleted&&r.favoriteFolder)folders.set(r.favoriteFolder.id,r.favoriteFolder.name);return folders;}
@@ -11356,7 +11548,7 @@ const cfValidate=learningValidateRecord;
 learningValidateRecord=function(kind,row){if(row.favoriteFolder!==undefined&&(kind!=='learningMaterials'||row.contentType!=='knowledge'||row.id!==row.favoriteFolder.id||!cfFolderValid(row.favoriteFolder)))throw Error('收藏文件夹格式无效');if(row.favorite?.folder!==undefined&&(typeof row.favorite.folder!=='string'||row.favorite.folder.length>100))throw Error('收藏分类格式无效');return cfValidate(kind,row);};
 async function cfCreateFolder(name){fvGuard();name=name.trim();if(!name||name.length>60)throw Error('文件夹名称需为 1–60 个字');learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot();if(workspace!==fvWorkspace())throw Error('账号已变化');const id='folder:'+crypto.randomUUID(),row={...learningBlank(id,'knowledge','收藏文件夹'),favoriteFolder:{id,name},updatedAt:Date.now()};await learningWrite({learningMaterials:[row]},snap);await fvRefresh();return id;}finally{learningBusy=false;}}
 async function cfMove(item,folder){fvGuard();learningBusy=true;try{const workspace=fvWorkspace(),snap=await learningSnapshot(),words=await allEntries();if(workspace!==fvWorkspace())throw Error('账号已变化');if(!cfFolders(snap).has(folder))throw Error('文件夹不存在，请刷新');const model=fvModel(snap,words),latest=model.get(fvKey(fvResolve(item,snap,words)));if(!latest?.active)throw Error('此条收藏已取消');const at=Math.max(Date.now(),...Array.from(model.values(),v=>v.at+1)),favorite={version:1,key:latest.key,item:latest.item,active:true,at,folder};await learningWrite({learningMaterials:[{...learningBlank('favorite:'+crypto.randomUUID(),'knowledge','收藏分类'),favorite,updatedAt:at}]},snap);await fvRefresh();}finally{learningBusy=false;}}
-function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
+function cfMaskButtons(colorMode=''){return '<details class="cf-mask-controls"><summary>自测显示</summary><div class="cf-mask-menu"><button type="button" data-cf-mask="zh" aria-pressed="false">隐藏中文</button><button type="button" data-cf-mask="lo" aria-pressed="false">隐藏老挝语</button><button type="button" data-cf-mask="syntax" aria-pressed="false">老挝语语序提示</button><button type="button" data-cf-mask="reset">显示全部</button>'+colorMode+'</div></details>';}
 function cfMaskScope(b){return b.closest('[data-fv-list],.cf-self-test')||b.closest('[data-page-key]')?.parentElement;}
 const cfTapeAttributes=new WeakMap();
 function cfRefreshTape(node,scope,language){
@@ -11392,7 +11584,7 @@ function cfMaskRefresh(scope,changedLanguage,roots){
   }
  }
  if(roots)return;
- for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(n.dataset.cfMask!=='reset'){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
+ for(const n of scope.querySelectorAll('[data-cf-mask]')){const hidden=scope.classList.contains('cf-hide-'+n.dataset.cfMask);n.setAttribute('aria-pressed',String(hidden));if(['zh','lo'].includes(n.dataset.cfMask)){const label=(hidden?'显示':'隐藏')+(n.dataset.cfMask==='zh'?'中文':'老挝语');if(n.textContent!==label)n.textContent=label;}}
 }
 function cfMaskDefaults(scope,force=false){
  const key=typeof apPreferenceKey==='function'?apPreferenceKey():'local';
@@ -11401,10 +11593,24 @@ function cfMaskDefaults(scope,force=false){
  scope.dataset.cfMaskWorkspace=key;
  scope.dataset.cfMaskDefault=mode;
  scope.classList.toggle('cf-hide-zh',mode==='zh'||mode==='both');
- scope.classList.toggle('cf-hide-lo',mode==='lo'||mode==='both');
+ scope.classList.toggle('cf-hide-lo',mode==='lo'||mode==='both'||mode==='syntax');
+ scope.classList.toggle('cf-hide-syntax',mode==='syntax');
  for(const n of scope.querySelectorAll('[data-cf-revealed]'))delete n.dataset.cfRevealed;
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-cf-mask]');if(!b)return;const scope=cfMaskScope(b);if(!scope)return;const mode=b.dataset.cfMask;if(mode==='reset')scope.classList.remove('cf-hide-zh','cf-hide-lo');else scope.classList.toggle('cf-hide-'+mode);const changed=mode==='reset'?undefined:mode;for(const n of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||n.dataset.cfTapeLanguage===changed)delete n.dataset.cfRevealed;cfMaskRefresh(scope,changed);b.closest('details').open=false;});
+document.addEventListener('click',event=>{
+ const button=event.target.closest('[data-cf-mask]'),scope=button&&cfMaskScope(button);
+ if(!scope)return;
+ const mode=button.dataset.cfMask,wasSyntax=scope.classList.contains('cf-hide-syntax');
+ if(mode==='syntax'){
+  scope.classList.remove('cf-hide-zh');scope.classList.toggle('cf-hide-lo',!wasSyntax);scope.classList.toggle('cf-hide-syntax',!wasSyntax);
+ }else{
+  if(mode==='reset'||wasSyntax)scope.classList.remove('cf-hide-zh','cf-hide-lo','cf-hide-syntax');
+  if(mode!=='reset')scope.classList.toggle('cf-hide-'+mode);
+ }
+ const changed=mode==='reset'||mode==='syntax'||wasSyntax?undefined:mode;
+ for(const node of scope.querySelectorAll('[data-cf-revealed]'))if(!changed||node.dataset.cfTapeLanguage===changed)delete node.dataset.cfRevealed;
+ cfMaskRefresh(scope,changed);button.closest('details').open=false;
+});
 function cfToggleTape(event){
  const node=event.target.closest('.cf-tape-toggle');
  if(!node||event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
@@ -11437,7 +11643,7 @@ fvOpen=async function(button){
  const h=learningEsc;learningModal('收藏夹','<section data-fv-list><div class="cf-library-tools"><input data-cf-search aria-label="搜索收藏" placeholder="搜索老挝语、中文或章节"><div class="cf-library-filters"><select data-cf-folder aria-label="收藏文件夹"></select><select data-cf-kind aria-label="内容类型"><option value="">全部词句</option><option value="word">单词</option><option value="sentence">句子与对话</option></select><button data-cf-create aria-label="新建收藏文件夹" title="新建文件夹">＋</button></div></div><div class="lesson-page-player cf-library-player"><div class="fv-actions"><button class="primary" data-cf-listen>▶ 播放列表</button><button data-cf-pause>暂停／继续</button><button data-cf-stop aria-label="终止播放" title="终止播放并收起进度条">□</button>'+cfMaskButtons()+'<details class="cf-library-options"><summary>播放选项</summary><label><input type="checkbox" data-page-loop>循环播放</label></details></div><p data-page-status role="status"></p></div><p class="cf-library-count" data-cf-count></p><div data-cf-rows></div><div class="fv-actions cf-library-pages"><button data-cf-prev>上一页</button><span data-cf-page></span><button data-cf-next>下一页</button></div></section>');learningDialog.classList.add('fv-dialog');if(parent)letterDetailBackButton();
  const host=learningDialog.querySelector('[data-fv-list]'),get=s=>host.querySelector(s),bar=get('.lesson-page-player');let page=0,filtered=[],seq=0;
  const options=()=>Array.from(cfFolders(fvCache.snap),([id,name])=>'<option value="'+h(id)+'">'+h(name)+'</option>').join('');const folderOptions=()=>'<option value="*">全部收藏夹</option>'+options();get('[data-cf-folder]').innerHTML=folderOptions();
- const draw=()=>{const folder=get('[data-cf-folder]').value,kind=get('[data-cf-kind]').value,q=get('[data-cf-search]').value.trim().toLowerCase();filtered=[...fvCache.model.values()].filter(v=>v.active&&(folder==='*'||(v.folder||'')===folder)&&(!kind||(kind==='word'?(v.item.kind||'word')==='word':v.item.kind!=='word'))&&(!q||[v.item.text,v.item.meaning,v.item.source].join(' ').toLowerCase().includes(q))).sort((a,b)=>b.at-a.at);page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));get('[data-cf-count]').textContent=filtered.length+' 项收藏';get('[data-cf-page]').textContent=(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/20));get('[data-cf-prev]').disabled=!page;get('[data-cf-next]').disabled=(page+1)*20>=filtered.length;get('.cf-library-pages').hidden=filtered.length<=20;get('[data-cf-rows]').innerHTML=filtered.slice(page*20,page*20+20).map((v,i)=>'<article class="fv-item"><div class="cf-item-content"><strong lang="lo">'+h(v.item.text)+'</strong><p class="cf-meaning">'+h(v.item.meaning)+'</p><small>'+h(v.item.source)+'</small></div><div class="fv-actions cf-item-actions"><button data-cf-play="'+(page*20+i)+'">▶ 播放</button><button data-cf-detail="'+(page*20+i)+'">详情</button><button type="button" class="fv-button" aria-label="取消收藏" title="取消收藏" data-cf-remove="'+(page*20+i)+'">♥</button></div><details class="cf-folder-move"><summary>'+h(cfFolders(fvCache.snap).get(v.folder||'')||'默认收藏夹')+' · 移动</summary><label>移动到<select data-cf-move="'+(page*20+i)+'">'+options()+'</select></label></details></article>').join('')||'<p class="cf-library-empty">暂无符合条件的收藏</p>';for(const n of host.querySelectorAll('[data-cf-move]'))n.value=filtered[Number(n.dataset.cfMove)].folder||'';cfMaskRefresh(host);};
+ const draw=()=>{const folder=get('[data-cf-folder]').value,kind=get('[data-cf-kind]').value,q=get('[data-cf-search]').value.trim().toLowerCase();filtered=[...fvCache.model.values()].filter(v=>v.active&&(folder==='*'||(v.folder||'')===folder)&&(!kind||(kind==='word'?(v.item.kind||'word')==='word':v.item.kind!=='word'))&&(!q||[v.item.text,v.item.meaning,v.item.source].join(' ').toLowerCase().includes(q))).sort((a,b)=>b.at-a.at);page=Math.min(page,Math.max(0,Math.ceil(filtered.length/20)-1));get('[data-cf-count]').textContent=filtered.length+' 项收藏';get('[data-cf-page]').textContent=(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/20));get('[data-cf-prev]').disabled=!page;get('[data-cf-next]').disabled=(page+1)*20>=filtered.length;get('.cf-library-pages').hidden=filtered.length<=20;get('[data-cf-rows]').innerHTML=filtered.slice(page*20,page*20+20).map((v,i)=>'<article class="fv-item"><div class="cf-item-content"><strong lang="lo">'+h(v.item.text)+'</strong><p class="cf-meaning">'+h(v.item.meaning)+'</p>'+(typeof syntaxHintForDisplay==='function'?syntaxHintHtml(syntaxHintForDisplay({contentType:v.item.kind},v.item.text,v.item.meaning),h):'')+'<small>'+h(v.item.source)+'</small></div><div class="fv-actions cf-item-actions"><button data-cf-play="'+(page*20+i)+'">▶ 播放</button><button data-cf-detail="'+(page*20+i)+'">详情</button><button type="button" class="fv-button" aria-label="取消收藏" title="取消收藏" data-cf-remove="'+(page*20+i)+'">♥</button></div><details class="cf-folder-move"><summary>'+h(cfFolders(fvCache.snap).get(v.folder||'')||'默认收藏夹')+' · 移动</summary><label>移动到<select data-cf-move="'+(page*20+i)+'">'+options()+'</select></label></details></article>').join('')||'<p class="cf-library-empty">暂无符合条件的收藏</p>';for(const n of host.querySelectorAll('[data-cf-move]'))n.value=filtered[Number(n.dataset.cfMove)].folder||'';cfMaskRefresh(host);};
  const fail=e=>{if(host.isConnected)get('[data-page-status]').textContent=e.message;},reset=()=>{seq++;lessonPageStop();page=0;draw();};get('[data-cf-folder]').onchange=get('[data-cf-kind]').onchange=get('[data-cf-search]').oninput=reset;
  get('[data-cf-prev]').onclick=()=>{page--;draw();};get('[data-cf-next]').onclick=()=>{page++;draw();};
  get('[data-cf-create]').onclick=async()=>{const name=prompt('新文件夹名称');if(name===null)return;try{const id=await cfCreateFolder(name);if(!host.isConnected)return;get('[data-cf-folder]').innerHTML=folderOptions();get('[data-cf-folder]').value=id;page=0;draw();}catch(e){fail(e);}};
@@ -11587,8 +11793,7 @@ cfDecorate();
 [data-fv-list] .cf-library-pages{justify-content:center;font-size:13px}
 [data-fv-list] .cf-library-pages[hidden]{display:none}
 @media(max-width:640px){#learningDialog.fv-dialog{padding:16px 12px;width:calc(100% - 16px);max-height:88dvh}[data-fv-list] .fv-item strong{font-size:22px}[data-fv-list] .fv-item{padding:12px;gap:8px}[data-fv-list] .cf-library-player .cf-mask-controls{margin-left:auto}}
-#learningPanel .learn-card.page-audio-current:not([data-dialogue-card]){background:#e4f4ed}
-#learningPanel .learn-card.page-audio-current{border-color:#087e6d;box-shadow:inset 0 0 0 1px #087e6d,0 3px 12px #087e6d16;transition:background-color .16s,border-color .16s}
+#learningPanel .learn-card.page-audio-current{background:#e4f4ed;border-color:#087e6d;box-shadow:inset 0 0 0 1px #087e6d,0 3px 12px #087e6d16;transition:background-color .16s,border-color .16s}
 #learningPanel .learn-card.page-audio-current .learn-card-main{background:transparent}
 #learningPanel .learn-card.page-audio-current [data-learn="play"]{background:#087e6d;color:white}
 /* Compact, anchored playback settings; labels and chevron have independent space. */
@@ -11682,6 +11887,13 @@ button,a,summary,[role="button"]{touch-action:manipulation}
 #dictionaryPanel #entries .actions>button:disabled{opacity:.5;cursor:wait}
 @media(max-width:760px){#dictionaryPanel #entries .actions{justify-content:flex-start;gap:6px;margin-top:12px}}
 @media(max-width:360px){#dictionaryPanel #entries .actions{gap:4px}#dictionaryPanel #entries .actions>.dict-detail{flex-basis:60px;width:60px}}
+
+.learn-card-syntax{display:none}
+.cf-hide-syntax .learn-card-main:has(>.learn-card-syntax)>.learn-card-translation{display:none}
+.cf-hide-syntax .learn-card-main>.learn-card-syntax{display:block;color:var(--muted,#526f65);font-size:inherit;line-height:1.65;text-align:start}
+.learn-card-syntax i{display:block;font-style:normal;font-size:.8em;color:var(--muted,#526f65)}
+.cf-hide-syntax .cf-item-content:has(>.learn-card-syntax)>.cf-meaning{display:none}
+.cf-hide-syntax .cf-item-content>.learn-card-syntax{display:block;line-height:1.65}
 </style>
 <script data-learning-bundle="compound-words">
 /* Read-only lexical component links. Syllables alone are never promoted to words. */
@@ -14875,7 +15087,7 @@ function chapterListeningCatalog(snap,words,courses){
    }
    if(!flags.size)continue;
    const needsWork=flags.has('red')||flags.has('yellow')||flags.has('slow');
-   catalog.push({id:row.id,target,word:row.lao,meaning:row.zh,courseId:course.id,itemKind:row.itemKind,needsWork,flags});
+   catalog.push({id:row.id,target,word:row.lao,meaning:row.zh,courseId:course.id,itemKind:row.itemKind,material:materialsById.get(row.id),needsWork,flags});
   }
  }
  return catalog;
@@ -14916,7 +15128,7 @@ async function chapterListeningOpen(courseId='',tone=''){
   </div>
   <div class="cl-list-tools">
    <label class="study-filter-select"><select name="cl-kind" aria-label="词句类型"><option value="all">词和句</option><option value="word">只看单词</option><option value="sentence">只看句子</option></select></label>
-   <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏两种语言</option></select></label>
+   <label class="study-filter-select"><select name="cl-display" aria-label="自测显示"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="syntax">老挝语语序提示</option><option value="both">隐藏两种语言</option></select></label>
    <p data-cl-selection aria-live="polite"></p><button type="button" data-cl-select aria-pressed="false">勾选</button>
   </div>
   <div data-cl-list class="cl-list"></div>
@@ -14980,12 +15192,13 @@ async function chapterListeningOpen(courseId='',tone=''){
   visible=catalog.filter(row=>(!chapters.size||chapters.has(row.courseId))&&(kind==='all'||row.itemKind===kind)&&[...row.flags].some(flag=>statuses.has(flag)));
   q('[data-cl-list]').innerHTML=visible.slice(0,limit).map((row,index)=>{
    const isRevealed=revealed.has(key(row));
-   const hideLao=!isRevealed&&(display==='lo'||display==='both'),hideChinese=!isRevealed&&(display==='zh'||display==='both');
+   const hideLao=!isRevealed&&(display==='lo'||display==='both'||display==='syntax'),hideChinese=!isRevealed&&(display==='zh'||display==='both');
+   const hint=!isRevealed&&display==='syntax'&&typeof syntaxHintForDisplay==='function'?syntaxHintForDisplay(row.material,row.word,row.meaning):null;
    return `<article class="cl-row" data-cl-row="${index}">
     ${selecting?`<input type="checkbox" data-cl-item aria-label="勾选第 ${index+1} 项" ${marked.has(key(row))?'checked':''}>`:''}
     <div class="cl-row-content">
      ${hideLao?'<span class="cl-answer-mask">老挝语已隐藏</span>':hideChinese?`<strong class="cl-lao" lang="lo">${h(row.word)}</strong>`:`<button type="button" data-cl-detail lang="lo">${h(row.word)}</button>`}
-     ${hideChinese?'<span class="cl-answer-mask">中文已隐藏</span>':`<p>${h(row.meaning)}</p>`}
+     ${hideChinese?'<span class="cl-answer-mask">中文已隐藏</span>':`<p>${hint?.kind==='fallback'?'<small>自然译文 · 语序待核对</small> ':''}${h(hint?.zh||row.meaning)}</p>`}
      ${display==='all'?'':`<button type="button" data-cl-reveal aria-expanded="${isRevealed}">${isRevealed?'收起答案':'揭晓答案'}</button>`}
      <small>${h(titles.get(row.courseId))}</small><small data-cl-unavailable ${unavailable.has(key(row))?'':'hidden'}>本机暂无录音</small>
     </div>

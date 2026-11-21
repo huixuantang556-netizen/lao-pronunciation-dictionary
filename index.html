@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ab02b893e71fcb06">
+  <meta name="lao-app-build" content="353936a57cc6ac9a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4529,7 +4529,7 @@ function batchReturnToParent(){
 const batchDraftKey=workspaceName('lao-batch-audio-draft-v1');
 const batchDialog=document.createElement('dialog');batchDialog.id='batchAudioDialog';document.body.append(batchDialog);
 function batchNotice(message){batchDialog.querySelector('[data-batch-status]').textContent=message;}
-function batchRemember(){if(batchAudioState?.key){localStorage.setItem(batchDraftKey,JSON.stringify({sourceHash:batchAudioState.sourceHash||null,pageMode:Boolean(batchAudioState.pageMode),dialogueReplace:Boolean(batchAudioState.dialogueReplace),analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));localStorage.setItem(batchDraftKey+':'+batchAudioState.key,localStorage.getItem(batchDraftKey));}}
+function batchRemember(){if(batchAudioState?.key){localStorage.setItem(batchDraftKey,JSON.stringify({sourceHash:batchAudioState.sourceHash||null,pageMode:Boolean(batchAudioState.pageMode),dialogueReplace:Boolean(batchAudioState.dialogueReplace),splitDialogueId:batchAudioState.splitDialogueId||null,analysisParent:batchAudioState.analysisParent||null,dialogueGroups:batchAudioState.dialogueGroups||[],words:batchAudioState.words,key:batchAudioState.key,ranges:batchAudioState.ranges,confirmed:batchAudioState.confirmed||[],continuous:Boolean(batchAudioState.continuous)}));localStorage.setItem(batchDraftKey+':'+batchAudioState.key,localStorage.getItem(batchDraftKey));}}
 function batchClose(){if(batchAudioBusy||batchReturning||typeof batchSwitchingMode!=='undefined'&&batchSwitchingMode)return;stopPracticeAudio();batchDialog.querySelectorAll('audio').forEach(a=>a.pause());if(batchAudioURL)URL.revokeObjectURL(batchAudioURL);batchAudioURL=null;if(batchReturnToParent())return;batchDialog.close();}
 batchDialog.addEventListener('cancel',e=>{e.preventDefault();batchClose();});
 async function batchDecode(blob){const ctx=new (window.AudioContext||window.webkitAudioContext)();try{return await ctx.decodeAudioData(await blob.arrayBuffer());}finally{await ctx.close();}}
@@ -4542,7 +4542,7 @@ async function batchRestoreDraft(view=null,key=null){
  batchAudioBusy=true;
  try{stopPracticeAudio();const buffer=await batchDecode(blob),sourceHash=typeof cloudHash==='function'?await cloudHash(blob):null;
   if(sourceHash&&draft.sourceHash&&sourceHash!==draft.sourceHash)throw Error('原音已更新，旧切点不能安全复用，请从对话重新打开原音。');
-  let words=draft.words||[],dialogueGroups=draft.dialogueGroups||[];if(draft.pageMode&&typeof batchRestoreSourceWords==='function'){const revised=words.some(w=>w.revised),inventory=await batchFreshInventory(revised);words=batchRestoreSourceWords(words,revised?inventory.revised:inventory.content.sentences);dialogueGroups=dialogueGroups.filter(g=>inventory.content?.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id)));}
+  let words=draft.words||[],dialogueGroups=draft.dialogueGroups||[];if(draft.pageMode&&!draft.splitDialogueId&&typeof batchRestoreSourceWords==='function'){const revised=words.some(w=>w.revised),inventory=await batchFreshInventory(revised);words=batchRestoreSourceWords(words,revised?inventory.revised:inventory.content.sentences);dialogueGroups=dialogueGroups.filter(g=>inventory.content?.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id)));}
   batchAudioState={...draft,words,dialogueGroups,blob,buffer,sourceHash};
   await batchFromView(view,async()=>{batchRemember();batchEditor();});
   if(!batchDialog.open)batchDialog.showModal();
@@ -5396,25 +5396,40 @@ async function batchAssertMissing(words){
  if(words.some(w=>current.get(w.id)?.word!==w.word))throw Error('课程文字或归属已变化，请返回列表重新选择。');
  if(words.some(w=>!inventory.missing(w)))throw Error('所选内容已有音频或待切分原音，已阻止重复生成。请返回列表使用“打开／切分”或“仅补缺句”。');
 }
-async function batchOpenSavedDialogue(id){
+async function batchOpenSavedDialogue(id,{groupOnly=false,replaceDefaults=false}={}){
  if(batchAudioBusy||recorder||learningHasWork())return;
- const inventory=await batchFreshInventory(),d=inventory.content.dialogues.find(d=>d.id===id),state=inventory.states.get(id);let full=state?.full||state?.savedBatch;const fullText=d?.words.map(w=>w.word).join('\n');const latest=fullText?await learningCachedSpeech(fullText):null;if(latest)full={blob:latest,key:JSON.stringify([ttsSettings.endpoint||'',fullText]),words:d.words.map(w=>({...w,dialogueId:id})),fresh:true};
- if(!d||!full)throw Error('未找到可用原音，请刷新列表或先同步音频；不会改为付费生成。');
- if(!full.words)throw Error('原音属于较大的批次，其中部分句子已不在课程中。请用“恢复切分草稿”打开；不会重复生成。');
  batchAudioBusy=true;
  try{
+  let inventory;
+  const content=groupOnly?batchCourseContent(await learningSnapshot()):(inventory=await batchFreshInventory()).content;
+  const d=content.dialogues.find(group=>group.id===id);
+  const fullText=d?.words.map(w=>w.word).join('\n');
+  const latest=fullText?await learningCachedSpeech(fullText):null;
+  let full;
+  if(latest){
+   const key=typeof learningStoredDefaultKeys==='function'?(await learningStoredDefaultKeys(fullText))[0]:JSON.stringify([ttsSettings.endpoint||'',fullText]);
+   full={blob:latest,key,words:d.words.map(w=>({...w,dialogueId:id})),fresh:true};
+  }else{
+   inventory||=await batchFreshInventory();
+   const state=inventory.states.get(id);
+   full=state?.full||(!groupOnly?state?.savedBatch:null);
+  }
+  if(!d||!full)throw Error('未找到本组整段音频。请先保存整组默认发音或接收已有录音。');
+  if(!full.words)throw Error('原音属于较大的批次，请从“恢复切分草稿”打开。');
+  if(groupOnly&&(full.words.length!==d.words.length||full.words.some((w,i)=>w.id!==d.words[i].id||w.word!==d.words[i].word)))throw Error('这份原音属于包含其他对话的批次。请在批量发音里打开原批次，或先保存本组的整段默认发音。');
   let draft=null;try{draft=JSON.parse(localStorage.getItem(batchDraftKey+':'+full.key)||localStorage.getItem(batchDraftKey)||'null');}catch(_){}
   if(draft&&draft.key!==full.key&&!confirm('打开已有原音会替换当前切分草稿，但不会删除原音和已保存切片。继续？'))return;
   stopPracticeAudio();let blob=full.blob,buffer=await batchDecode(blob);
   if(full.start||full.end!=null){const end=full.end??buffer.duration;if(full.start<0||end>buffer.duration+.05||end<=full.start)throw Error('原音片段范围无效，请在详情中核对。');blob=batchWav(buffer,full.start,Math.min(end,buffer.duration));buffer=await batchDecode(blob);}
   const sourceHash=typeof cloudHash==='function'?await cloudHash(blob):null,sameSource=sourceHash?draft?.sourceHash===sourceHash:!full.fresh;
   const sameDraft=sameSource&&draft?.key===full.key&&JSON.stringify(draft.words?.map(w=>w.word))===JSON.stringify(full.words.map(w=>w.word));
-  const words=batchRestoreSourceWords(sameDraft?draft.words:full.words,inventory.content.sentences),current=await batchResolveSourceWords(words);if(current.some((w,i)=>w.word!==words[i].word))throw Error('原音对应文字已变化，请先核对。');
+  const words=groupOnly?full.words:batchRestoreSourceWords(sameDraft?draft.words:full.words,content.sentences),current=await batchResolveSourceWords(words);if(current.some((w,i)=>w.m?.deleted||w.word!==words[i].word))throw Error('原音对应文字已变化，请先核对。');
   const key=full.key||JSON.stringify([ttsSettings.endpoint||'',lessonPageText(words)]);
   if(!full.key)await ttsCache('readwrite',key,blob);
   const resume=sameSource&&draft?.key===key&&JSON.stringify(draft.words?.map(w=>[w.id,w.word]))===JSON.stringify(words.map(w=>[w.id,w.word]));
-  batchAudioState={...(resume?draft:{}),pageMode:true,words,key,blob,buffer,sourceHash,dialogueGroups:resume?(draft.dialogueGroups||[]).filter(g=>inventory.content.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id))):inventory.content.dialogues.filter(g=>g.words.every(w=>words.some(x=>x.id===w.id))).map(g=>({id:g.id,itemIds:g.words.map(w=>w.id)})),ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
+  batchAudioState={...(resume?draft:{}),pageMode:true,dialogueReplace:resume?Boolean(draft.dialogueReplace):replaceDefaults,splitDialogueId:groupOnly?id:null,words,key,blob,buffer,sourceHash,dialogueGroups:resume?(draft.dialogueGroups||[]).filter(g=>content.dialogues.some(d=>d.id===g.id)&&g.itemIds.every(id=>words.some(w=>!w.orphan&&w.id===id))):content.dialogues.filter(g=>g.words.every(w=>words.some(x=>x.id===w.id))).map(g=>({id:g.id,itemIds:g.words.map(w=>w.id)})),ranges:resume?draft.ranges:batchRanges(buffer,words.length,.25)||[]};
   batchRemember();batchEditor();
+  return true;
  }finally{batchAudioBusy=false;}
 }
 function batchRepairable(state){return Boolean(state&&!state.full&&!state.blocked&&state.missing.length);}
@@ -5528,7 +5543,6 @@ async function batchResolveSourceWords(words){
  const live=words.filter(w=>!w.orphan),resolved=await lessonPageResolve(live);let at=0;
  return words.map(w=>w.orphan?{...w,m:{audioSources:[]},entry:null}:resolved[at++]);
 }
-
 </script>
 <style data-pronunciation-bundle="styles">
 #pronunciationPanel{grid-column:1/-1}#pronunciationPanel h2{margin:12px 0 22px}#pronunciationPanel h3{font-size:17px;margin:26px 0 12px}.pron-intro,.pron-footnote,.pron-notes{color:var(--muted,#637a76);font-size:14px;line-height:1.7}.pron-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.pron-entry{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:28px!important;text-align:left;background:#edf7f3!important;border:1px solid #d8e8e3!important}.pron-entry strong{font-size:24px}.pron-entry span{font-size:15px;color:#657b76}.pron-entry small{align-self:flex-end;color:#087f6e}.pron-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#637a76;font-size:14px;margin-bottom:16px}#pronunciationPanel .pron-section-heading button,#pronunciationPanel .pron-back{font-size:14px;padding:6px 10px;min-height:34px}.pron-matrix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pron-matrix.pron-three{grid-template-columns:repeat(3,minmax(0,1fr))}.pron-column{font-size:14px;color:#637a76;padding:8px}.pron-card{position:relative;border:1px solid #dce9e5;border-radius:14px;background:#fff;overflow:hidden}.pron-card:hover{border-color:#58a798;background:#f4faf7}#pronunciationPanel .pron-card-main{display:flex;flex-direction:column;gap:15px;align-items:flex-start;text-align:left;border:0;background:transparent;width:100%;padding:19px 18px;min-height:140px}.pron-card-main span{font-size:13px;color:#637a76;padding-right:26px}.pron-card-main strong{font-size:28px;color:#087f6e}.pron-card-main small{font-size:12px;align-self:flex-end;color:#637a76}#pronunciationPanel .pron-play{position:absolute;right:10px;top:10px;padding:5px 9px;min-height:32px;font-size:14px;border:0;background:#edf7f3}.pron-notes{margin-top:20px}.pron-footnote{margin-top:26px;font-size:12px}.pron-combination{color:#637a76}.pron-rule{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-size:14px;background:#edf7f3;padding:16px;border-radius:12px}.pron-rule dt{color:#637a76;font-size:12px}.pron-rule dd{margin:8px 0 0}.pron-example{display:flex;align-items:center;gap:10px;border-bottom:1px solid #e4eeea;padding:12px 0}.pron-example>span{flex:1}.pron-example small{display:block;font-size:12px;color:#637a76;margin-bottom:5px}.pron-example b{font-size:23px;font-weight:500}#pronunciationPanel .pron-example button{padding:5px 10px;font-size:13px;min-height:32px}#pronunciationStatus{font-size:14px;color:#087f6e;line-height:1.6}#pronunciationPanel button:focus-visible{outline:3px solid #087f6e;outline-offset:2px}@media(max-width:600px){.pron-entries{grid-template-columns:1fr}.pron-entry{padding:22px!important}.pron-matrix{gap:7px}.pron-card-main span{font-size:11px;padding-right:0;padding-top:26px}#pronunciationPanel .pron-card-main{padding:12px 9px;min-height:160px}.pron-card-main strong{font-size:23px}.pron-column{font-size:12px;padding:5px}.pron-rule{grid-template-columns:repeat(2,1fr)}.pron-section-heading{align-items:flex-start}.pron-example{flex-wrap:wrap}.pron-example .pron-manage{font-size:12px!important}}
@@ -7779,24 +7793,31 @@ async function saReplaceDefault(text,blob,expected,key){
 async function saRegenerate(id){
  if(learningHasWork()||recorder||batchAudioBusy)throw Error('请先完成编辑或录音。');
  const {m,w}=await learningResolve(id),text=w?.word||m.textLao;if(!text||m.deleted)throw Error('资料不存在。');
- if(!confirm('只重新生成这一条默认发音，可能消耗一次额度。试听满意后再保存；取消保留旧音。相同文字共用默认音，手录参考音不会改变。继续？'))return;
- learningBusy=true;stopPracticeAudio();let dialog,url;
+ const group=m.v2Data?.contentType==='dialogue'&&Array.isArray(m.v2Data.content?.items)&&m.v2Data.content.items.length>1;
+ if(!confirm('重新生成'+(group?'本组整段对话':'本条')+'的默认发音，可能消耗一次额度。试听满意后再保存；取消保留旧音。相同文字共用默认音，手录参考音不会改变。继续？'))return;
+ learningBusy=true;stopPracticeAudio();let dialog,url,splitAfterSave=false;
  try{
   const key=JSON.stringify([ttsSettings.endpoint||'',text]);
   const expected=(await cloudCacheRows()).filter(r=>{try{return JSON.parse(r.key)[1]===text;}catch(_){return false;}});
   const blob=await defaultSpeech(text,{force:true,previewOnly:true});
   url=URL.createObjectURL(blob);dialog=document.createElement('dialog');
-  dialog.innerHTML='<h2>试听本条新默认发音</h2><p lang="lo">'+learningEsc(text)+'</p><audio controls style="width:100%"></audio><p>满意后保存替换。不满意可取消，旧默认音与手录参考音保留。</p><button data-save>保存替换默认音</button> <button data-cancel>取消，保留旧音</button><p role="status"></p>';
+  dialog.innerHTML='<h2>'+ (group?'试听本组整段新发音':'试听本条新默认发音')+'</h2><p lang="lo">'+learningEsc(text)+'</p><audio controls style="width:100%"></audio><p>满意后保存替换。不满意可取消，旧默认音与手录参考音保留。</p>'+(group?'<button data-save-split>保存整段并逐句切分</button> ':'')+'<button data-save>保存替换默认音</button> <button data-cancel>取消，保留旧音</button><p role="status"></p>';
   dialog.querySelector('audio').src=url;document.body.append(dialog);dialog.showModal();
   await new Promise(resolve=>{let saving=false;
    const cancel=()=>{if(saving)return;if(confirm('放弃本次新音频？生成额度不会退回，旧音频仍保留。'))resolve();};
    dialog.addEventListener('cancel',e=>{e.preventDefault();cancel();});dialog.querySelector('[data-cancel]').onclick=cancel;
-   dialog.querySelector('[data-save]').onclick=async()=>{if(saving)return;saving=true;try{
+   const save=async split=>{if(saving)return;saving=true;try{
     const fresh=await learningResolve(id);if(fresh.m.deleted||(fresh.w?.word||fresh.m.textLao)!==text)throw Error('文字已变化，未替换旧音频。');
-    await saReplaceDefault(text,blob,expected,key);learningRefreshAudioReview(fresh.m,text,true);resolve();
+    await saReplaceDefault(text,blob,expected,key);learningRefreshAudioReview(fresh.m,text,true);splitAfterSave=split;resolve();
    }catch(e){dialog.querySelector('[role="status"]').textContent=e.message;saving=false;}};
+   dialog.querySelector('[data-save]').onclick=()=>save(false);
+   if(group)dialog.querySelector('[data-save-split]').onclick=()=>save(true);
   });
  }finally{if(dialog){dialog.querySelector('audio').pause();dialog.close();dialog.remove();}if(url)URL.revokeObjectURL(url);learningBusy=false;}
+ if(splitAfterSave){
+  try{await dialogueSplit(id);}
+  catch(error){throw Error('整段已保存。打开切分时遇到问题：'+error.message,{cause:error});}
+ }
 }
 const saAudioOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){
@@ -7815,8 +7836,7 @@ learningOpenDetail=async function(id){
 /* Split an already generated dialogue into its existing course rows. Never generates audio. */
 async function dialogueSplit(id){
  if(batchAudioBusy||learningHasWork()||recorder)throw Error('请先完成编辑或录音。');
- await batchOpenSavedDialogue(id);
- if(!batchDialog.open)batchDialog.showModal();
+ if(await batchOpenSavedDialogue(id,{groupOnly:true,replaceDefaults:true})&&!batchDialog.open)batchDialog.showModal();
 }
 function dialogueSplitOptions(s){
  if(!s.pageMode)return;
@@ -7830,7 +7850,11 @@ const dialogueOriginalEditor=batchEditor;
 batchEditor=function(){dialogueOriginalEditor();dialogueSplitOptions(batchAudioState);};
 async function dialogueReplaceClips(s){
  const current=await (typeof batchResolveSourceWords==='function'?batchResolveSourceWords(s.words):lessonPageResolve(s.words));
- if(current.some((w,i)=>w.word!==s.words[i].word))throw Error('词句文字已改变，请重新打开切分。');
+ if(current.some((w,i)=>w.m?.deleted||w.word!==s.words[i].word))throw Error('词句文字已改变，请重新打开切分。');
+ if(s.splitDialogueId){
+  const group=batchCourseContent(await learningSnapshot()).dialogues.find(d=>d.id===s.splitDialogueId);
+  if(!group||group.words.length!==current.length||group.words.some((w,i)=>w.id!==current[i].id||w.word!==current[i].word))throw Error('本组对话的句子或顺序已改变，请重新打开切分。');
+ }
  if(!confirm('确认用已试听的切片替换这些词句的默认发音？相同文字共用默认音，其他位置也会更新。整段原音及手录参考音保留。'))throw Error('已取消替换，旧音频不变。');
  const clips=new Map();current.forEach((w,i)=>{if(!w.orphan&&!clips.has(w.word))clips.set(w.word,batchWav(s.buffer,...s.ranges[i]));});
  await dialogueWriteClips(clips);
@@ -7855,8 +7879,7 @@ learningOpenDetail=async function(id){
  await dialogueOriginalDetail(id);if(learningDetail!==id)return;
  const snap=await learningSnapshot();if(learningDetail!==id||!batchCourseContent(snap).dialogues.some(d=>d.id===id))return;
  const toolbar=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!toolbar)return;
- const button=document.createElement('button');button.textContent='✂ 将已有整段音频切分到短句';toolbar.prepend(button);
- button.onclick=async()=>{button.disabled=true;try{await dialogueSplit(id);}catch(e){alert(e.message);}finally{button.disabled=false;}};
+ const button=document.createElement('button');button.type='button';button.dataset.dialogueSplit=id;button.textContent='✂ 切分本组已有整段音频';toolbar.prepend(button);
 };
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-dialogue-split]');if(!button)return;
@@ -9703,7 +9726,8 @@ function ssCompose(detail,resolved,id){
   };
   quick.append(editText);
  }if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ const splitDialogue=audio?.querySelector('[data-dialogue-split]');
+ actions.append(play);if(gemini)actions.append(gemini);if(splitDialogue)actions.append(splitDialogue);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -9756,7 +9780,6 @@ learningOpenDetail=function(id){
  };
  const result=ssDetailQueue.catch(()=>{}).then(build);ssDetailQueue=result;ssDetailActiveId=id;ssDetailActivePromise=result;const clear=()=>{if(ssDetailActivePromise===result){ssDetailActiveId=null;ssDetailActivePromise=null;}};result.then(clear,clear);return result;
 };
-
 </script>
 <script data-learning-bundle="pending-review">
 /* Real attempts only. Reuses append-only review events and the existing scheduler. */

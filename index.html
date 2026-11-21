@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="74346ce80317ab70">
+  <meta name="lao-app-build" content="8f83c817d2d43e42">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -1346,7 +1346,13 @@ function backupReviewDialog(rows,summary){return new Promise(resolve=>{
       backupBusy=true;$('#importButton').disabled=true;$('#exportButton').disabled=true;$('#backupStatus').textContent='正在读取备份…';
       let committed=false;
       try {
+        const syntaxWorkspace=typeof syntaxHintImport==='function'?workspaceName('lao-syntax-hints-v1'):null;
         const backup=JSON.parse(await file.text());
+        if(backup?.format==='lao-syntax-hints-v1'){
+          if(!syntaxWorkspace)throw Error('请更新程序后再导入语序提示。');
+          $('#backupStatus').textContent=syntaxHintImport(backup,syntaxWorkspace);
+          return;
+        }
         if(backup?.format==='lao-library-maintenance-v1'){await importLibraryMaintenance(backup);return;}
         if(backup?.format==='lao-shared-words-v1'){await importSharedWords(backup);return;}
         if(backup?.format==='lao-tags-patch-v1'){await importTagPatch(backup);return;}
@@ -11520,6 +11526,13 @@ function syntaxHintHtml(hint,escape){
  const note=hint.kind==='fallback'?'<i>自然译文 · 语序待核对</i>':'';
  return '<small class="learn-card-syntax">'+note+escape(hint.zh)+'</small>';
 }
+function syntaxHintImport(value,key){
+ const rows=syntaxHintValidateFile(value);
+ if(key!==workspaceName('lao-syntax-hints-v1'))throw Error('账号已变化，请重新导入。');
+ if(!rows.length)throw Error('这份资料没有可导入的语序提示，之前的提示已保留。');
+ localStorage.setItem(key,JSON.stringify(rows));syntaxHintImported=null;
+ return '已导入 '+rows.length+' 条老挝语语序提示。请重新打开课程，在「自测显示」中选择「老挝语语序提示」。';
+}
 function syntaxHintMount(){
  const host=document.querySelector('#apDataActions');if(!host)return;
  const fold=document.createElement('details');fold.innerHTML='<summary>导入老挝语语序提示</summary><p>只添加中文语序提示。导入后，重新打开正在学习的章节即可查看。</p><input type="file" accept=".json,application/json" aria-label="选择语序提示资料"><p role="status"></p>';
@@ -11530,10 +11543,7 @@ function syntaxHintMount(){
   const key=workspaceName('lao-syntax-hints-v1');input.disabled=true;
   try{
    if(file.size>15000000)throw Error('请选择语序提示资料文件。');
-   const rows=syntaxHintValidateFile(JSON.parse(await file.text()));
-   if(key!==workspaceName('lao-syntax-hints-v1'))throw Error('账号已变化，请重新导入。');
-   localStorage.setItem(key,JSON.stringify(rows));syntaxHintImported=null;
-   status.textContent='已导入 '+rows.length+' 条不同词句的语序提示。';
+   status.textContent=syntaxHintImport(JSON.parse(await file.text()),key);
   }catch(error){status.textContent=error.message;}
   finally{input.value='';input.disabled=false;}
  };

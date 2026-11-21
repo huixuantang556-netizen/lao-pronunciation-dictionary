@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="353936a57cc6ac9a">
+  <meta name="lao-app-build" content="20f989b1cb512ca1">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -5103,7 +5103,10 @@ async function lessonDialogueAction(action,button){
  if(action==='record'){await cfRecord(id,{button,quick:true,autoStart:true});return;}
  if(action==='manage'){
   stopPracticeAudio();await learningOpenDetail(id);
-  if(learningDetail===id&&typeof ssOpenManagement==='function')ssOpenManagement(learningDialog,'audio');
+  if(learningDetail===id){
+   if(typeof showDialogueSplitControl==='function')showDialogueSplitControl(learningDialog,id);
+   if(typeof ssOpenManagement==='function')ssOpenManagement(learningDialog,'audio');
+  }
   return;
  }
  if(action!=='play')return;
@@ -7874,13 +7877,17 @@ async function dialogueWriteClips(clips){const written=new Map();await new Promi
 });
  for(const [key,blob] of written)if(typeof qaDefaultSaved==='function')await qaDefaultSaved(key,blob);
 }
-const dialogueOriginalDetail=learningOpenDetail;
-learningOpenDetail=async function(id){
- await dialogueOriginalDetail(id);if(learningDetail!==id)return;
- const snap=await learningSnapshot();if(learningDetail!==id||!batchCourseContent(snap).dialogues.some(d=>d.id===id))return;
- const toolbar=learningDialog.querySelector('.learn-audio-bottom .learn-toolbar');if(!toolbar)return;
- const button=document.createElement('button');button.type='button';button.dataset.dialogueSplit=id;button.textContent='✂ 切分本组已有整段音频';toolbar.prepend(button);
-};
+function showDialogueSplitControl(dialog,id){
+ const audio=dialog.querySelector('.ss-audio-tools');
+ const toolbar=audio||dialog.querySelector('.ss-main-actions,.learn-audio-bottom .learn-toolbar');
+ if(!toolbar)return;
+ let button=toolbar.querySelector('[data-dialogue-split]');
+ if(!button){
+  button=document.createElement('button');button.type='button';button.textContent='✂ 切分本组已有整段音频';
+  if(audio)audio.firstElementChild.after(button);else toolbar.prepend(button);
+ }
+ button.dataset.dialogueSplit=id;
+}
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-dialogue-split]');if(!button)return;
  button.disabled=true;try{await dialogueSplit(button.dataset.dialogueSplit);}catch(error){alert(error.message);}finally{button.disabled=false;}
@@ -9726,8 +9733,7 @@ function ssCompose(detail,resolved,id){
   };
   quick.append(editText);
  }if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
- const splitDialogue=audio?.querySelector('[data-dialogue-split]');
- actions.append(play);if(gemini)actions.append(gemini);if(splitDialogue)actions.append(splitDialogue);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
+ actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
  if(panel){
@@ -9763,6 +9769,7 @@ function ssCompose(detail,resolved,id){
  if(related&&w&&related.isConnected&&!main.contains(related)&&related.querySelector('button'))metadata.append(related);
  if(metadata.children.length>1)manager.append(metadata);
  if(!existing)detail.append(host);host.classList.add('ss-sentence-view');host.append(main,manager);
+ if(m.v2Kind==='block'&&m.v2Data?.contentType==='dialogue'&&typeof showDialogueSplitControl==='function')showDialogueSplitControl(detail,id);
 }
 const ssPreviousDetail=learningOpenDetail;
 let ssDetailRenderGate=null,ssDetailRequest=0,ssDetailQueue=Promise.resolve(),ssDetailActiveId=null,ssDetailActivePromise=null;

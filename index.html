@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ae33d7ae7b32368b">
+  <meta name="lao-app-build" content="15a38f2dcdc78baa">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -4404,7 +4404,7 @@ async function lessonV2Render(snap,words,context={}){if(typeof lessonPageStop===
  else if(b.contentType==='table')body='<div class="v2-table-scroll"><table><thead><tr>'+x.columns.map(col=>'<th>'+h(col.label)+'</th>').join('')+'<th>学习</th></tr></thead><tbody>'+x.rows.map(r=>'<tr>'+x.columns.map(col=>'<td>'+h(r.cells[col.key]||'')+'</td>').join('')+'<td>'+(r.playableText?'<button data-learn="play" data-id="'+h(rec('item',r.itemId).id)+'">▶</button><button data-learn="detail" data-id="'+h(rec('item',r.itemId).id)+'">录音／详情</button>':'')+'</td></tr>').join('')+'</tbody></table></div>';
  else if(b.contentType==='word-ref'&&b.displayType==='table')body='<div class="v2-table-scroll"><table>'+x.items.map(r=>'<tr><td>'+card(r,b.contentType)+'</td></tr>').join('')+'</table></div>';
  else body=(!sceneDialogue&&b.contentType==='dialogue'&&typeof lessonDialogueControls==='function'?lessonDialogueControls(m.id):'')+'<div class="'+(['dialogue','sentence'].includes(b.contentType)?'v2-sentences':'learn-card-grid')+'">'+(context.mobilePlan&&b.contentType==='word-ref'?mobileChapterCards(context.mobilePlan,x.items,r=>card(r,b.contentType),r=>lessonV2Id(key,'item',r.itemId)):x.items.map(r=>card(r,b.contentType)).join(''))+'</div>';
- return '<section class="learn-knowledge"'+(sceneDialogue?' data-dialogue-player="'+h(m?.id||lessonV2Id(key,'block',b.id))+'"':'')+'><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(sceneDialogue?'<div class="learn-dialogue-actions">':'')+audioManage+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+(sceneDialogue?'</div>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(sceneDialogue?'<p class="learn-dialogue-status" data-page-status role="status"></p>':'')+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>'+teachingTools(b):'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
+ return '<section class="learn-knowledge"'+(sceneDialogue?' data-dialogue-player="'+h(m?.id||lessonV2Id(key,'block',b.id))+'"':'')+'><div class="learn-block-heading"><h3>'+h(b.title||b.contentType)+'</h3>'+(sceneDialogue?'<div class="learn-dialogue-actions">':'')+audioManage+(['word-ref','sentence','dialogue','reading'].includes(b.contentType)?'<button type="button" class="learn-group-test" data-course-test="block" data-key="'+h(b.id)+'">检测本组</button>':'')+(sceneDialogue?'</div>':'')+'</div><p class="tag-hint">'+h([...new Set([...b.topics,...b.roles])].join(' · '))+'</p>'+(sceneDialogue?'<p class="learn-dialogue-status" data-page-status role="status"></p>':'')+(learningSettings?'<div class="learn-block-tools">'+(Array.isArray(x.items)?'<button type="button" data-list-edit="'+h(b.id)+'">编辑卡片</button>':'')+'<button type="button" data-course-block-edit="'+h(b.id)+'">分类设置</button>'+'</div>'+teachingTools(b):'')+body+(b.note&&b.note.trim()!=='依据2026-10-23最新导出及用户补充整理；保留原ID与录音关联。'?'<p class="learn-note">'+h(b.note)+'</p>':'')+(typeof sceneVocabularyHtml==='function'&&learningGroupKind(b)==='dialogue'&&x.items?.length?sceneVocabularyHtml(lessonV2Id(key,'block',b.id)):'')+(typeof learningGroupFooter==='function'?learningGroupFooter(d,c,b.id):'')+'</section>';};
  const grouped=typeof learningGroupView==='function'?learningGroupView(d,c):null;
  const types=[...new Set(d.sections.flatMap(s=>s.blocks.map(b=>b.contentType)))];
  if(selected)lessonV2Sections.set(c.id,selected.id);
@@ -16081,6 +16081,223 @@ function mountDefaultAudioReview(){
  };
 }
 mountDefaultAudioReview();
+</script>
+<style data-scene-vocabulary>
+.scene-vocab{margin:16px 0 0;padding:12px 14px;border:1px solid #d9e7df;border-radius:14px;background:#f7fbf8}
+.scene-vocab header,.scene-vocab li{display:flex;align-items:center;gap:10px}
+.scene-vocab header{justify-content:space-between}
+.scene-vocab h4,.scene-vocab button{margin:0}
+.scene-vocab button,.scene-vocab-dialog button{min-height:44px}
+.scene-vocab ul{display:grid;gap:6px;padding:0;margin:10px 0;list-style:none}
+.scene-vocab li{padding:7px 0;border-bottom:1px solid #d9e7df}
+.scene-vocab-term,.scene-vocab-options label>span{display:grid;flex:1;min-width:0;gap:2px;overflow-wrap:anywhere}
+.scene-vocab strong[lang=lo],.scene-vocab-options strong[lang=lo]{font-size:1.14em;color:var(--teal,#087f70)}
+.scene-vocab-status{margin:6px 0 0;color:var(--muted)}
+.scene-vocab-status:empty{display:none}
+.scene-vocab-options{display:grid;max-height:42dvh;overflow:auto}
+.scene-vocab-options label{display:flex;align-items:center;gap:12px;min-height:44px;padding:5px 8px;margin:0;border-bottom:1px solid #e1ebe5}
+.scene-vocab-options input{width:20px;height:20px;flex:none;margin:0}
+.scene-vocab-missing{display:flex;align-items:center;gap:6px}
+.scene-vocab-missing label{flex:1;min-width:0}
+.scene-vocab-missing button{margin:0}
+.scene-vocab-dialog .scene-vocab-manual{margin:12px 0}
+.scene-vocab-manual form{display:grid;gap:8px}
+.scene-vocab-manual label{display:grid;gap:3px;margin:0}
+.scene-vocab-manual input{width:100%;box-sizing:border-box;margin:0}
+.scene-vocab-practice p[lang=lo]{font-size:clamp(1.4rem,5vw,2rem);margin:10px 0;color:var(--teal,#087f70)}
+.scene-vocab-review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+@media(max-width:640px){
+ #learningDialog.scene-vocab-dialog{width:100%;max-width:100%;margin:auto 0 0;max-height:85dvh;border-radius:16px 16px 0 0}
+ .scene-vocab{padding:10px}
+ .scene-vocab li{gap:6px}
+ .scene-vocab li button{padding-inline:8px}
+}
+</style>
+<script data-scene-vocabulary>
+/* A scene's personal review list uses existing word and analysis audio. */
+function sceneVocabularyKey(text){
+ return String(text||'').normalize('NFC').replace(/\s+/gu,'');
+}
+function sceneVocabularyCandidates(materials,words){
+ const byWord=new Map(),result=new Map(),contextual=new Set();
+ for(const word of words){
+  const key=sceneVocabularyKey(word.word),matches=byWord.get(key)||[];
+  matches.push(word);byWord.set(key,matches);
+ }
+ const add=(lao,meaning,target='',context=false)=>{
+  lao=String(lao||'').trim();const key=sceneVocabularyKey(lao);
+  if(!key||!/\p{Script=Lao}/u.test(key)||lao.length>150)return;
+  const matches=byWord.get(key)||[],word=matches.length===1?matches[0]:null;
+  const next={lao,meaning:meaning||word?.meaning||'',target:target||(word?.syncId?'word:'+word.syncId:'')},old=result.get(key);
+  if(context&&meaning&&!contextual.has(key)){
+   contextual.add(key);result.set(key,next);return;
+  }
+  if(!old){result.set(key,next);return;}
+  if(!old.target&&next.target)old.target=next.target;
+ };
+ const segmenter=typeof Intl.Segmenter==='function'?new Intl.Segmenter('lo',{granularity:'word'}):null;
+ for(const material of materials){
+  const text=material.textLao||'',analysis=material.sentenceAnalysis;
+  const tokens=sceneVocabularyKey(analysis?.original)===sceneVocabularyKey(text)?analysis?.segments?.flatMap(s=>s.words||[])||[]:[];
+  for(const token of tokens){
+   if(!token.isName&&token.kind!=='name'&&sceneVocabularyKey(text).includes(sceneVocabularyKey(token.lao)))add(token.lao,token.meaning,token.target,true);
+  }
+  const pieces=segmenter?[...segmenter.segment(text)].filter(p=>p.isWordLike).map(p=>p.segment):text.split(/[\s\p{P}]+/u);
+  for(const piece of pieces)add(piece,'');
+ }
+ return result;
+}
+function sceneVocabularyRead(key){
+ try{
+  const rows=JSON.parse(localStorage.getItem(key)||'[]');
+  return new Map(rows.filter(r=>typeof r.lao==='string'&&typeof r.meaning==='string'&&typeof r.target==='string').map(r=>[sceneVocabularyKey(r.lao),r]));
+ }catch(_){return new Map();}
+}
+function sceneVocabularyWrite(key,rows){
+ localStorage.setItem(key,JSON.stringify([...rows.values()]));
+}
+function sceneVocabularyBody(key){
+ const rows=[...sceneVocabularyRead(key).values()],h=learningEsc;
+ return '<header><h4>本节生词'+(rows.length?' · '+rows.length+' 个':'')+'</h4><button type="button" data-scene-vocab-action="pick">'+(rows.length?'选词':'选本节生词')+'</button></header>'+
+ (rows.length?'<ul>'+rows.map((row,index)=>'<li><button type="button" data-scene-vocab-action="play" data-index="'+index+'" aria-label="播放 '+h(row.lao)+'">▶</button><span class="scene-vocab-term"><strong lang="lo">'+h(row.lao)+'</strong><span>'+h(row.meaning||'待补词义')+'</span></span><button type="button" data-scene-vocab-action="remove" data-index="'+index+'">标为已熟</button></li>').join('')+'</ul><button type="button" class="primary" data-scene-vocab-action="review">复习这 '+rows.length+' 个词</button>':'')+
+ '<p class="scene-vocab-status" role="status"></p>';
+}
+function sceneVocabularyHtml(blockId){
+ const key=workspaceName('scene-vocabulary-v1')+':'+blockId;
+ return '<section class="scene-vocab" aria-label="本节生词" data-scene-vocab="'+learningEsc(key)+'">'+sceneVocabularyBody(key)+'</section>';
+}
+function sceneVocabularyStartModal(title,html){
+ if(learningHasWork()||recorder||learningBusy)throw Error('请先保存编辑或结束录音。');
+ stopPracticeAudio();
+ learningModal(title,html);
+ learningDialog.classList.add('scene-vocab-dialog');
+}
+async function sceneVocabularyPlay(row,current){
+ if(learningHasWork()||recorder||learningBusy)throw Error('请先保存编辑或结束录音。');
+ stopPracticeAudio();
+ const generation=playbackGeneration,valid=()=>current()&&generation===playbackGeneration;
+ if(row.target){
+  try{await saPlay(row.target,{isCurrent:valid});return;}
+  catch(error){if(error.code!=='missing-saved-speech'&&!/已删除|已移除|尚未同步/.test(error.message))throw error;}
+ }
+ if(!valid())return;
+ const blob=await learningCachedSpeech(row.lao);
+ if(!valid())return;
+ if(!blob)throw Error('这项暂无单独发音，可以先复习词义。');
+ await learningPlayBlob(blob);
+}
+async function sceneVocabularyPick(host,trigger){
+ const key=host.dataset.sceneVocab,section=host.closest('.learn-knowledge'),owner=workspaceName('scene-vocabulary-v1');
+ const ids=new Set([...section.querySelectorAll('.v2-sentences [data-card-id]')].map(card=>card.dataset.cardId));
+ const {snap,words}=await lnGetData();
+ if(!host.isConnected||learningDialog.open||owner!==workspaceName('scene-vocabulary-v1'))return;
+ const materials=snap.learningMaterials.filter(m=>ids.has(m.id)&&!m.deleted);
+ const candidates=sceneVocabularyCandidates(materials,words),selected=sceneVocabularyRead(key),h=learningEsc;
+ // Keep previously picked terms editable even if a sentence's analysis has been replaced.
+ for(const [id,row] of selected){
+  const fresh=candidates.get(id);
+  candidates.set(id,{...row,target:fresh?.target||'',meaning:row.meaning||fresh?.meaning||''});
+ }
+ sceneVocabularyStartModal('选本节生词',
+  '<div class="scene-vocab-picker" data-scene-vocab-picker><div class="scene-vocab-options"></div>'+
+  '<details class="scene-vocab-manual"><summary>补选没列出的词</summary><form><label>句中的老挝语<input name="lao" lang="lo" maxlength="150" required></label><label>本句词义<input name="meaning" maxlength="1000" required></label><button type="submit">加入备选</button></form></details>'+
+  '<button type="button" class="primary" data-scene-vocab-save>完成</button></div>');
+ const picker=learningDialog.querySelector('[data-scene-vocab-picker]');
+ if(!picker)return;
+ const options=picker.querySelector('.scene-vocab-options'),status=$('#learningDialogStatus'),changed=new Set(),form=picker.querySelector('form');
+ function option(id,row){
+  const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span');
+  input.type='checkbox';input.checked=selected.has(id);
+  text.innerHTML='<strong lang="lo">'+h(row.lao)+'</strong><span>'+h(row.meaning||'待补词义')+'</span>';
+  input.onchange=()=>{changed.add(id);if(input.checked)selected.set(id,candidates.get(id));else selected.delete(id);};
+  label.append(input,text);
+  if(row.meaning)return label;
+  const item=document.createElement('div'),edit=document.createElement('button');
+  item.className='scene-vocab-missing';
+  edit.type='button';edit.textContent='补词义';
+  edit.setAttribute('aria-label','补词义 '+row.lao);
+  edit.onclick=()=>{
+   form.parentElement.open=true;form.elements.lao.value=row.lao;form.elements.meaning.value='';form.elements.meaning.focus();
+  };
+  item.append(label,edit);return item;
+ }
+ function draw(){
+  options.replaceChildren(...[...candidates].map(([id,row])=>option(id,row)));
+ }
+ draw();
+ form.onsubmit=event=>{
+  event.preventDefault();const lao=form.elements.lao.value.trim(),meaning=form.elements.meaning.value.trim(),id=sceneVocabularyKey(lao);
+  if(!id||!meaning||!/\p{Script=Lao}/u.test(id)||!materials.some(m=>sceneVocabularyKey(m.textLao).includes(id))){
+   status.textContent='请填入本节原句里出现的词和它在句中的意思。';return;
+  }
+  const row={lao,meaning,target:candidates.get(id)?.target||''};
+  candidates.set(id,row);selected.set(id,row);changed.add(id);draw();
+  form.reset();status.textContent='已勾选 '+lao+'，点「完成」保存。';
+ };
+ picker.querySelector('[data-scene-vocab-save]').onclick=()=>{
+  try{
+   if(!host.isConnected||owner!==workspaceName('scene-vocabulary-v1'))throw Error('课程已切换，请重新选词。');
+   const saved=sceneVocabularyRead(key);
+   for(const id of changed){if(selected.has(id))saved.set(id,selected.get(id));else saved.delete(id);}
+   sceneVocabularyWrite(key,saved);
+   host.innerHTML=sceneVocabularyBody(key);learningClose();host.querySelector('[data-scene-vocab-action="pick"]')?.focus();
+  }catch(error){status.textContent=error.message;}
+ };
+ learningDialog.addEventListener('close',()=>{if(trigger.isConnected)trigger.focus();},{once:true});
+}
+function sceneVocabularyReview(host){
+ const key=host.dataset.sceneVocab,rows=[...sceneVocabularyRead(key).values()],h=learningEsc;
+ if(!rows.length)return;
+ let index=0;
+ const draw=()=>{
+  const row=rows[index];
+  sceneVocabularyStartModal('复习本节生词',row?
+   '<div class="scene-vocab-practice"><p role="status">'+(index+1)+' / '+rows.length+'</p><p lang="lo">'+h(row.lao)+'</p>'+
+   '<button type="button" data-scene-vocab-review="play">▶ 听发音</button><details><summary>显示词义</summary><p>'+h(row.meaning||'待补词义')+'</p></details>'+
+   '<div class="scene-vocab-review-actions"><button type="button" data-scene-vocab-review="master">标为已熟</button><button type="button" class="primary" data-scene-vocab-review="next">'+(index+1<rows.length?'下一个':'完成复习')+'</button></div></div>':
+   '<p>本轮复习完成。</p><button type="button" class="primary" data-scene-vocab-review="return">回到对话</button>');
+  const dialog=learningDialog.querySelector('.scene-vocab-practice');
+  learningDialog.querySelector('[data-scene-vocab-review="return"]')?.addEventListener('click',()=>{
+   learningClose();
+   const first=host.closest('.learn-knowledge')?.querySelector('.v2-sentences .learn-card-main');
+   first?.scrollIntoView({block:'center'});first?.focus({preventScroll:true});
+  });
+  if(!dialog)return;
+  dialog.querySelector('[data-scene-vocab-review="play"]').onclick=async()=>{
+   const current=()=>learningDialog.open&&dialog.isConnected&&host.isConnected;
+   const status=$('#learningDialogStatus');status.textContent='';
+   try{await sceneVocabularyPlay(row,current);}catch(error){if(current())status.textContent=error.message;}
+  };
+  dialog.querySelector('[data-scene-vocab-review="next"]').onclick=()=>{index++;draw();};
+  dialog.querySelector('[data-scene-vocab-review="master"]').onclick=()=>{
+   try{sceneVocabularyRemove(host,row);index++;draw();}
+   catch(error){$('#learningDialogStatus').textContent=error.message;}
+  };
+ };
+ draw();
+}
+function sceneVocabularyRemove(host,row){
+ const key=host.dataset.sceneVocab,rows=sceneVocabularyRead(key);
+ rows.delete(sceneVocabularyKey(row.lao));sceneVocabularyWrite(key,rows);
+ host.innerHTML=sceneVocabularyBody(key);
+}
+learningPanel.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-scene-vocab-action]'),host=button?.closest('[data-scene-vocab]');
+ if(!host)return;
+ const action=button.dataset.sceneVocabAction,status=host.querySelector('.scene-vocab-status');
+ const current=()=>button.isConnected&&host.isConnected&&!learningDialog.open;
+ try{
+  status.textContent='';
+  if(action==='pick'){await sceneVocabularyPick(host,button);return;}
+  if(action==='review'){sceneVocabularyReview(host);return;}
+  const row=[...sceneVocabularyRead(host.dataset.sceneVocab).values()][Number(button.dataset.index)];
+  if(!row||button.parentElement.querySelector('strong').textContent!==row.lao){host.innerHTML=sceneVocabularyBody(host.dataset.sceneVocab);return;}
+  if(action==='remove'){
+   sceneVocabularyRemove(host,row);
+   host.querySelector('[data-scene-vocab-action="pick"]').focus();
+  }else if(action==='play')await sceneVocabularyPlay(row,current);
+ }catch(error){if(status.isConnected)status.textContent=error.message;}
+});
 </script>
 </body>
 </html>

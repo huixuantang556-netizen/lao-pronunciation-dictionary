@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="15a38f2dcdc78baa">
+  <meta name="lao-app-build" content="ecd35e7e2b45d870">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -16200,11 +16200,14 @@ async function sceneVocabularyPick(host,trigger){
  }
  sceneVocabularyStartModal('选本节生词',
   '<div class="scene-vocab-picker" data-scene-vocab-picker><div class="scene-vocab-options"></div>'+
-  '<details class="scene-vocab-manual"><summary>补选没列出的词</summary><form><label>句中的老挝语<input name="lao" lang="lo" maxlength="150" required></label><label>本句词义<input name="meaning" maxlength="1000" required></label><button type="submit">加入备选</button></form></details>'+
+  '<details class="scene-vocab-manual"><summary>补选没列出的词</summary><form><label>句中的老挝语<input name="lao" lang="lo" maxlength="150" required></label><label>本句词义<input name="meaning" maxlength="1000" required></label><button type="submit">加入并勾选</button></form></details>'+
   '<button type="button" class="primary" data-scene-vocab-save>完成</button></div>');
  const picker=learningDialog.querySelector('[data-scene-vocab-picker]');
  if(!picker)return;
  const options=picker.querySelector('.scene-vocab-options'),status=$('#learningDialogStatus'),changed=new Set(),form=picker.querySelector('form');
+ const laoField=form.elements.lao,meaningField=form.elements.meaning;
+ let prefilledWord='';
+ const hasPendingWord=()=>Boolean(meaningField.value.trim()||laoField.value.trim()!==prefilledWord);
  function option(id,row){
   const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span');
   input.type='checkbox';input.checked=selected.has(id);
@@ -16217,7 +16220,8 @@ async function sceneVocabularyPick(host,trigger){
   edit.type='button';edit.textContent='补词义';
   edit.setAttribute('aria-label','补词义 '+row.lao);
   edit.onclick=()=>{
-   form.parentElement.open=true;form.elements.lao.value=row.lao;form.elements.meaning.value='';form.elements.meaning.focus();
+   if(hasPendingWord()&&!addPendingWord())return;
+   form.parentElement.open=true;prefilledWord=row.lao;laoField.value=row.lao;meaningField.focus();
   };
   item.append(label,edit);return item;
  }
@@ -16225,18 +16229,26 @@ async function sceneVocabularyPick(host,trigger){
   options.replaceChildren(...[...candidates].map(([id,row])=>option(id,row)));
  }
  draw();
- form.onsubmit=event=>{
-  event.preventDefault();const lao=form.elements.lao.value.trim(),meaning=form.elements.meaning.value.trim(),id=sceneVocabularyKey(lao);
-  if(!id||!meaning||!/\p{Script=Lao}/u.test(id)||!materials.some(m=>sceneVocabularyKey(m.textLao).includes(id))){
-   status.textContent='请填入本节原句里出现的词和它在句中的意思。';return;
+ function addPendingWord(){
+  const lao=laoField.value.trim(),meaning=meaningField.value.trim(),id=sceneVocabularyKey(lao);
+  const validWord=id&&/\p{Script=Lao}/u.test(id)&&materials.some(m=>sceneVocabularyKey(m.textLao).includes(id));
+  if(!validWord||!meaning){
+   status.textContent=validWord?'请先补写本句词义。':'请填入本节原句里出现的老挝语。';
+   form.parentElement.open=true;(validWord?meaningField:laoField).focus();
+   return false;
   }
   const row={lao,meaning,target:candidates.get(id)?.target||''};
   candidates.set(id,row);selected.set(id,row);changed.add(id);draw();
-  form.reset();status.textContent='已勾选 '+lao+'，点「完成」保存。';
+  form.reset();prefilledWord='';status.textContent='已勾选 '+lao+'，点「完成」保存。';
+  return true;
+ }
+ form.onsubmit=event=>{
+  event.preventDefault();addPendingWord();
  };
  picker.querySelector('[data-scene-vocab-save]').onclick=()=>{
   try{
    if(!host.isConnected||owner!==workspaceName('scene-vocabulary-v1'))throw Error('课程已切换，请重新选词。');
+   if(hasPendingWord()&&!addPendingWord())return;
    const saved=sceneVocabularyRead(key);
    for(const id of changed){if(selected.has(id))saved.set(id,selected.get(id));else saved.delete(id);}
    sceneVocabularyWrite(key,saved);

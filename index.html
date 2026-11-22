@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="0162244f88cbae02">
+  <meta name="lao-app-build" content="85b919135f64afeb">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -928,7 +928,7 @@ function speechResultUncertain(key){try{localStorage.setItem(workspaceName('spee
 function speechResultClear(){localStorage.removeItem(workspaceName('speech-uncertain-result'));}
     async function playEntrySpeech(item, source = 'auto') {
       stopPracticeAudio();const generation=playbackGeneration;
-      try{if(source==='auto'){const clip=await recordedReferenceForWord(item);if(generation!==playbackGeneration)return;if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}const own=source==='default'?null:audioBlobFor(item);if(source==='personal'&&!own)throw new Error('这个词条没有自己的录音。');if(!own)$('#ttsStatus').textContent='正在准备默认发音…';const blob=own||await defaultSpeech(item.word);if(generation!==playbackGeneration)return;practiceAudioUrl=URL.createObjectURL(blob);practiceAudio=new Audio(practiceAudioUrl);const playing=practiceAudio;playing.onended=()=>{if(practiceAudio===playing)stopPracticeAudio();};await playing.play();if(!own)$('#ttsStatus').textContent='正在播放默认发音；它与自己的录音分别保留。';}catch(error){if(generation!==playbackGeneration)return;stopPracticeAudio();$('#ttsStatus').textContent=error.message;alert(error.name==='AbortError'?'语音生成超时，请重试。':error.message);}
+      try{if(source==='auto'){const clip=await recordedReferenceForWord(item);if(generation!==playbackGeneration)return;if(clip){await learningPlayBlob(clip.blob,clip.start,clip.end);return;}}const own=source==='default'?null:audioBlobFor(item);if(source==='personal'&&!own)throw new Error('这个词条没有自己的录音。');if(!own)$('#ttsStatus').textContent='正在准备默认发音…';const blob=own||await defaultSpeech(item.word);if(generation!==playbackGeneration)return;practiceAudioUrl=URL.createObjectURL(blob);practiceAudio=new Audio(practiceAudioUrl);const playing=practiceAudio;if(typeof appSetSinglePlaybackRate==='function')appSetSinglePlaybackRate(playing);playing.onended=()=>{if(practiceAudio===playing)stopPracticeAudio();};await playing.play();if(!own)$('#ttsStatus').textContent='正在播放默认发音；它与自己的录音分别保留。';}catch(error){if(generation!==playbackGeneration)return;stopPracticeAudio();$('#ttsStatus').textContent=error.message;alert(error.name==='AbortError'?'语音生成超时，请重试。':error.message);}
     }
     const bulkPrompt = '请整理为五列文本，表头必须是：老挝语 | IPA | 中文 | 标签 | 备注。每行一个完整写法的主词卡，同写法的不同常用义项合并到中文列，以词性及语境区分；不得因来源、课次或释义不同重复成行。拼写、调号和重复符号不同的词不擅自合并。原文缺失或不确定的 IPA／词义留空，疑点写备注。真实单词标签用“主题·名称,词性·名称”；主题从：食物与饮品、数字与计量、时间与日历、亲属与人际、人称与称呼、国家与地名、职业与机构、学习与交流、身体与健康、衣着与配饰、颜色与外观、交通与旅行、居住与日用品、方位与地点、自然与农事、动物、社交与礼貌、情绪与状态、状态与性质、文化与活动、交易与费用、常用动作、感知与认知、语法与功能表达中选择，可多个。字母／元音／无实际词义的拼读练习使用对象·辅音字母、对象·元音字形或对象·拼读练习，勿伪造词义。课次、字母教学用途和例句放备注，不用中辅音等标签代替真实词义主题。每行严格五列，半角 | 分隔，内容中的竖线改为全角 ｜，换行写<br>。忠实保留老挝语和IPA附加符号，不编造出处。不输出额外解释。此入口仅添加新词，已有词纠错须更新原词卡，不能伪装成新增。以下为原始资料：';
     let bulkReadyText = null;
@@ -3356,6 +3356,7 @@ function learningAudioDeadline(work,message,signal){
 }
 async function learningPlayBlob(blob,start=0,end=null,onComplete){
  stopPracticeAudio();const generation=playbackGeneration;practiceAudioUrl=URL.createObjectURL(blob);const a=practiceAudio=new Audio();a.laoClipEnd=end;
+ if(typeof appSetSinglePlaybackRate==='function')appSetSinglePlaybackRate(a);
  const loading=new AbortController();a.laoCancelLoad=()=>loading.abort();
  try{
   if(start||end!==null){
@@ -4734,8 +4735,10 @@ function lessonPageToolbarFor(words,title,key){
  if(!words.length)return '';lessonPages.set(key,{words,title});
  const h=learningEsc,speed=typeof appPreference==='function'?appPreference('chapterReadSpeed')||'1':'1';
  const loop=typeof appPreference==='function'&&appPreference('chapterReadLoop');
- const speeds=['0.75','1','1.25','1.5','2','3'].map(value=>'<option value="'+value+'"'+(value===speed?' selected':'')+'>'+value+'×</option>').join('');
- return '<div class="lesson-page-player" data-chapter-read-aloud data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="终止整页播放" title="终止播放并收起进度条">'+lessonIcon('stop')+'</button><details class="page-player-more"><summary>更多</summary><div><label><span>语速</span><select data-page-speed>'+speeds+'</select></label><label><span>循环播放</span><input type="checkbox" data-page-loop'+(loop?' checked':'')+'></label>'+(typeof chapterListeningMenu==='function'?chapterListeningMenu():'')+'<button data-page-action="prepare">'+lessonIcon('audio')+'音频管理</button><button type="button" data-page-action="share-chapter-defaults">同步本章默认发音</button>'+'</div></details></div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
+ const singleSpeed=typeof appPreference==='function'?appPreference('singlePlaySpeed')||'1':'1';
+ const speedOptions=selected=>['0.75','1','1.25','1.5','2','3'].map(value=>'<option value="'+value+'"'+(value===selected?' selected':'')+'>'+value+'×</option>').join('');
+ const speeds=speedOptions(speed);
+ return '<div class="lesson-page-player" data-chapter-read-aloud data-page-key="'+h(key)+'"><div class="page-player-heading"><span class="page-player-kicker">本页听读 · '+words.length+' 项</span><strong>'+h(title)+'</strong></div><div class="page-player-controls"><button data-page-action="play" class="page-play">'+lessonIcon('play')+'播放整页</button><button data-page-action="pause" aria-label="暂停／继续">暂停／继续</button><button data-page-action="stop" aria-label="终止整页播放" title="终止播放并收起进度条">'+lessonIcon('stop')+'</button><details class="page-player-more"><summary>更多</summary><div><label><span>整页语速</span><select data-page-speed>'+speeds+'</select></label><label><span>单条语速</span><select data-single-speed>'+speedOptions(singleSpeed)+'</select></label><label><span>循环播放</span><input type="checkbox" data-page-loop'+(loop?' checked':'')+'></label>'+(typeof chapterListeningMenu==='function'?chapterListeningMenu():'')+'<button data-page-action="prepare">'+lessonIcon('audio')+'音频管理</button><button type="button" data-page-action="share-chapter-defaults">同步本章默认发音</button>'+'</div></details></div><p data-page-status role="status">优先播放整段原音；没有整段时按顺序播放已保存的单条音频。</p></div>';
 }
 // Keep the existing player actions and status channel; compact labels are presentation only.
 const lessonPageFullToolbar=lessonPageToolbarFor;
@@ -10925,12 +10928,33 @@ function rpProgressHtml(model){const b=rrDailyBudget(model);return '<div class="
 </style>
 <script data-learning-bundle="app-settings">
 /* Local presentation preferences; reuse original account, backup and update controls. */
-const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',showSyntaxHints:false,showHanziReading:false,chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
-const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
+const appPreferenceDefaults=Object.freeze({selfTestDisplay:'all',showSyntaxHints:false,showHanziReading:false,singlePlaySpeed:'1',chapterReadSpeed:'1',chapterReadLoop:false,expandPronunciation:false,expandSentenceReading:false,expandExamples:false,revealAudio:true,listeningAutoPlay:true,listeningAutoRepeats:'1',includeFamiliar:true,adaptiveRelearning:true,courseCheckAutoPlay:false,courseCheckScope:'current',courseCheckKind:'all',courseCheckDirection:'lao',courseCheckOrder:'ordered',dailyPracticeDirection:'wordToMeaning',freePracticeDirection:'wordToMeaning',freePracticeKind:'words',freePracticeScope:'all',freePracticeLibrary:'all'});
+const apPreferenceChoices={selfTestDisplay:['all','zh','lo','both'],singlePlaySpeed:['0.75','1','1.25','1.5','2','3'],chapterReadSpeed:['0.75','1','1.25','1.5','2','3'],listeningAutoRepeats:['1','2','3','4','5'],dailyPracticeDirection:['wordToMeaning','meaningToSpeech','meaningToWord','audio','all'],freePracticeDirection:['ipaToWord','wordToIpa','wordToMeaning','meaningToWord','audioToWord','mixed'],freePracticeKind:['words','sentences','words-sentences','letters'],freePracticeScope:['all','mistakes','focus'],freePracticeLibrary:['all','teaching','communication'],courseCheckScope:['current','course','groups','pick'],courseCheckKind:['all','words','dialogues'],courseCheckDirection:['lao','zh','audio','continuous'],courseCheckOrder:['ordered','random','random-all']};
 function apPreferenceValue(key,value){const fallback=appPreferenceDefaults[key];return typeof fallback==='boolean'?(typeof value==='boolean'?value:fallback):(apPreferenceChoices[key]?.includes(value)?value:fallback);}
 function apPreferenceKey(){return workspaceName('lao-personal-preferences-v1');}
 function apReadPreferences(){let saved;try{saved=JSON.parse(localStorage.getItem(apPreferenceKey())||'null');}catch(_){}return Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,key==='courseCheckDirection'&&saved?.[key]==='dictation'?'audio':key==='showSyntaxHints'&&saved?.showSyntaxHints===undefined&&saved?.selfTestDisplay==='syntax'?true:saved?.[key])]));}
 function appPreference(key){return apReadPreferences()[key];}
+function appSetSinglePlaybackRate(audio,rate=Number(appPreference('singlePlaySpeed'))){
+ if(!audio)return;
+ audio.defaultPlaybackRate=rate;
+ audio.playbackRate=rate;
+}
+function appApplySinglePlaybackPreference(){
+ const value=appPreference('singlePlaySpeed');
+ if(typeof practiceAudio!=='undefined')appSetSinglePlaybackRate(practiceAudio,Number(value));
+ for(const select of document.querySelectorAll?.('[data-single-speed],[data-ap-choice="singlePlaySpeed"]')||[])select.value=value;
+}
+document.addEventListener?.('change',event=>{
+ const select=event.target;
+ if(!select.matches?.('[data-single-speed]'))return;
+ try{
+  apSavePreferences({...apReadPreferences(),singlePlaySpeed:select.value});
+  appApplySinglePlaybackPreference();
+ }catch(error){
+  select.value=appPreference('singlePlaySpeed');
+  alert('无法保存单条播放倍速：'+error.message);
+ }
+});
 function apSavePreferences(value){const safe=Object.fromEntries(Object.keys(appPreferenceDefaults).map(key=>[key,apPreferenceValue(key,value[key])]));localStorage.setItem(apPreferenceKey(),JSON.stringify({version:1,...safe}));return safe;}
 function apApplyDetail(detail){if(!detail)return;const prefs=apReadPreferences();for(const n of detail.querySelectorAll('.ss-pronunciation,.pa-word-card,.pa-segment-rules'))n.open=n.dataset.ssSentenceReading==='true'?prefs.expandSentenceReading:prefs.expandPronunciation;for(const n of detail.querySelectorAll('.ss-word-examples'))n.open=prefs.expandExamples;}
 function apGuard(){scGuard();if(typeof rpSaving!=='undefined'&&rpSaving||typeof practiceChecking!=='undefined'&&practiceChecking)throw Error('请等待当前学习结果保存完成');}
@@ -10961,8 +10985,8 @@ updateProfileUser=function(...args){const result=apPreviousUpdateProfile(...args
 function apOpenSettings(){try{apGuard();updateProfileUser();if(typeof appCloseMore==='function')appCloseMore();document.querySelector('#apSettingsStatus').textContent='';if(!apDialog.open){if(typeof window.laoResetSyncFeedback==='function'&&window.laoResetSyncFeedback())apSyncResult.hidden=true;apDialog.showModal();}apDialog.scrollTop=0;}catch(error){alert(error.message);}}
 accountButton.onclick=apOpenSettings;
 const apEntry=document.createElement('button');apEntry.type='button';apEntry.className='ap-more-entry';apEntry.textContent='⚙ 设置与个人中心';apEntry.onclick=apOpenSettings;if(typeof appMorePanel!=='undefined')appMorePanel.append(apEntry);
-apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(['selfTestDisplay','showSyntaxHints','showHanziReading'].includes(key)&&typeof cfDecorate==='function')cfDecorate();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
-document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
+apContent.addEventListener('change',e=>{const choice=e.target.dataset.apChoice,key=choice||e.target.dataset.apPreference;if(!Object.hasOwn(appPreferenceDefaults,key))return;try{apSavePreferences({...apReadPreferences(),[key]:choice?e.target.value:e.target.checked});if(['selfTestDisplay','showSyntaxHints','showHanziReading'].includes(key)&&typeof cfDecorate==='function')cfDecorate();if(key==='singlePlaySpeed')appApplySinglePlaybackPreference();if((key==='chapterReadSpeed'||key==='chapterReadLoop')&&typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='偏好已保存在本机。';}catch(error){if(choice)e.target.value=appPreference(key);else e.target.checked=appPreference(key);document.querySelector('#apPreferenceStatus').textContent='保存失败，未改变偏好：'+error.message;}});
+document.querySelector('#apResetPreferences').onclick=()=>{if(!confirm('只恢复阅读、播放和学习默认偏好？词典、录音、学习清单和复习记录都不会改变。'))return;try{apSavePreferences(appPreferenceDefaults);apRefreshSettings();appApplySinglePlaybackPreference();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));document.querySelector('#apPreferenceStatus').textContent='已恢复默认偏好，学习资料未改动。';}catch(error){document.querySelector('#apPreferenceStatus').textContent='保存失败：'+error.message;}};
 let apTransition=false;
 apContent.addEventListener('click',async e=>{const section=e.target.closest('[data-ap-section]');if(section){document.querySelector('#'+section.dataset.apSection)?.scrollIntoView({block:'start',behavior:'smooth'});return;}const action=e.target.closest('[data-ap-action]');if(!action||apTransition)return;try{apGuard();apTransition=true;apDialog.close();if(action.dataset.apAction==='goals')await rrManage();}catch(error){if(!apDialog.open)apDialog.showModal();document.querySelector('#apSettingsStatus').textContent=error.message;}finally{apTransition=false;}});
 document.querySelector('#apDataActions').addEventListener('click',e=>{if(!e.target.closest('button'))return;try{apGuard();apDialog.close();}catch(error){e.preventDefault();e.stopImmediatePropagation();document.querySelector('#apSettingsStatus').textContent=error.message;}},true);
@@ -10970,7 +10994,7 @@ window.appMoveOfflinePanel=panel=>{panel.classList.add('ap-offline-panel');docum
 const apExistingOffline=document.querySelector('.app-offline');if(apExistingOffline)window.appMoveOfflinePanel(apExistingOffline);
 const apPreviousDetail=learningOpenDetail;
 learningOpenDetail=async function(id,...args){const result=await apPreviousDetail(id,...args);if(learningDetail===id)apApplyDetail(learningDialog.querySelector('.ss-detail'));return result;};
-window.addEventListener('storage',e=>{if(e.key===apPreferenceKey()||e.key===null){apRefreshSettings();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));}});
+window.addEventListener('storage',e=>{if(e.key===apPreferenceKey()||e.key===null){apRefreshSettings();appApplySinglePlaybackPreference();if(typeof lessonApplyPlaybackPreferences==='function')lessonApplyPlaybackPreferences();if(typeof cfDecorate==='function')cfDecorate();apApplyDetail(learningDialog.querySelector('.ss-detail'));}});
 const apRefreshBeforeChoices=apRefreshSettings;
 apRefreshSettings=function(){apRefreshBeforeChoices();for(const select of apDialog.querySelectorAll('[data-ap-choice]'))select.value=appPreference(select.dataset.apChoice);};
 apRefreshSettings();
@@ -10991,7 +11015,11 @@ const apChapterPlayback=document.createElement('div');
 apChapterPlayback.className='ap-course-check';
 const apChapterSpeedOptions=apPreferenceChoices.chapterReadSpeed.map(value=>'<option value="'+value+'">'+value+'×</option>').join('');
 apChapterPlayback.innerHTML='<h4>整章朗读默认设置</h4><label>播放倍速<select data-ap-choice="chapterReadSpeed">'+apChapterSpeedOptions+'</select></label><label class="ap-switch-row"><span><strong>循环播放</strong></span><input type="checkbox" role="switch" data-ap-preference="chapterReadLoop"></label>';
-apGroup('阅读与播放',[...apReadingRows,apChapterPlayback]);
+const apSinglePlayback=document.createElement('div');
+apSinglePlayback.className='ap-course-check';
+const apSingleSpeedOptions=apPreferenceChoices.singlePlaySpeed.map(value=>'<option value="'+value+'">'+value+'×</option>').join('');
+apSinglePlayback.innerHTML='<label>单条播放倍速<select data-ap-choice="singlePlaySpeed">'+apSingleSpeedOptions+'</select></label>';
+apGroup('阅读与播放',[...apReadingRows,apSinglePlayback,apChapterPlayback]);
 const apSelfTestDisplay=document.createElement('div');
 apSelfTestDisplay.className='ap-course-check';
 apSelfTestDisplay.innerHTML='<label>打开课程时<select data-ap-choice="selfTestDisplay"><option value="all">显示全部</option><option value="zh">隐藏中文</option><option value="lo">隐藏老挝语</option><option value="both">隐藏中文和老挝语</option></select></label>'+

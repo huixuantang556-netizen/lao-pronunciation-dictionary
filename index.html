@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="e8efb146ceeea48b">
+  <meta name="lao-app-build" content="1fe5e02ba9a7c4f5">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -9855,6 +9855,19 @@ showView=function(view,...args){
  #learningDialog .ss-reading .ss-pronunciation>summary{font-size:14px;padding:8px 0}
  #learningDialog button[data-letter-detail-back]{font-size:13px;min-height:36px;padding:7px 11px}
 }
+
+#learningDialog .ss-quick-management .ss-edit-grammar{background:#eaf5ef;color:#086551}
+#learningDialog .mt-tool-actions{display:flex;gap:8px;flex-wrap:wrap;margin-block:10px}
+#learningDialog .mt-tools [data-mt-status]:empty,#mtSentenceGrammarStatus:empty{display:none}
+#learningDialog .mt-grammar-source{font-size:clamp(1.25rem,4vw,1.8rem);color:#087f70;overflow-wrap:anywhere}
+#mtSentenceGrammar{display:grid;gap:14px}
+#mtSentenceGrammar section h3,#mtSentenceGrammar section h4{margin:0 0 8px}
+#mtSentenceGrammar details section{margin:12px 0}
+#mtSentenceGrammar .mt-grammar-row{display:grid;gap:8px;padding:12px;margin-bottom:8px;border:1px solid #d9e7df;border-radius:12px}
+#mtSentenceGrammar .mt-grammar-row label{display:grid;gap:5px;margin:0}
+#mtSentenceGrammar .mt-grammar-row input,#mtSentenceGrammar .mt-grammar-row textarea{box-sizing:border-box;width:100%;min-width:0;margin:0}
+#mtSentenceGrammar [data-mt-remove-grammar]{justify-self:start;margin:0}
+#mtSentenceGrammar button{min-height:44px}
 </style>
 <script data-learning-bundle="sentence-study-layout">
 /* One reading surface; move existing controls, never clone handlers or rewrite saved analysis. */
@@ -9875,7 +9888,8 @@ function ssCompose(detail,resolved,id){
  if(detail.dataset.ssLayout)return;detail.dataset.ssLayout='true';detail.dataset.ssWord=String(!!resolved.w);detail.classList.add('ss-detail');
  const {m,w}=resolved,a=m.sentenceAnalysis,trusted=!!a&&saTextKey(a.original)===saTextKey(w?.word||m.textLao)&&(!w||saTextKey(a.translation||'')===saTextKey(w.meaning||'')),existing=detail.querySelector('.sentence-analysis'),host=existing||ssElement('section','ss-root'),panel=trusted?detail.querySelector('.wsl-panel'):null,meaning=detail.querySelector('.learn-meaning'),ipa=detail.querySelector('.ipa'),audio=detail.querySelector('.learn-audio-bottom'),record=detail.querySelector('#learningRecord'),reference=detail.querySelector('#learningReferenceRecord'),draft=detail.querySelector('#learningRecordingDraft'),raw=existing?.querySelector('.sa-content'),paTools=detail.querySelector('.pa-analysis-tools'),quiz=trusted?raw?.querySelector('.sa-quiz'):null;
  const originalHostChildren=existing?[...existing.children]:[],originalDetailChildren=[...detail.children];
- const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 播放'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold('语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
+ const canEditGrammar=!w&&!m.analysisOwner&&m.v2Kind!=='block'&&['sentence','dialogue','reading_drill'].includes(m.contentType)&&typeof mtEditSentenceGrammar==='function';
+ const main=ssElement('div','ss-reading'),actions=ssElement('div','ss-main-actions'),play=ssElement('button','ss-play','▶ 播放'),toggle=ssElement('button','ss-manage-toggle','⚙ 设置'),status=ssElement('p','ss-play-status'),manager=ssElement('section','ss-management'),parseTools=ssFold(canEditGrammar?'更多语法工具':'语法解析管理','ss-analysis-tools'),audioTools=ssFold('录音、纠音与音频管理','ss-audio-tools'),metadata=ssFold('来源、备注与复习记录','ss-metadata');
  play.type=toggle.type='button';play.setAttribute('aria-label',w?'播放单词已有参考录音':'播放本句已有参考录音');toggle.dataset.ssManage='true';toggle.setAttribute('aria-expanded','false');manager.id='sentenceStudyManagement';toggle.setAttribute('aria-controls',manager.id);status.setAttribute('role','status');manager.hidden=true;
  const gemini=audio?.querySelector('[data-learn="gemini"]'),editText=audio?.querySelector('[data-learn="edit-word"]')||audio?.querySelector('[data-learn="edit-material"]'),regenerate=audio?.querySelector('[data-ss-regenerate]'),quick=ssElement('div','ss-quick-management');quick.hidden=true;quick.id='sentenceStudyQuickManagement';if(editText&&typeof conversationIsMaterial==='function'&&conversationIsMaterial(id))editText.remove();
  else if(editText){
@@ -9892,7 +9906,20 @@ function ssCompose(detail,resolved,id){
    finally{editText.disabled=false;}
   };
   quick.append(editText);
- }if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
+ }
+ if(canEditGrammar){
+  const grammar=ssElement('button','ss-edit-grammar','修改整句语法');
+  grammar.type='button';grammar.dataset.ssEditGrammar='';
+  grammar.onclick=async()=>{
+   if(learningHasWork()||recorder){status.textContent='请先保存编辑或结束录音。';return;}
+   grammar.disabled=true;status.textContent='';
+   try{await mtEditSentenceGrammar(id);}
+   catch(error){status.textContent=error.message;}
+   finally{grammar.disabled=false;}
+  };
+  quick.prepend(grammar);
+ }
+ if(reference)quick.append(reference);if(regenerate)quick.append(regenerate);toggle.setAttribute('aria-controls',manager.id+' '+quick.id);
  actions.append(play);if(gemini)actions.append(gemini);actions.append(quick);const colorPicker=typeof wordColorDetailPicker==='function'?wordColorDetailPicker(resolved):null;if(colorPicker)actions.append(colorPicker);actions.append(toggle);play.onclick=async()=>{play.disabled=true;try{await saPlay(id,{reviewDialog:true});if(learningDetail===id)status.textContent='';}catch(error){if(learningDetail===id)status.textContent=error.message;}finally{play.disabled=false;}};
  toggle.onclick=()=>ssSetManagement(learningDialog,manager.hidden);
  const title=learningDialog.querySelector('header h2');if(!w&&title)title.textContent=m.analysisOwner?'词句学习':'句子学习';else if(w&&title)title.lang='lo';
@@ -9917,11 +9944,11 @@ function ssCompose(detail,resolved,id){
  else if(paTools){const saved=[...paTools.children].filter(n=>n.classList.contains('pa-section'));if(saved.length){const fold=ssFold('语音分析','ss-pronunciation');saved.forEach(n=>fold.append(n));main.append(fold);}}
  const related=detail.querySelector('.learn-related');if(related&&panel){metadata.append(related);}else if(related&&!related.querySelector('button')){related.remove();}else if(related&&!w&&related.querySelector('button')){const fallback=ssFold('词汇','ss-fallback-words');for(const n of [...related.children])if(n.tagName==='H3'||n.classList.contains('tag-hint'))n.remove();fallback.append(related);main.append(fallback);}
  if(w||m.analysisUnitType==='word'){const nodes=originalDetailChildren.filter(n=>(w&&n===related||n.classList.contains('letter-examples'))&&n.querySelector('button'));if(nodes.length){const examples=nodes.some(n=>n.dataset.wslUsage==='true')?ssGroup('例句与短语用法','ss-usage-examples'):ssFold('例句与用法','ss-word-examples');examples.open=true;for(const n of nodes){n.querySelector('h3')?.remove();examples.append(n);}main.append(examples);}}
- parseTools.append(ssElement('p','ss-management-note',a?'已有解析；原文和录音不随显示调整而改变。':'尚未添加解析。'));
+ if(!canEditGrammar)parseTools.append(ssElement('p','ss-management-note',a?'已有解析；原文和录音不随显示调整而改变。':'尚未添加解析。'));
  const exportSaved=existing?.querySelector('.sa-export-saved');if(exportSaved)parseTools.append(exportSaved);
  for(const n of originalHostChildren){if(n===panel||n===paTools||n===raw||n===stale)continue;if(n.tagName==='H3'||n.classList.contains('sa-help')){n.remove();continue;}if(n.querySelector('[data-split]'))audioTools.append(n);else parseTools.append(n);}
  if(raw){const fold=ssFold('分段与原始解析（核对用）','ss-raw-analysis');fold.append(raw);parseTools.append(fold);}
- if(existing)manager.append(parseTools);
+ if(existing||canEditGrammar)manager.append(parseTools);
  if(paTools){paTools.classList.add('ss-phonetic-tools');const heading=paTools.querySelector('h3');const fold=ssFold('发音分析管理','ss-phonetic-management');heading?.remove();for(const n of [...paTools.children]){if(n.classList.contains('pa-muted'))n.remove();else if(n.classList.contains('pa-pending'))main.append(n);}fold.append(paTools);manager.append(fold);}
  if(audio){audioTools.append(audio);manager.append(audioTools);}
  const removed=new Set([host,panel,meaning,ipa,audio,record,reference,draft,warning,related,paTools]);
@@ -14677,8 +14704,8 @@ learningWrite=async function(rows,expected,options){
 async function mtApply(id){const snap=await learningSnapshot(),m=snap.learningMaterials.find(x=>x.id===id&&!x.deleted);if(!m)throw Error('这句已修改或删除，请重新打开');const rows=await mtRepairPlan(m,snap);if(rows.length)await learningWrite({learningMaterials:rows},snap,{quickAudio:true});return rows.length;}
 function mtAddTools(id,resolved){
  const detail=learningDialog.querySelector('.learn-detail');if(!detail||detail.querySelector('.mt-tools')||resolved.w||resolved.m.analysisOwner)return;
- const group=document.createElement('details');group.className='mt-tools';group.innerHTML='<summary>只更新这一句</summary><button type="button" data-mt="audio">试听／确认已有录音</button><button type="button" data-mt="keep">仅标点调整：沿用原分析</button><button type="button" data-mt="grammar">编辑本句翻译与语法</button><button type="button" data-mt="phonetics">核对本句发音分析</button><p class="tag-hint">标点、空格调整可沿用原分析；字母或声调符号改变需核对本句。录音始终保留，可先试听再决定是否沿用。</p><p data-mt-status role="status"></p>';
- (detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m,resolved.snap);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
+ const group=document.createElement('details');group.className='mt-tools';group.innerHTML='<summary>翻译、分段与发音核对</summary><div class="mt-tool-actions"><button type="button" data-mt="grammar">编辑翻译与分段</button><button type="button" data-mt="keep">按标点沿用解析</button><button type="button" data-mt="audio">核对已有录音</button><button type="button" data-mt="phonetics">核对发音分析</button></div><p data-mt-status role="status"></p>';
+ (detail.querySelector('.ss-analysis-tools')||detail.querySelector('.ss-management')||detail).append(group);group.onclick=async e=>{const b=e.target.closest('[data-mt]');if(!b)return;try{if(learningHasWork())throw Error('请先保存或取消当前编辑');if(b.dataset.mt==='audio'){await learningReviewChangedAudio(resolved.m,resolved.snap);return;}if(b.dataset.mt==='keep'){if(!mtEquivalent(resolved.m.sentenceAnalysis?.original,resolved.m.textLao))throw Error('原句字母或声调符号有变化，请编辑本句语法后核对发音分析');await mtApply(id);await learningOpenDetail(id);return;}if(b.dataset.mt==='grammar'){await mtEditGrammar(id);return;}await paOpen([id]);if($('#paReuse'))await $('#paReuse').onclick();}catch(error){group.querySelector('[data-mt-status]').textContent=error.message;}};
 }
 const mtOriginalDetail=learningOpenDetail;
 learningOpenDetail=async function(id){
@@ -14692,6 +14719,76 @@ async function mtEditGrammar(id){
  $('#mtGrammarForm').oninput=()=>{learningDraft={kind:'minor-grammar',dirty:true};};$('#mtCancel').onclick=()=>{learningDraft=null;return learningOpenDetail(id);};$('#mtGrammarForm').onsubmit=async e=>{e.preventDefault();if(learningBusy)return;learningBusy=true;try{const fresh=await learningSnapshot(),current=fresh.learningMaterials.find(x=>x.id===id);if(!cloudSame(current,m))throw Error('这句刚刚已变化，请重新打开');const translation=$('#mtTranslation').value,data={...a,original:m.textLao,translation,segments:segments.map((s,i)=>{const lao=learningDialog.querySelector('[data-mt-lao="'+i+'"]').value;return {...s,lao,chinese:learningDialog.querySelector('[data-mt-zh="'+i+'"]').value,words:(s.words||[]).filter(w=>saTextKey(lao).includes(saTextKey(w.lao))),grammar:[{pattern:'本段用法',explanation:learningDialog.querySelector('[data-mt-grammar="'+i+'"]').value}]};})},valid=saValidate(data,m.textLao);valid.segments=valid.segments.map((s,i)=>({...s,...(segments[i].lao===s.lao&&segments[i].target?{target:segments[i].target}:{}),words:s.words.map(w=>{const old=segments[i].words?.find(x=>x.lao===w.lao&&x.meaning===w.meaning);return {...w,...(old?.target?{target:old.target}:{})};})}));const next={...m,translationZh:translation,sentenceAnalysis:valid,...(m.v2Data?{v2Data:{...m.v2Data,translationZh:translation,studyAnalysis:{...m.v2Data.studyAnalysis,grammar:valid}}}:{}),updatedAt:Date.now()};await learningWrite({learningMaterials:[next]},fresh);learningDraft=null;learningBusy=false;await learningOpenDetail(id);}catch(error){$('#mtStatus').textContent=error.message;}finally{learningBusy=false;}};
 }
 
+function mtGrammarField({pattern='',explanation=''}={}){
+ const h=learningEsc;
+ return '<div class="mt-grammar-row"><label>句型或要点<input data-mt-pattern maxlength="1000" value="'+h(pattern)+'"></label>'+
+  '<label>语法解释<textarea data-mt-explanation maxlength="6000" rows="3">'+h(explanation)+'</textarea></label>'+
+  '<button type="button" data-mt-remove-grammar>移除这条</button></div>';
+}
+function mtGrammarFields(rows){
+ return '<div data-mt-grammar-group><div data-mt-grammar-rows>'+rows.map(mtGrammarField).join('')+
+  '</div><button type="button" data-mt-add-grammar>＋ 添加一条说明</button></div>';
+}
+function mtSentenceGrammarAnalysis(analysis,patternRows,segmentRows){
+ const clean=rows=>rows.map(({pattern,explanation})=>({pattern:pattern.trim(),explanation:explanation.trim()})).filter(row=>row.pattern||row.explanation);
+ return {...analysis,patterns:clean(patternRows),segments:analysis.segments.map((segment,index)=>({...segment,grammar:clean(segmentRows[index])}))};
+}
+async function mtEditSentenceGrammar(id){
+ const rows=await learningRows('learningMaterials'),material=rows.find(row=>row.id===id&&!row.deleted);
+ if(learningDetail!==id||!learningDialog.open)return;
+ if(!material||material.analysisOwner||material.v2Kind==='block'||!['sentence','dialogue','reading_drill'].includes(material.contentType))throw Error('这句已变化，请重新打开详情。');
+ const text=material.textLao,saved=material.sentenceAnalysis;
+ if(saved&&saTextKey(saved.original)!==saTextKey(text))throw Error('原句与解析不一致。请先在「更多语法工具 → 翻译、分段与发音核对」里核对分段。');
+ const analysis=saved||{...saTemplate(text),translation:material.translationZh||''};
+ const h=learningEsc,patterns=analysis.patterns||[],hasSegmentGrammar=analysis.segments.some(segment=>segment.grammar?.length);
+ learningDraft={kind:'sentence-grammar',dirty:false};
+ learningModal('修改整句语法','<p class="mt-grammar-source" lang="lo">'+h(text)+'</p>'+
+  '<form id="mtSentenceGrammar"><section><h3>整句语法</h3>'+mtGrammarFields(patterns.length?patterns:[{}])+'</section>'+
+  '<details'+(!patterns.length&&hasSegmentGrammar?' open':'')+'><summary>分段语法</summary>'+
+  analysis.segments.map((segment,index)=>'<section><h4>第 '+(index+1)+' 段</h4><p lang="lo">'+h(segment.lao)+'</p>'+mtGrammarFields(segment.grammar||[])+'</section>').join('')+'</details>'+
+  '<div class="mt-tool-actions"><button class="primary" type="submit">保存语法</button><button type="button" data-mt-cancel>取消</button></div></form><p id="mtSentenceGrammarStatus" role="status"></p>');
+ const form=$('#mtSentenceGrammar'),status=$('#mtSentenceGrammarStatus');
+ const dirty=()=>{learningDraft.dirty=true;};
+ form.oninput=dirty;
+ form.onclick=event=>{
+  const button=event.target.closest('[data-mt-add-grammar],[data-mt-remove-grammar]');
+  if(!button||learningBusy)return;
+  const fields=button.closest('[data-mt-grammar-group]').querySelector('[data-mt-grammar-rows]');
+  if(button.hasAttribute('data-mt-add-grammar')){
+   if(fields.children.length>=40){status.textContent='每组最多可保存 40 条语法。';return;}
+   fields.insertAdjacentHTML('beforeend',mtGrammarField());
+   fields.lastElementChild.querySelector('input').focus();
+  }else{button.closest('.mt-grammar-row').remove();fields.parentElement.querySelector('[data-mt-add-grammar]').focus();}
+  status.textContent='';dirty();
+ };
+ form.querySelector('[data-mt-cancel]').onclick=()=>{
+  if(learningBusy)return;
+  learningDraft=null;
+  return learningOpenDetail(id).then(()=>ssSetManagement(learningDialog,true));
+ };
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  if(learningBusy)return;
+  learningBusy=true;
+  const submit=form.querySelector('[type="submit"]');submit.disabled=true;status.textContent='';
+  try{
+   if(learningDraft?.dirty){
+    const [whole,...parts]=[...form.querySelectorAll('[data-mt-grammar-group]')].map(group=>[...group.querySelectorAll('.mt-grammar-row')].map(row=>({
+     pattern:row.querySelector('[data-mt-pattern]').value,explanation:row.querySelector('[data-mt-explanation]').value
+    })));
+    const nextAnalysis=mtSentenceGrammarAnalysis(analysis,whole,parts);
+    saValidate(nextAnalysis,text);
+    const before=await learningRows('learningMaterials'),current=before.find(row=>row.id===id);
+    if(!cloudSame(current,material))throw Error('这句刚刚已变化，请重新打开后再修改。');
+    const next={...current,sentenceAnalysis:nextAnalysis,updatedAt:Math.max(Date.now(),(current.updatedAt||0)+1)};
+    if(current.v2Data)next.v2Data={...current.v2Data,studyAnalysis:{...current.v2Data.studyAnalysis,grammar:nextAnalysis}};
+    await learningWrite({learningMaterials:[next]},{learningMaterials:before},{quickAudio:true});
+   }
+   learningDraft=null;learningBusy=false;await learningOpenDetail(id);
+  }catch(error){status.textContent=error.message;}
+  finally{learningBusy=false;submit.disabled=false;}
+ };
+}
 </script>
 <script data-listening-autoplay>
 /* Saved-audio-only auto listening. A new card owns a cancellable playback sequence. */

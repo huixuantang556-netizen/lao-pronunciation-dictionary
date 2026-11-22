@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta name="lao-app-build" content="ecd35e7e2b45d870">
+  <meta name="lao-app-build" content="f5052b5662794e7b">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="theme-color" content="#087f70">
@@ -16083,14 +16083,22 @@ function mountDefaultAudioReview(){
 mountDefaultAudioReview();
 </script>
 <style data-scene-vocabulary>
-.scene-vocab{margin:16px 0 0;padding:12px 14px;border:1px solid #d9e7df;border-radius:14px;background:#f7fbf8}
-.scene-vocab header,.scene-vocab li{display:flex;align-items:center;gap:10px}
-.scene-vocab header{justify-content:space-between}
+.scene-vocab{margin:20px 0 0;padding:12px 0 0;border-top:1px solid #d9e7df}
+.scene-vocab header,.scene-vocab-tools{display:flex;align-items:center;gap:8px}
+.scene-vocab header{justify-content:space-between;flex-wrap:wrap}
+.scene-vocab h4 span{margin-inline-start:5px;font-size:.84em;font-weight:500;color:var(--muted)}
 .scene-vocab h4,.scene-vocab button{margin:0}
 .scene-vocab button,.scene-vocab-dialog button{min-height:44px}
-.scene-vocab ul{display:grid;gap:6px;padding:0;margin:10px 0;list-style:none}
-.scene-vocab li{padding:7px 0;border-bottom:1px solid #d9e7df}
-.scene-vocab-term,.scene-vocab-options label>span{display:grid;flex:1;min-width:0;gap:2px;overflow-wrap:anywhere}
+.scene-vocab ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;padding:0;margin:10px 0 0;list-style:none}
+.scene-vocab li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:6px;border:1px solid #d9e7df;border-radius:13px;background:var(--paper,#fffefa)}
+.scene-vocab .scene-vocab-play{display:grid;place-items:center;width:44px;min-width:44px;padding:0;border:0;background:#edf5ef;color:#176756}
+.scene-vocab-play svg{width:18px;height:18px}
+.scene-vocab .scene-vocab-term{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 7px;align-items:center;text-align:start;min-width:0;padding:5px 6px;border:0;background:transparent;color:var(--ink);overflow-wrap:anywhere}
+.scene-vocab-term>span:first-of-type{grid-column:1;color:var(--muted);font-size:.88em}
+.scene-vocab-chevron{grid-column:2;grid-row:1/3;font-size:1.3em;color:#547b6e}
+.scene-vocab .scene-vocab-master{padding-inline:8px;border:0;background:transparent;color:#40675c;font-size:.85em}
+.scene-vocab .scene-vocab-term:hover,.scene-vocab .scene-vocab-master:hover{background:#edf5ef}
+.scene-vocab-options label>span{display:grid;flex:1;min-width:0;gap:2px;overflow-wrap:anywhere}
 .scene-vocab strong[lang=lo],.scene-vocab-options strong[lang=lo]{font-size:1.14em;color:var(--teal,#087f70)}
 .scene-vocab-status{margin:6px 0 0;color:var(--muted)}
 .scene-vocab-status:empty{display:none}
@@ -16106,11 +16114,14 @@ mountDefaultAudioReview();
 .scene-vocab-manual input{width:100%;box-sizing:border-box;margin:0}
 .scene-vocab-practice p[lang=lo]{font-size:clamp(1.4rem,5vw,2rem);margin:10px 0;color:var(--teal,#087f70)}
 .scene-vocab-review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.scene-vocab-local-detail p[lang=lo]{font-size:clamp(1.45rem,5vw,2rem);margin:5px 0 12px;color:var(--teal,#087f70)}
+.scene-vocab-local-detail form,.scene-vocab-local-detail label{display:grid;gap:8px}
+.scene-vocab-local-detail form{margin-top:12px;justify-items:start}
+.scene-vocab-local-detail label{width:100%}
+.scene-vocab-local-detail textarea{box-sizing:border-box;width:100%;margin:0;resize:vertical}
 @media(max-width:640px){
  #learningDialog.scene-vocab-dialog{width:100%;max-width:100%;margin:auto 0 0;max-height:85dvh;border-radius:16px 16px 0 0}
- .scene-vocab{padding:10px}
- .scene-vocab li{gap:6px}
- .scene-vocab li button{padding-inline:8px}
+ .scene-vocab ul{grid-template-columns:1fr}
 }
 </style>
 <script data-scene-vocabulary>
@@ -16147,19 +16158,37 @@ function sceneVocabularyCandidates(materials,words){
  }
  return result;
 }
-function sceneVocabularyRead(key){
+function sceneVocabularyState(key){
+ const selection=new Map(),glosses=new Map();
  try{
-  const rows=JSON.parse(localStorage.getItem(key)||'[]');
-  return new Map(rows.filter(r=>typeof r.lao==='string'&&typeof r.meaning==='string'&&typeof r.target==='string').map(r=>[sceneVocabularyKey(r.lao),r]));
- }catch(_){return new Map();}
+  const stored=JSON.parse(localStorage.getItem(key)||'[]'),legacy=Array.isArray(stored);
+  for(const row of (legacy?stored:stored?.selection)||[]){
+   if(typeof row?.lao!=='string'||typeof row.meaning!=='string'||typeof row.target!=='string')continue;
+   const id=sceneVocabularyKey(row.lao);
+   selection.set(id,row);
+   if(legacy&&row.meaning)glosses.set(id,{lao:row.lao,meaning:row.meaning});
+  }
+  if(!legacy)for(const row of stored?.glosses||[]){
+   if(typeof row?.lao==='string'&&typeof row.meaning==='string'&&row.meaning)glosses.set(sceneVocabularyKey(row.lao),row);
+  }
+ }catch(_){}
+ return {selection,glosses};
 }
-function sceneVocabularyWrite(key,rows){
- localStorage.setItem(key,JSON.stringify([...rows.values()]));
+function sceneVocabularyRead(key){return sceneVocabularyState(key).selection;}
+function sceneVocabularyWrite(key,selection,glosses=sceneVocabularyState(key).glosses){
+ localStorage.setItem(key,JSON.stringify({selection:[...selection.values()],glosses:[...glosses.values()]}));
 }
 function sceneVocabularyBody(key){
  const rows=[...sceneVocabularyRead(key).values()],h=learningEsc;
- return '<header><h4>本节生词'+(rows.length?' · '+rows.length+' 个':'')+'</h4><button type="button" data-scene-vocab-action="pick">'+(rows.length?'选词':'选本节生词')+'</button></header>'+
- (rows.length?'<ul>'+rows.map((row,index)=>'<li><button type="button" data-scene-vocab-action="play" data-index="'+index+'" aria-label="播放 '+h(row.lao)+'">▶</button><span class="scene-vocab-term"><strong lang="lo">'+h(row.lao)+'</strong><span>'+h(row.meaning||'待补词义')+'</span></span><button type="button" data-scene-vocab-action="remove" data-index="'+index+'">标为已熟</button></li>').join('')+'</ul><button type="button" class="primary" data-scene-vocab-action="review">复习这 '+rows.length+' 个词</button>':'')+
+ return '<header><h4>本节生词'+(rows.length?' <span>'+rows.length+' 个</span>':'')+'</h4><div class="scene-vocab-tools"><button type="button" data-scene-vocab-action="pick">'+(rows.length?'选词':'选本节生词')+'</button>'+
+ (rows.length?'<button type="button" class="primary" data-scene-vocab-action="review">开始复习</button>':'')+'</div></header>'+
+ (rows.length?'<ul>'+rows.map(row=>{
+  const id=h(sceneVocabularyKey(row.lao)),label=h(row.lao);
+  const action=name=>' data-scene-vocab-action="'+name+'" data-scene-vocab-word="'+id+'"';
+  return '<li><button type="button" class="scene-vocab-play"'+action('play')+' aria-label="播放 '+label+'">'+lessonIcon('play')+'</button>'+
+   '<button type="button" class="scene-vocab-term"'+action('detail')+' aria-label="查看 '+label+' 的详情"><strong lang="lo">'+label+'</strong><span>'+h(row.meaning||'待补词义')+'</span><span class="scene-vocab-chevron" aria-hidden="true">›</span></button>'+
+   '<button type="button" class="scene-vocab-master"'+action('remove')+' aria-label="将 '+label+' 标为已熟">已熟</button></li>';
+ }).join('')+'</ul>':'')+
  '<p class="scene-vocab-status" role="status"></p>';
 }
 function sceneVocabularyHtml(blockId){
@@ -16171,6 +16200,52 @@ function sceneVocabularyStartModal(title,html){
  stopPracticeAudio();
  learningModal(title,html);
  learningDialog.classList.add('scene-vocab-dialog');
+}
+function sceneVocabularyDetailTarget(row,snap,words){
+ const id=sceneVocabularyKey(row.lao);
+ const entry=words.find(w=>'word:'+w.syncId===row.target&&sceneVocabularyKey(w.word)===id);
+ if(entry)return row.target;
+ const unit=snap.learningMaterials.find(m=>m.id===row.target&&!m.deleted&&m.analysisUnitType==='word'&&sceneVocabularyKey(m.textLao)===id);
+ if(unit)return unit.id;
+ const matches=words.filter(w=>w.syncId&&sceneVocabularyKey(w.word)===id);
+ return matches.length===1?'word:'+matches[0].syncId:'';
+}
+async function sceneVocabularyOpenDetail(host,row,current){
+ if(learningHasWork()||recorder||learningBusy)throw Error('请先保存编辑或结束录音。');
+ const owner=workspaceName('scene-vocabulary-v1'),{snap,words}=await lnGetData();
+ if(!current()||owner!==workspaceName('scene-vocabulary-v1'))return;
+ if(learningHasWork()||recorder||learningBusy)throw Error('请先保存编辑或结束录音。');
+ const target=sceneVocabularyDetailTarget(row,snap,words);
+ if(target){stopPracticeAudio();return learningOpenDetail(target);}
+ const h=learningEsc,key=host.dataset.sceneVocab,id=sceneVocabularyKey(row.lao);
+ sceneVocabularyStartModal('生词详情','<div class="scene-vocab-local-detail"><p lang="lo">'+h(row.lao)+'</p>'+
+  '<button type="button" data-scene-vocab-detail-play>▶ 听发音</button>'+
+  '<form><label>本节词义<textarea name="meaning" rows="2" maxlength="1000" required>'+h(row.meaning)+'</textarea></label>'+
+  '<button type="submit" class="primary">保存词义</button></form></div>');
+ const detail=learningDialog.querySelector('.scene-vocab-local-detail');
+ if(!detail)return;
+ const valid=()=>learningDialog.open&&detail.isConnected&&host.isConnected&&owner===workspaceName('scene-vocabulary-v1'),status=$('#learningDialogStatus');
+ detail.querySelector('[data-scene-vocab-detail-play]').onclick=async()=>{
+  status.textContent='';
+  try{await sceneVocabularyPlay(row,valid);}catch(error){if(valid())status.textContent=error.message;}
+ };
+ detail.querySelector('form').onsubmit=event=>{
+  event.preventDefault();
+  if(!valid())return;
+  try{
+   const meaning=event.currentTarget.elements.meaning.value.trim();
+   if(!meaning)throw Error('请填写本节词义。');
+   const {selection,glosses}=sceneVocabularyState(key),selected=selection.get(id);
+   if(!selected)throw Error('该词已从本节生词移出，请重新打开。');
+   selection.set(id,{...selected,meaning});
+   glosses.set(id,{lao:selected.lao,meaning});
+   sceneVocabularyWrite(key,selection,glosses);
+   host.innerHTML=sceneVocabularyBody(key);learningClose();
+   for(const button of host.querySelectorAll('[data-scene-vocab-action="detail"]')){
+    if(button.dataset.sceneVocabWord===id){button.focus();break;}
+   }
+  }catch(error){status.textContent=error.message;}
+ };
 }
 async function sceneVocabularyPlay(row,current){
  if(learningHasWork()||recorder||learningBusy)throw Error('请先保存编辑或结束录音。');
@@ -16192,36 +16267,40 @@ async function sceneVocabularyPick(host,trigger){
  const {snap,words}=await lnGetData();
  if(!host.isConnected||learningDialog.open||owner!==workspaceName('scene-vocabulary-v1'))return;
  const materials=snap.learningMaterials.filter(m=>ids.has(m.id)&&!m.deleted);
- const candidates=sceneVocabularyCandidates(materials,words),selected=sceneVocabularyRead(key),h=learningEsc;
+ const candidates=sceneVocabularyCandidates(materials,words),{selection:selected,glosses}=sceneVocabularyState(key),h=learningEsc;
  // Keep previously picked terms editable even if a sentence's analysis has been replaced.
  for(const [id,row] of selected){
   const fresh=candidates.get(id);
   candidates.set(id,{...row,target:fresh?.target||'',meaning:row.meaning||fresh?.meaning||''});
  }
+ for(const [id,gloss] of glosses){
+  const candidate=candidates.get(id);
+  candidates.set(id,{...gloss,target:candidate?.target||''});
+ }
  sceneVocabularyStartModal('选本节生词',
   '<div class="scene-vocab-picker" data-scene-vocab-picker><div class="scene-vocab-options"></div>'+
-  '<details class="scene-vocab-manual"><summary>补选没列出的词</summary><form><label>句中的老挝语<input name="lao" lang="lo" maxlength="150" required></label><label>本句词义<input name="meaning" maxlength="1000" required></label><button type="submit">加入并勾选</button></form></details>'+
+  '<details class="scene-vocab-manual"><summary>补充词义或添加候选词</summary><form><label>句中的老挝语<input name="lao" lang="lo" maxlength="150" required></label><label>本句词义<input name="meaning" maxlength="1000" required></label><button type="submit">应用词义</button></form></details>'+
   '<button type="button" class="primary" data-scene-vocab-save>完成</button></div>');
  const picker=learningDialog.querySelector('[data-scene-vocab-picker]');
  if(!picker)return;
- const options=picker.querySelector('.scene-vocab-options'),status=$('#learningDialogStatus'),changed=new Set(),form=picker.querySelector('form');
+ const options=picker.querySelector('.scene-vocab-options'),status=$('#learningDialogStatus'),changed=new Set(),editedGlosses=new Map(),form=picker.querySelector('form');
  const laoField=form.elements.lao,meaningField=form.elements.meaning;
- let prefilledWord='';
- const hasPendingWord=()=>Boolean(meaningField.value.trim()||laoField.value.trim()!==prefilledWord);
+ let prefilledWord='',prefilledMeaning='';
+ const hasPendingWord=()=>laoField.value.trim()!==prefilledWord||meaningField.value.trim()!==prefilledMeaning;
  function option(id,row){
   const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span');
   input.type='checkbox';input.checked=selected.has(id);
   text.innerHTML='<strong lang="lo">'+h(row.lao)+'</strong><span>'+h(row.meaning||'待补词义')+'</span>';
   input.onchange=()=>{changed.add(id);if(input.checked)selected.set(id,candidates.get(id));else selected.delete(id);};
   label.append(input,text);
-  if(row.meaning)return label;
+  if(row.meaning&&!glosses.has(id)&&!editedGlosses.has(id))return label;
   const item=document.createElement('div'),edit=document.createElement('button');
   item.className='scene-vocab-missing';
-  edit.type='button';edit.textContent='补词义';
-  edit.setAttribute('aria-label','补词义 '+row.lao);
+  edit.type='button';edit.textContent=row.meaning?'改词义':'补词义';
+  edit.setAttribute('aria-label',edit.textContent+' '+row.lao);
   edit.onclick=()=>{
    if(hasPendingWord()&&!addPendingWord())return;
-   form.parentElement.open=true;prefilledWord=row.lao;laoField.value=row.lao;meaningField.focus();
+   form.parentElement.open=true;laoField.value=prefilledWord=row.lao;meaningField.value=prefilledMeaning=row.meaning;meaningField.focus();
   };
   item.append(label,edit);return item;
  }
@@ -16238,8 +16317,9 @@ async function sceneVocabularyPick(host,trigger){
    return false;
   }
   const row={lao,meaning,target:candidates.get(id)?.target||''};
-  candidates.set(id,row);selected.set(id,row);changed.add(id);draw();
-  form.reset();prefilledWord='';status.textContent='已勾选 '+lao+'，点「完成」保存。';
+  editedGlosses.set(id,{lao,meaning});
+  candidates.set(id,row);draw();
+  form.reset();prefilledWord='';prefilledMeaning='';status.textContent='已补充 '+lao+' 的词义，点「完成」保存。';
   return true;
  }
  form.onsubmit=event=>{
@@ -16249,9 +16329,13 @@ async function sceneVocabularyPick(host,trigger){
   try{
    if(!host.isConnected||owner!==workspaceName('scene-vocabulary-v1'))throw Error('课程已切换，请重新选词。');
    if(hasPendingWord()&&!addPendingWord())return;
-   const saved=sceneVocabularyRead(key);
-   for(const id of changed){if(selected.has(id))saved.set(id,selected.get(id));else saved.delete(id);}
-   sceneVocabularyWrite(key,saved);
+   const {selection:saved,glosses:storedGlosses}=sceneVocabularyState(key);
+   for(const id of changed){if(selected.has(id))saved.set(id,candidates.get(id));else saved.delete(id);}
+   for(const [id,gloss] of editedGlosses){
+    storedGlosses.set(id,gloss);
+    if(saved.has(id))saved.set(id,{...saved.get(id),...gloss});
+   }
+   sceneVocabularyWrite(key,saved,storedGlosses);
    host.innerHTML=sceneVocabularyBody(key);learningClose();host.querySelector('[data-scene-vocab-action="pick"]')?.focus();
   }catch(error){status.textContent=error.message;}
  };
@@ -16302,12 +16386,13 @@ learningPanel.addEventListener('click',async event=>{
   status.textContent='';
   if(action==='pick'){await sceneVocabularyPick(host,button);return;}
   if(action==='review'){sceneVocabularyReview(host);return;}
-  const row=[...sceneVocabularyRead(host.dataset.sceneVocab).values()][Number(button.dataset.index)];
-  if(!row||button.parentElement.querySelector('strong').textContent!==row.lao){host.innerHTML=sceneVocabularyBody(host.dataset.sceneVocab);return;}
+  const row=sceneVocabularyRead(host.dataset.sceneVocab).get(button.dataset.sceneVocabWord);
+  if(!row){host.innerHTML=sceneVocabularyBody(host.dataset.sceneVocab);return;}
   if(action==='remove'){
    sceneVocabularyRemove(host,row);
    host.querySelector('[data-scene-vocab-action="pick"]').focus();
   }else if(action==='play')await sceneVocabularyPlay(row,current);
+  else if(action==='detail')await sceneVocabularyOpenDetail(host,row,current);
  }catch(error){if(status.isConnected)status.textContent=error.message;}
 });
 </script>
